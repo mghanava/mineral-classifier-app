@@ -1,0 +1,214 @@
+import argparse
+import os
+from typing import List
+
+import torch
+import torch.nn.functional as F
+import yaml
+from models import get_model
+from sklearn.metrics import accuracy_score, fbeta_score, matthews_corrcoef
+from sklearn.utils.class_weight import compute_sample_weight
+from src.utilities.utils import (
+    CalibrationMetrics,
+    LogTime,
+    ModelCalibration,
+    plot_confusion_matrix,
+    plot_reliability_diagram,
+)
+
+
+def evaluate_with_calibration(
+    data,
+    model,
+    calibration_method: str,
+    initial_temperature: float,
+    n_bins: int,
+    class_names: List,
+    lr: float,
+    n_epochs: int,
+    weight_decay: float,
+    factor_learning_rate_scheduler: float,
+    patience_learning_rate_scheduler: float,
+    patience_early_stopping: float,
+    min_delta_early_stopping: float,
+    verbose: bool,
+    save_path: str,
+    device: torch.device,
+):
+    y_true_test = data.y[data.test_mask]
+    y_tru_calib = data.y[data.calib_mask]
+    sample_weights_test = compute_sample_weight("balanced", y_true_test.cpu())
+    sample_weights_test = torch.tensor(sample_weights_test, dtype=torch.float32).to(
+        device
+    )
+    sample_weights_calib = compute_sample_weight("balanced", y_tru_calib.cpu())
+    sample_weights_calib = torch.tensor(sample_weights_calib, dtype=torch.float32).to(
+        device
+    )
+    # Get base model predictions
+    model.eval()
+    with torch.no_grad():
+        logits = model(data)
+        base_probs = F.softmax(logits, dim=1)
+        # Calculate metrics before calibration
+        uncal_probs = base_probs[data.test_mask]
+        uncal_pred = uncal_probs.argmax(dim=1)
+
+        cal_metrics = CalibrationMetrics(n_bins=n_bins)
+        cal_metrics_uncalibrated = cal_metrics.calculate_metrics(
+            uncal_probs, y_true_test, sample_weights_test
+        )
+        uncal_metrics = {
+            "acc": accuracy_score(
+                y_true_test.cpu().numpy(),
+                uncal_pred.cpu().numpy(),
+                sample_weight=sample_weights_test.cpu().numpy(),
+            ),
+            "f1": fbeta_score(
+                y_true_test.cpu().numpy(),
+                uncal_pred.cpu().numpy(),
+                sample_weight=sample_weights_test.cpu().numpy(),
+                beta=0.5,
+                average="macro",
+            ),
+            "mcc": matthews_corrcoef(
+                y_true_test.cpu().numpy(),
+                uncal_pred.cpu().numpy(),
+                sample_weight=sample_weights_test.cpu().numpy(),
+            ),
+            "mce": cal_metrics_uncalibrated.mce,
+        }
+    # Generate new logits WITH gradient tracking for calibration
+    model.eval()  # Keep in eval mode, but without no_grad
+    calib_logits = model(data)[data.calib_mask]  # These logits will have grad_fn
+    # Calibrate model with the calibration dataset
+    calibrator = ModelCalibration(
+        method=calibration_method,
+        initial_temperature=initial_temperature,
+        device=device,
+        lr=lr,
+        weight_decay_adam_optimizer=weight_decay,
+        n_epochs=n_epochs,
+        verbose=verbose,
+        patience_early_stopping=patience_early_stopping,
+        factor_learning_rate_scheduler=factor_learning_rate_scheduler,
+        patience_learning_rate_scheduler=patience_learning_rate_scheduler,
+        min_delta_early_stopping=min_delta_early_stopping,
+    )
+    calibrator.fit(calib_logits, y_tru_calib, sample_weights_calib)
+    cal_probs = calibrator.predict_probability(logits[data.test_mask])
+    cal_pred = cal_probs.argmax(dim=1)
+    cal_metrics_calibrated = cal_metrics.calculate_metrics(
+        cal_probs, y_true_test, sample_weights_test, verbose=False
+    )
+
+    cal_metrics = {
+        "acc": accuracy_score(
+            y_true_test.cpu().numpy(),
+            cal_pred.cpu().numpy(),
+            sample_weight=sample_weights_test.cpu().numpy(),
+        ),
+        "f1": fbeta_score(
+            y_true_test.cpu().numpy(),
+            cal_pred.cpu().numpy(),
+            sample_weight=sample_weights_test.cpu().numpy(),
+            beta=0.5,
+            average="macro",
+        ),
+        "mcc": matthews_corrcoef(
+            y_true_test.cpu().numpy(),
+            cal_pred.cpu().numpy(),
+            sample_weight=sample_weights_test.cpu().numpy(),
+        ),
+        "mce": cal_metrics_calibrated.mce,
+    }
+
+    # Print results
+    print("\nUncalibrated Metrics:")
+    print(f"Accuracy: {uncal_metrics['acc']:.3f}")
+    print(f"F1 Score: {uncal_metrics['f1']:.3f}")
+    print(f"matthews_corrcoef: {uncal_metrics['mcc']:.3f}")
+    print(f"Maximum calibration error: {uncal_metrics['mce']:.3f}")
+    print("\nCalibrated Metrics:")
+    print(f"Accuracy: {cal_metrics['acc']:.3f}")
+    print(f"F1 Score: {cal_metrics['f1']:.3f}")
+    print(f"matthews_corrcoef: {cal_metrics['mcc']:.3f}")
+    print(f"Maximum calibration error: {cal_metrics['mce']:.3f}\n")
+
+    plot_reliability_diagram(
+        uncalibrated_stats=cal_metrics_uncalibrated,
+        calibrated_stats=cal_metrics_calibrated,
+        save_path=save_path,
+    )
+    plot_confusion_matrix(
+        y_true_test.cpu().numpy(),
+        cal_pred.cpu().numpy(),
+        sample_weights_test.cpu().numpy(),
+        class_names,
+        save_path=save_path,
+    )
+
+    return calibrator, (uncal_metrics, cal_metrics)
+
+
+def main():
+    dataset_path = "results/data"
+    model_trained_path = "results/trained"
+    evaluation_path = "results/evaluation"
+    os.makedirs(evaluation_path, exist_ok=True)
+
+    test_data = torch.load(os.path.join(dataset_path, "test_data.pt"))
+
+    with open("params.yaml") as f:
+        params = yaml.safe_load(f)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, required=True)
+    args = parser.parse_args()
+    # Get model-specific parameters
+    model_params = params["models"][args.model]
+    # Initialize a new model instance
+    model = get_model(args.model, model_params)
+    model.load_state_dict(
+        torch.load(f"{model_trained_path}/{args.model}.pkl", weights_only=True)
+    )
+
+    INITIAL_TEMPERATURE = params["evaluate"]["initial_temperature"]
+    CALIBRATION_METHOD = params["evaluate"]["calibration_method"]
+    N_BINS = params["evaluate"]["n_bins"]
+    CLASS_NAMES = params["evaluate"]["class_names"]
+    N_EPOCHS = params["evaluate"]["n_epochs"]
+    LEARNING_RATE = params["evaluate"]["lr"]
+    WEIGHT_DEACY = params["evaluate"]["weight_decay_adam_optimizer"]
+    FACTOR = params["evaluate"]["factor_learning_rate_scheduler"]
+    PATIENCE_LEARNING_RATE_SCHEDULER = params["evaluate"][
+        "patience_learning_rate_scheduler"
+    ]
+    PATIENCE_EARLY_STOPPING = params["evaluate"]["patience_early_stopping"]
+    MIN_DELTA_EARLY_STOPPING = params["evaluate"]["min_delta_early_stopping"]
+    VERBOSE = params["evaluate"]["verbose"]
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    with LogTime(task_name="\nEvaluation"):
+        print("Assessing test dataset")
+        evaluate_with_calibration(
+            data=test_data.to(device),
+            model=model.to(device),
+            calibration_method=CALIBRATION_METHOD,
+            initial_temperature=INITIAL_TEMPERATURE,
+            n_bins=N_BINS,
+            class_names=CLASS_NAMES,
+            lr=LEARNING_RATE,
+            n_epochs=N_EPOCHS,
+            weight_decay=WEIGHT_DEACY,
+            factor_learning_rate_scheduler=FACTOR,
+            patience_learning_rate_scheduler=PATIENCE_LEARNING_RATE_SCHEDULER,
+            patience_early_stopping=PATIENCE_EARLY_STOPPING,
+            min_delta_early_stopping=MIN_DELTA_EARLY_STOPPING,
+            save_path=evaluation_path,
+            verbose=VERBOSE,
+            device=device,
+        )
+
+    if __name__ == "__main__":
+        main()
