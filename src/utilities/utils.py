@@ -1,3 +1,5 @@
+import os
+import pickle
 import time
 from typing import List, Literal, NamedTuple, Optional, Tuple
 
@@ -62,7 +64,7 @@ class CalibrationStats(NamedTuple):
 class CalibrationMetrics:
     def __init__(
         self,
-        num_bins: int = 10,
+        n_bins: int = 10,
         binary_case_prob_threshold: float = 0.5,
         min_samples_per_bin: int = 10,
     ):
@@ -83,28 +85,28 @@ class CalibrationMetrics:
             MCE: Get maximum of unweighted differences
 
         Args:
-            num_bins (int): Number of bins for binning confidence scores
+            n_bins (int): Number of bins for binning confidence scores
             binary_case_prob_threshold (float): Threshold for binary classification
             min_samples_per_bin: Minimum samples required per bin
         """
-        if num_bins < 1:
+        if n_bins < 1:
             raise ValueError("Number of bins must be positive")
         if not 0 < binary_case_prob_threshold < 1:
             raise ValueError(
                 "Binary case probability threshold must be between 0 and 1"
             )
 
-        self.num_bins = num_bins
+        self.n_bins = n_bins
         self.binary_case_prob_threshold = binary_case_prob_threshold
         self.min_samples_per_bin = min_samples_per_bin
 
-    def _adaptive_binning(self, max_probs: torch.Tensor, num_bins: int) -> torch.Tensor:
+    def _adaptive_binning(self, max_probs: torch.Tensor, n_bins: int) -> torch.Tensor:
         """
         Create adaptive bin edges based on prediction distribution.
 
         Args:
             max_probs: Prediction probabilities
-            num_bins: Target number of bins
+            n_bins: Target number of bins
 
         Returns:
             torch.Tensor: Bin edges
@@ -113,16 +115,16 @@ class CalibrationMetrics:
         sorted_probs = torch.sort(max_probs)[0]
 
         # Calculate target samples per bin
-        target_bin_size = len(max_probs) // num_bins
+        target_bin_size = len(max_probs) // n_bins
 
         if target_bin_size < self.min_samples_per_bin:
             # Reduce number of bins if not enough samples
-            num_bins = max(1, len(max_probs) // self.min_samples_per_bin)
-            target_bin_size = len(max_probs) // num_bins
+            n_bins = max(1, len(max_probs) // self.min_samples_per_bin)
+            target_bin_size = len(max_probs) // n_bins
 
         # Create adaptive bin edges
         bin_edges = [0.0]
-        for i in range(1, num_bins):
+        for i in range(1, n_bins):
             idx = i * target_bin_size
             if idx < len(sorted_probs):
                 edge = sorted_probs[idx].item()
@@ -188,18 +190,18 @@ class CalibrationMetrics:
 
         # Get bin edges (either adaptive or uniform)
         if adaptive_binning:
-            bin_edges = self._adaptive_binning(max_probs, self.num_bins)
+            bin_edges = self._adaptive_binning(max_probs, self.n_bins)
         else:
-            bin_edges = torch.linspace(0, 1, self.num_bins + 1, device=y_prob.device)
+            bin_edges = torch.linspace(0, 1, self.n_bins + 1, device=y_prob.device)
         # initialize bin counts to store number of samples in each bin
-        bin_counts = torch.zeros(self.num_bins, device=y_prob.device)
+        bin_counts = torch.zeros(self.n_bins, device=y_prob.device)
         # Compute binning metrics for non-empty bins
         bin_confidences_list = []
         bin_accuracies_list = []
         bin_weights_list = []
 
         # Compute binning metrics
-        for i in range(self.num_bins):
+        for i in range(self.n_bins):
             bin_lower = bin_edges[i]
             bin_upper = bin_edges[i + 1]
             # Handle edge cases for first bin to include exact 0
@@ -542,9 +544,6 @@ class IsotonicRegressionCalibration:
         n_samples = len(y)
         result = torch.zeros_like(y, device=self.device)
 
-        # if sample_weight is None:
-        #     sample_weight = torch.ones_like(y, device=self.device)
-
         # Create initial solution blocks: (start_idx, end_idx, value, weight)
         solution_blocks = [(i, i, y[i], sample_weight[i]) for i in range(n_samples)]
 
@@ -608,6 +607,8 @@ class ModelCalibration:
         factor_learning_rate_scheduler: float = 0.1,
         patience_learning_rate_scheduler: float = 20,
         patience_early_stopping: float = 50,
+        min_delta_early_stopping: float = 0.001,
+        save_path: str = None,
     ):
         """
         Initialize the calibration model.
@@ -646,6 +647,8 @@ class ModelCalibration:
         self.factor_learning_rate_scheduler = factor_learning_rate_scheduler
         self.patience_learning_rate_scheduler = patience_learning_rate_scheduler
         self.patience_early_stopping = patience_early_stopping
+        self.min_delta_early_stopping = min_delta_early_stopping
+        self.save_path = save_path
 
     def fit(
         self,
@@ -662,21 +665,6 @@ class ModelCalibration:
             labels_train (torch.Tensor): Ground truth labels (shape: [n_samples]).
             sample_weights_train (torch.Tensor): Weights of each sample (shape: [n_samples]).
         """
-        # Convert inputs to tensors
-        # if not isinstance(logits_train, torch.Tensor):
-        #     logits_train = torch.tensor(
-        #         logits_train, dtype=torch.float32, device=self.device
-        #     )
-        # if not isinstance(labels_train, torch.Tensor):
-        #     labels_train = torch.tensor(
-        #         labels_train, dtype=torch.long, device=self.device
-        #     )
-        # if sample_weights_train is not None and not isinstance(
-        #     sample_weights_train, torch.Tensor
-        # ):
-        #     sample_weights_train = torch.tensor(
-        #         sample_weights_train, dtype=torch.float32, device=self.device
-        #     )
         if sample_weights_train is None:
             sample_weights_train = torch.ones_like(
                 labels_train, dtype=torch.float32, device=self.device
@@ -761,7 +749,8 @@ class ModelCalibration:
 
             last_lr = self.lr
             early_stopping = EarlyStopping(
-                patience=self.patience_early_stopping, min_delta=self.lr
+                patience=self.patience_early_stopping,
+                min_delta=self.min_delta_early_stopping,
             )
 
             track_losses = []
@@ -807,7 +796,7 @@ class ModelCalibration:
                 # Check for early stopping
                 early_stopping(ece_val)
                 if early_stopping.early_stop:
-                    print(f"\nEarly stopping triggered after {epoch + 1} epochs!")
+                    print(f"\nEarly stopping triggered after {epoch + 1} epochs!\n")
                     break
             if self.verbose:
                 # print optimum parameters based on model type
@@ -897,7 +886,8 @@ class ModelCalibration:
                 patience=self.patience_learning_rate_scheduler,
             )
             early_stopping = EarlyStopping(
-                patience=self.patience_early_stopping, min_delta=self.lr
+                patience=self.patience_early_stopping,
+                min_delta=self.min_delta_early_stopping,
             )
 
             track_losses = []
@@ -971,7 +961,7 @@ class ModelCalibration:
                 # Check for early stopping
                 early_stopping(ece_val)
                 if early_stopping.early_stop:
-                    print(f"\nEarly stopping triggered after {epoch + 1} epochs!")
+                    print(f"\nEarly stopping triggered after {epoch + 1} epochs!\n")
                     break
             if self.verbose:
                 # print optimum parameters based on model type
@@ -1003,25 +993,36 @@ class ModelCalibration:
 
     def _plot_loss_and_gradients(self, model, track_losses, track_gradients):
         # print optimum parameters based on model type
+        if self.save_path is not None:
+            optimum_params_path = os.path.join(self.save_path, "optimum_params.txt")
         if self.method == "temperature":
-            print(f"Temperature scaling T: {model.T.item():.4f}")
-        elif self.method == "dirichlet":
-            print(
-                f"Dirichlet calibration parameters:\nweights \n{model.weights.detach().cpu().numpy()}"
-                f"\nbiases:\n {model.biases.detach().cpu().numpy()}"
-            )
-        elif self.method == "platt":
-            print(
-                f"Platt scaling parameters:\na- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}"
-            )
-        else:
-            print(
-                f"Beta calibration parameters:"
-                f"a- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}, "
-                f"c- {model.c.detach().cpu().numpy()}"
-            )
+            # Save the optimum parameters to a file
+            with open(optimum_params_path, "w") as f:
+                f.write(f"Temperature scaling optimum T: {model.T.item():.4f}")
 
-        _, axs = pyplot.subplots(1, 2, figsize=(20, 6))
+        elif self.method == "dirichlet":
+            # Save the optimum parameters to a file
+            with open(optimum_params_path, "w") as f:
+                f.write(
+                    f"Dirichlet calibration optimum parameters:\nweights \n{model.weights.detach().cpu().numpy()}"
+                    f"\nbiases:\n {model.biases.detach().cpu().numpy()}"
+                )
+        elif self.method == "platt":
+            # Save the optimum parameters to a file
+            with open(optimum_params_path, "w") as f:
+                f.write(
+                    f"Platt scaling optimum parameters:\na- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}"
+                )
+        else:
+            # Save the optimum parameters to a file
+            with open(optimum_params_path, "w") as f:
+                f.write(
+                    f"Beta calibration optimum parameters:"
+                    f"a- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}, "
+                    f"c- {model.c.detach().cpu().numpy()}"
+                )
+        # Plot loss and gradients
+        fig, axs = pyplot.subplots(1, 2, figsize=(20, 6))
         axs[0].plot(range(len(track_losses)), track_losses)
         axs[0].set_xlabel("Iteration")
         axs[0].set_ylabel("Loss")
@@ -1030,6 +1031,11 @@ class ModelCalibration:
         axs[1].set_xlabel("Iteration")
         axs[1].set_ylabel("Gradient Norm")
         axs[1].set_yscale("log")
+        fig.suptitle(f"Calibration Method: {self.method} - Loss and Gradient Norms")
+        if self.save_path is not None:
+            pyplot.savefig(
+                f"{self.save_path}/calibration_{self.method}_loss_and_gradients.png"
+            )
         pyplot.show()
 
     def predict_probability(self, logits_test):
@@ -1147,14 +1153,6 @@ class ModelCalibration:
         return {"ece_before": ece_before, "ece_after": ece_after}
 
     def _compute_weighted_ece(self, y_true, y_prob, sample_weights=None, n_bins=10):
-        # if not isinstance(y_true, torch.Tensor):
-        #     y_true = torch.tensor(y_true, dtype=torch.float32)
-        # if not isinstance(y_prob, torch.Tensor):
-        #     y_prob = torch.tensor(y_prob, dtype=torch.float32)
-
-        # y_true = y_true.to(self.device)
-        # y_prob = y_prob.to(self.device)
-
         if not self.use_binary_calibration:
             confidence, predictions = torch.max(y_prob, dim=1)
         else:
@@ -1165,13 +1163,6 @@ class ModelCalibration:
         # Create bins and calculate weighted ECE
         bin_indices = torch.floor(confidence * n_bins).long()
         bin_indices = torch.clamp(bin_indices, 0, n_bins - 1)
-
-        # if sample_weights is None:
-        #     sample_weights = torch.ones_like(confidence, dtype=torch.float32)
-        # if not isinstance(sample_weights, torch.Tensor):
-        #     sample_weights = torch.tensor(sample_weights, dtype=torch.float32)
-
-        # sample_weights = sample_weights.to(self.device)
 
         ece = 0.0
         total_weight = sample_weights.sum()
@@ -1193,57 +1184,133 @@ class ModelCalibration:
 
         return ece.item()
 
-    # def save(self, path: str) -> None:
-    #     """
-    #     Save the calibration model to a file.
+    def __getstate__(self):
+        """Prepare the object for serialization."""
+        state = {
+            "method": self.method,
+            "device": str(self.device),  # Save as string
+            "calibrated": self.calibrated,
+            "use_binary_calibration": self.use_binary_calibration,
+            "classes": self.classes.cpu() if self.classes is not None else None,
+            "n_classes": self.n_classes,
+            # Save model state if exists
+            "model_state": self.model.state_dict() if self.model is not None else None,
+            # Save isotonic calibrators if exists
+            "iso_calibrators": self.iso_calibrators
+            if self.iso_calibrators is not None
+            else None,
+            # Save all hyperparameters
+            "hyperparams": {
+                "lr": self.lr,
+                "n_epochs": self.n_epochs,
+                "weight_decay_adam_optimizer": self.weight_decay_adam_optimizer,
+                "reg_lambda": self.reg_lambda,
+                "reg_mu": self.reg_mu,
+                "eps": self.eps,
+                "initial_temperature": self.initial_temperature,
+                "factor_learning_rate_scheduler": self.factor_learning_rate_scheduler,
+                "patience_learning_rate_scheduler": self.patience_learning_rate_scheduler,
+                "patience_early_stopping": self.patience_early_stopping,
+                "min_delta_early_stopping": self.min_delta_early_stopping,
+            },
+        }
+        return state
 
-    #     Parameters:
-    #         path (str): Path to save the model
-    #     """
-    #     save_dict = {
-    #         "method": self.method,
-    #         "calibrated": self.calibrated,
-    #         "is_multiclass": self.is_multiclass,
-    #     }
+    def __setstate__(self, state):
+        """Reconstruct the object from serialized state."""
+        # Restore basic attributes
+        self.method = state["method"]
+        self.device = torch.device(state["device"])
+        self.calibrated = state["calibrated"]
+        self.use_binary_calibration = state["use_binary_calibration"]
+        self.classes = (
+            state["classes"].to(self.device) if state["classes"] is not None else None
+        )
+        self.n_classes = state["n_classes"]
 
-    #     if self.method == "temperature":
-    #         save_dict["temperature"] = self.temperature
-    #     elif self.method == "isotonic":
-    #         save_dict["isotonic_params"] = self.isotonic_params
-    #     elif self.method == "platt":
-    #         save_dict["platt_a"] = self.platt_a
-    #         save_dict["platt_b"] = self.platt_b
-    #     elif self.method == "beta":
-    #         save_dict["a"] = self.a
-    #         save_dict["b"] = self.b
-    #         save_dict["c"] = self.c
+        # Restore hyperparameters
+        hyperparams = state["hyperparams"]
+        self.lr = hyperparams["lr"]
+        self.n_epochs = hyperparams["n_epochs"]
+        self.weight_decay_adam_optimizer = hyperparams["weight_decay_adam_optimizer"]
+        self.reg_lambda = hyperparams["reg_lambda"]
+        self.reg_mu = hyperparams["reg_mu"]
+        self.eps = hyperparams["eps"]
+        self.initial_temperature = hyperparams["initial_temperature"]
+        self.factor_learning_rate_scheduler = hyperparams[
+            "factor_learning_rate_scheduler"
+        ]
+        self.patience_learning_rate_scheduler = hyperparams[
+            "patience_learning_rate_scheduler"
+        ]
+        self.patience_early_stopping = hyperparams["patience_early_stopping"]
+        self.min_delta_early_stopping = hyperparams["min_delta_early_stopping"]
 
-    #     torch.save(save_dict, path)
+        # Rebuild the calibration model
+        if state["method"] == "isotonic":
+            # Handle isotonic calibrators
+            self.iso_calibrators = state["iso_calibrators"]
+            self.model = None  # Isotonic doesn't use the model attribute
+        else:
+            # Handle parametric calibrators
+            self.iso_calibrators = None
+            if state["model_state"] is not None:
+                if state["model_type"] == "TemperatureScaling":
+                    self.model = TemperatureScaling(
+                        device=self.device, initial_temperature=self.initial_temperature
+                    )
+                elif state["model_type"] == "PlattScaling":
+                    self.model = PlattScaling(
+                        n_classes=self.n_classes, device=self.device
+                    )
+                elif state["model_type"] == "BetaCalibration":
+                    self.model = BetaCalibration(
+                        n_classes=self.n_classes, device=self.device
+                    )
+                elif state["model_type"] == "DirichletCalibration":
+                    self.model = DirichletCalibration(
+                        n_classes=self.n_classes, device=self.device
+                    )
 
-    # def load(self, path: str) -> None:
-    #     """
-    #     Load the calibration model from a file.
+                self.model.load_state_dict(state["model_state"])
+                self.model.to(self.device)
 
-    #     Parameters:
-    #         path (str): Path to load the model from
-    #     """
-    #     load_dict = torch.load(path, map_location=self.device)
+        # Restore other attributes not saved in state
+        self.verbose = getattr(self, "verbose", False)  # Default if not present
+        self.save_path = getattr(self, "save_path", None)
 
-    #     self.method = load_dict["method"]
-    #     self.calibrated = load_dict["calibrated"]
-    #     self.is_multiclass = load_dict["is_multiclass"]
+    def save(self, file_path: str) -> None:
+        """Save the calibrator to a file using pickle.
+        Args:
+           filepath: Path to saved calibrator state"""
+        if not file_path.endswith(".pkl"):
+            raise ValueError("File path must end with .pkl")
+        with open(file_path, "wb") as f:
+            pickle.dump(self, f)
 
-    #     if self.method == "temperature":
-    #         self.temperature = load_dict["temperature"]
-    #     elif self.method == "isotonic":
-    #         self.isotonic_params = load_dict["isotonic_params"]
-    #     elif self.method == "platt":
-    #         self.platt_a = load_dict["platt_a"]
-    #         self.platt_b = load_dict["platt_b"]
-    #     elif self.method == "beta":
-    #         self.a = load_dict["a"]
-    #         self.b = load_dict["b"]
-    #         self.c = load_dict["c"]
+    @classmethod
+    def load(cls, filepath: str, device: str = None) -> "ModelCalibration":
+        """Load a calibrator from file with safe deserialization.
+
+        Args:
+            filepath: Path to saved calibrator state
+            device: Target device (None to use original device)
+
+        Returns:
+            ModelCalibration: Loaded calibrator instance
+        """
+        try:
+            if not filepath.endswith(".pkl"):
+                raise ValueError("File path must end with .pkl")
+            with open(filepath, "rb") as f:
+                calibrator = pickle.load(f)
+                if device is not None:
+                    calibrator.device = torch.device(device)
+                    if calibrator.model is not None:
+                        calibrator.model.to(device)
+                return calibrator
+        except (pickle.UnpicklingError, AttributeError, ImportError) as e:
+            raise RuntimeError(f"Failed to load calibrator: {str(e)}")
 
 
 def load_data(
@@ -1625,7 +1692,6 @@ def visualize_graph(
                 showlegend=True,
             )
         )
-
     return fig
 
 
@@ -1639,6 +1705,7 @@ def plot_training(
     val_ece,
     val_mce,
     title="Training Plot",
+    save_path: Optional[str] = None,
 ):
     """
     Plot training and validation losses and accuracies.
@@ -1683,7 +1750,10 @@ def plot_training(
     ax[3].legend()
 
     pyplot.suptitle(title)
+    if save_path:
+        pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
     pyplot.show()
+    return fig
 
 
 def plot_confusion_matrix(
@@ -1691,8 +1761,8 @@ def plot_confusion_matrix(
     y_pred,
     sample_weights,
     classes: List,
+    title: str = "Confusion Matrix",
     save_path: Optional[str] = None,
-    title: str = None,
 ):
     """
     Plot confusion matrix using seaborn.
@@ -1708,7 +1778,7 @@ def plot_confusion_matrix(
     sns.heatmap(
         cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes
     )
-    pyplot.title("Confusion Matrix")
+    pyplot.title(f"{title}")
     pyplot.ylabel("True Label")
     pyplot.xlabel("Predicted Label")
     pyplot.title(title)

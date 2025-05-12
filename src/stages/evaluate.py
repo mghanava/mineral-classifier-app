@@ -1,13 +1,14 @@
 import argparse
+import json
 import os
 from typing import List
 
 import torch
 import torch.nn.functional as F
 import yaml
-from models import get_model
 from sklearn.metrics import accuracy_score, fbeta_score, matthews_corrcoef
 from sklearn.utils.class_weight import compute_sample_weight
+from src.models import get_model
 from src.utilities.utils import (
     CalibrationMetrics,
     LogTime,
@@ -76,6 +77,7 @@ def evaluate_with_calibration(
                 uncal_pred.cpu().numpy(),
                 sample_weight=sample_weights_test.cpu().numpy(),
             ),
+            "ece": cal_metrics_uncalibrated.ece,
             "mce": cal_metrics_uncalibrated.mce,
         }
     # Generate new logits WITH gradient tracking for calibration
@@ -94,6 +96,7 @@ def evaluate_with_calibration(
         factor_learning_rate_scheduler=factor_learning_rate_scheduler,
         patience_learning_rate_scheduler=patience_learning_rate_scheduler,
         min_delta_early_stopping=min_delta_early_stopping,
+        save_path=save_path,
     )
     calibrator.fit(calib_logits, y_tru_calib, sample_weights_calib)
     cal_probs = calibrator.predict_probability(logits[data.test_mask])
@@ -120,35 +123,41 @@ def evaluate_with_calibration(
             cal_pred.cpu().numpy(),
             sample_weight=sample_weights_test.cpu().numpy(),
         ),
+        "ece": cal_metrics_calibrated.ece,
         "mce": cal_metrics_calibrated.mce,
     }
 
-    # Print results
-    print("\nUncalibrated Metrics:")
-    print(f"Accuracy: {uncal_metrics['acc']:.3f}")
-    print(f"F1 Score: {uncal_metrics['f1']:.3f}")
-    print(f"matthews_corrcoef: {uncal_metrics['mcc']:.3f}")
-    print(f"Maximum calibration error: {uncal_metrics['mce']:.3f}")
-    print("\nCalibrated Metrics:")
-    print(f"Accuracy: {cal_metrics['acc']:.3f}")
-    print(f"F1 Score: {cal_metrics['f1']:.3f}")
-    print(f"matthews_corrcoef: {cal_metrics['mcc']:.3f}")
-    print(f"Maximum calibration error: {cal_metrics['mce']:.3f}\n")
+    # Save plots to disk
+    reliability_path = os.path.join(save_path, "reliability_diagram.png")
+    confusion_path = os.path.join(save_path, "confusion_matrix.png")
 
+    print(f"Saving reliability diagram to {reliability_path}!")
     plot_reliability_diagram(
         uncalibrated_stats=cal_metrics_uncalibrated,
         calibrated_stats=cal_metrics_calibrated,
-        save_path=save_path,
+        title=f"Reliability Diagram for {calibrator.method}",
+        save_path=reliability_path,
     )
+    print(f"Saving confusion matrix to {confusion_path}!")
     plot_confusion_matrix(
         y_true_test.cpu().numpy(),
         cal_pred.cpu().numpy(),
         sample_weights_test.cpu().numpy(),
         class_names,
-        save_path=save_path,
+        save_path=confusion_path,
     )
+    # Save metrics as JSON file
+    metrics_path = os.path.join(save_path, "metrics.json")
+    print(f"Saving metrics to {metrics_path}")
+    metrics = {"uncalibrated": uncal_metrics, "calibrated": cal_metrics}
+    with open(metrics_path, "w") as f:
+        json.dump(metrics, f, indent=4)
+    # Save the calibrator
+    file_name = f"{save_path}/calibrator.pkl"
+    print(f"Saving calibrated model to {file_name}\n")
+    calibrator.save(file_name)
 
-    return calibrator, (uncal_metrics, cal_metrics)
+    return metrics
 
 
 def main():
@@ -157,7 +166,9 @@ def main():
     evaluation_path = "results/evaluation"
     os.makedirs(evaluation_path, exist_ok=True)
 
-    test_data = torch.load(os.path.join(dataset_path, "test_data.pt"))
+    test_data = torch.load(
+        os.path.join(dataset_path, "test_data.pt"), weights_only=False
+    )
 
     with open("params.yaml") as f:
         params = yaml.safe_load(f)
@@ -189,8 +200,9 @@ def main():
     VERBOSE = params["evaluate"]["verbose"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"\nUsing device: {device} for evaluation\n")
     with LogTime(task_name="\nEvaluation"):
-        print("Assessing test dataset")
+        print("Assessing test dataset ...\n")
         evaluate_with_calibration(
             data=test_data.to(device),
             model=model.to(device),
@@ -210,5 +222,6 @@ def main():
             device=device,
         )
 
-    if __name__ == "__main__":
-        main()
+
+if __name__ == "__main__":
+    main()

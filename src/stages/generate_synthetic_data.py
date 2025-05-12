@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 import numpy as np
 import torch
@@ -6,6 +7,7 @@ import yaml
 from scipy.spatial import distance_matrix
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler
+from src.utilities.utils import visualize_graph
 from torch_geometric.data import Data
 
 
@@ -294,6 +296,33 @@ def prepare_edge_data(coordinates, d_threshold: float, edge_dim: int):
     return edge_index, edge_attr
 
 
+def export_graph_to_html(
+    graph,
+    coordinates,
+    node_indices,
+    d_threshold,
+    edge_dim,
+    save_path: str,
+    dataset_idx: Optional[int] = None,
+    dataset_tag: str = "train",
+    filename="graph.html",
+):
+    """
+    Export the graph to an interactive HTML file using Plotly.
+    """
+    edge_index, _ = prepare_edge_data(coordinates[node_indices], d_threshold, edge_dim)
+    src, dst = edge_index
+    fig = visualize_graph(
+        coordinates[node_indices], graph.y[node_indices].numpy(), src, dst
+    )
+    if dataset_idx is not None:
+        filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}.html"
+    else:
+        filename = f"{save_path}/{dataset_tag}_graph.html"
+    fig.write_html(filename)
+    print(f"Graph exported to {filename}")
+
+
 def main():
     with open("params.yaml") as f:
         params = yaml.safe_load(f)
@@ -343,6 +372,50 @@ def main():
     os.makedirs(dataset_path, exist_ok=True)
     torch.save(fold_data, os.path.join(dataset_path, "fold_data.pt"))
     torch.save(test_data, os.path.join(dataset_path, "test_data.pt"))
+    # export the interactive 3D plots
+    for i, graph in enumerate(fold_data):
+        node_indices = graph.train_mask
+        export_graph_to_html(
+            graph,
+            coordinates,
+            node_indices,
+            d_threshold=D_THRESHOLD,
+            edge_dim=EDGE_DIM,
+            save_path=dataset_path,
+            dataset_idx=i + 1,
+            dataset_tag="train",
+        )
+        node_indices = graph.val_mask
+        export_graph_to_html(
+            graph,
+            coordinates,
+            node_indices,
+            d_threshold=D_THRESHOLD,
+            edge_dim=EDGE_DIM,
+            save_path=dataset_path,
+            dataset_idx=i + 1,
+            dataset_tag="val",
+        )
+    node_indices = test_data.test_mask
+    export_graph_to_html(
+        test_data,
+        coordinates,
+        node_indices,
+        d_threshold=D_THRESHOLD,
+        edge_dim=EDGE_DIM,
+        save_path=dataset_path,
+        dataset_tag="test",
+    )
+    node_indices = test_data.calib_mask
+    export_graph_to_html(
+        test_data,
+        coordinates,
+        node_indices,
+        d_threshold=D_THRESHOLD,
+        edge_dim=EDGE_DIM,
+        save_path=dataset_path,
+        dataset_tag="calib",
+    )
 
 
 if __name__ == "__main__":

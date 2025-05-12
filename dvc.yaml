@@ -1,0 +1,31 @@
+stages:
+  generate_data:
+    cmd: python src/stages/generate_synthetic_data.py
+    deps:
+      - src/stages/generate_synthetic_data.py
+    params:
+      - data
+    outs:
+      - results/data
+  train:
+    cmd: python src/stages/train.py --model ${model}
+    deps:
+      - src/stages/train.py
+      - src/models/
+      - results/data
+    params:
+      - model
+      - models.${model}
+      - train
+    outs:
+      - results/trained
+  evaluate:
+    cmd: python src/stages/evaluate.py --model ${model}
+    deps:
+      - src/stages/evaluate.py
+      - results/trained
+      - results/data
+    params:
+      - evaluate
+    outs:
+      - results/evaluation

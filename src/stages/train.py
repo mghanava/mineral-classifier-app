@@ -6,9 +6,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import yaml
-from models import get_model
 from sklearn.metrics import accuracy_score, fbeta_score, matthews_corrcoef
 from sklearn.utils.class_weight import compute_class_weight, compute_sample_weight
+from src.models import get_model
 from src.utilities.utils import (
     CalibrationMetrics,
     EarlyStopping,
@@ -43,6 +43,8 @@ def train(
     patience_learning_rate_scheduler: float,
     patience_early_stopping: float,
     min_delta_early_stopping: float,
+    dataset_idx: int,
+    save_path: str,
 ):
     y_true_train = data.y[data.train_mask]
     classes_train = np.unique(y_true_train.cpu().numpy())
@@ -170,14 +172,14 @@ def train(
         current_lr = optimizer.param_groups[0]["lr"]
         # Print message if learning rate has changed
         if current_lr != last_lr:
-            print(f"Learning rate decreased from {last_lr:.6f} to {current_lr:.6f}")
+            print(f"Learning rate decreased from {last_lr:.5e} to {current_lr:.5e}")
             last_lr = current_lr
             early_stopping.reset_counter()
         # Check early stopping
         early_stopping(loss_val)
         if early_stopping.early_stop:
             print(f"\nEarly stopping triggered after {epoch + 1} epochs!")
-            print(f"Best validation loss achieved: {early_stopping.best_score:.4f}")
+            print(f"Best validation loss achieved: {early_stopping.best_score:.4f}\n")
             break
 
         training_losses.append(loss.item() if loss else 0)
@@ -188,6 +190,10 @@ def train(
         validation_ece.append(ece)
         validation_mce.append(mce)
 
+    training_plots_path = os.path.join(
+        save_path, f"training_plots_dataset_{dataset_idx}.png"
+    )
+    print(f"Saving training plots for dataset {dataset_idx} to {training_plots_path}!")
     plot_training(
         training_losses,
         validation_losses,
@@ -198,6 +204,7 @@ def train(
         validation_ece,
         validation_mce,
         title="Training Plot",
+        save_path=training_plots_path,
     )
 
     # Load the best model state
@@ -210,7 +217,12 @@ def train(
 
 def main():
     dataset_path = "results/data"
-    fold_data = torch.load(os.path.join(dataset_path, "fold_data.pt"))
+    model_trained_path = "results/trained"
+    os.makedirs(model_trained_path, exist_ok=True)
+
+    fold_data = torch.load(
+        os.path.join(dataset_path, "fold_data.pt"), weights_only=False
+    )
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
     args = parser.parse_args()
@@ -235,8 +247,9 @@ def main():
     set_seed(seed=SEED)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nUsing device: {device}")
+    print(f"\nUsing device: {device} for training")
     fold_results = []
+    dataset_idx = 0
     with LogTime(task_name="\nTraining"):
         for graph in fold_data:
             print(f"\nTraining model on kfold {graph.fold + 1} ...\n")
@@ -251,17 +264,19 @@ def main():
                 patience_learning_rate_scheduler=PATIENCE_LEARNING_RATE_SCHEDULER,
                 patience_early_stopping=PATIENCE_EARLY_STOPPING,
                 min_delta_early_stopping=MIN_DELTA_EARLY_STOPPING,
+                save_path=model_trained_path,
+                dataset_idx=dataset_idx + 1,
             )
             fold_results.append((model_trained, best_loss_val))
+            dataset_idx += 1
+
     # Select the best trained model and save it
     sorted_models = sorted(fold_results, key=lambda x: x[1], reverse=True)
     model_trained_best = sorted_models[0][0]
-    model_trained_path = "results/trained"
-    os.makedirs(model_trained_path, exist_ok=True)
     torch.save(
         model_trained_best.state_dict(), f"{model_trained_path}/{args.model}.pkl"
     )
-    print(f"Model saved to {model_trained_path}/{args.model}.pkl")
+    print(f"Model saved to {model_trained_path}/{args.model}.pkl\n")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,12 @@
+services:
+  mineral_classifier:
+    build: .
+    runtime: nvidia # Critical for GPU access
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all # Expose all GPUs
+    volumes:
+      - .:/app
+      - ./results:/app/results # Mount results directory
+      - ./.dvc/cache:/app/.dvc/cache # Mount DVC cache to persist between runs
+    # Default command (executed with docker-compose up)
+    command: tail -f /dev/null # Keeps container running
