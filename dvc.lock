@@ -31,7 +31,7 @@ stages:
     outs:
     - path: results/data
       hash: md5
-      md5: 8758ed5087cbb34000c42219cab8dedb.dir
+      md5: dd8768a5d0890b107fc67f7361e4f20a.dir
       size: 111457729
       nfiles: 14
   train:
@@ -39,7 +39,7 @@ stages:
     deps:
     - path: results/data
       hash: md5
-      md5: 8758ed5087cbb34000c42219cab8dedb.dir
+      md5: dd8768a5d0890b107fc67f7361e4f20a.dir
       size: 111457729
       nfiles: 14
     - path: src/models/
@@ -72,21 +72,21 @@ stages:
     outs:
     - path: results/trained
       hash: md5
-      md5: 57ce84a9db89646ee2ab55c7a0c1107d.dir
-      size: 3701587
+      md5: a1832099cf9101d1e8fecb17f549f701.dir
+      size: 3682431
       nfiles: 6
   evaluate:
     cmd: python src/stages/evaluate.py --model gcn
     deps:
     - path: results/data
       hash: md5
-      md5: 8758ed5087cbb34000c42219cab8dedb.dir
+      md5: dd8768a5d0890b107fc67f7361e4f20a.dir
       size: 111457729
       nfiles: 14
     - path: results/trained
       hash: md5
-      md5: 57ce84a9db89646ee2ab55c7a0c1107d.dir
-      size: 3701587
+      md5: a1832099cf9101d1e8fecb17f549f701.dir
+      size: 3682431
       nfiles: 6
     - path: src/stages/evaluate.py
       hash: md5
@@ -95,7 +95,7 @@ stages:
     params:
       params.yaml:
         evaluate:
-          initial_temperature: 1.1
+          initial_temperature: 0.9
           n_bins: 10
           class_names:
           - low
@@ -115,6 +115,6 @@ stages:
     outs:
     - path: results/evaluation
       hash: md5
-      md5: b9c5518b316928e17fad2aa169167016.dir
-      size: 440302
+      md5: bebd033e45bfd086907c347c48efdfcc.dir
+      size: 433214
       nfiles: 6

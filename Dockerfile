@@ -21,9 +21,8 @@ COPY . .
 EXPOSE 8000
 # set python path to include the src directory
 ENV PYTHONPATH=/app
-# Add non-root user
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Creates a non-root user and adds permission to access the /app folder
+RUN useradd -u 1000 appuser && chown -R appuser /app
 USER appuser
 # command to run when the container starts
 CMD ["dvc", "exp", "save"]
