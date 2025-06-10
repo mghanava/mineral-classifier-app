@@ -1,0 +1,15 @@
+{
+  "name": "Mineral Classifier",
+  "dockerComposeFile": "../docker-compose.yaml",
+  "service": "mineral_classifier",
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.pythonPath": "/opt/conda/bin/python",
+        "python.analysis.extraPaths": ["/app/src"]
+      },
+      "extensions": ["ms-python.python"]
+    }
+  }
+}

@@ -12,11 +12,10 @@ data:
   n_features: 4
   n_classes: 5
   d_threshold: 5
-  edge_dim: 2
   n_splits: 5
   test_size: 0.3
   calib_size: 0.50
-  seed: 40
+  seed: 10
 
 # Default model selection
 model: gcn

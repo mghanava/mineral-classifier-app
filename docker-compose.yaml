@@ -1,9 +1,11 @@
 services:
   mineral_classifier:
+    container_name: mineral_classifier_container
+    image: my_mineral_classifier:latest
     build: .
-    runtime: nvidia # Critical for GPU access
+    runtime: nvidia 
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all # Expose all GPUs
+      - NVIDIA_VISIBLE_DEVICES=all 
     volumes:
       - .:/app
       - ./results:/app/results # Mount results directory

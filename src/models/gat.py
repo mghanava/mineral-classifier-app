@@ -9,7 +9,6 @@ class MineralDepositGAT(nn.Module):
         n_classes: int,
         in_channels: int,
         hidden_channels: int = 64,
-        edge_dim: int = 1,
         n_layers: int = 3,
         n_heads: int = 5,
         dropout: float = 0.3,
@@ -41,7 +40,6 @@ class MineralDepositGAT(nn.Module):
                 hidden_channels,
                 heads=n_heads,
                 add_self_loops=False,
-                edge_dim=edge_dim,
                 dropout=dropout,
             )
         )  # in_channels => hidden_channels
@@ -53,7 +51,6 @@ class MineralDepositGAT(nn.Module):
                     hidden_channels,
                     heads=n_heads,
                     add_self_loops=False,
-                    edge_dim=edge_dim,
                     dropout=dropout,
                 )  # hidden_channels * n_heads => hidden_channels* n_heads
             )
@@ -64,13 +61,10 @@ class MineralDepositGAT(nn.Module):
                 hidden_channels,
                 heads=1,
                 add_self_loops=False,
-                edge_dim=edge_dim,
                 dropout=dropout,
             )  # hidden_channels * n_heads => hidden_channels
         )
         # MLP head for classification: hidden_channels => n_classes
-        # # Binary classification case
-        # n_classes = n_classes if n_classes > 2 else 1
         self.classify = nn.Sequential(
             nn.Linear(hidden_channels, hidden_channels),
             nn.ReLU(),

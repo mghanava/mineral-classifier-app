@@ -130,8 +130,7 @@ def construct_graph(
     coordinates,
     features,
     labels,
-    d_threshold: float,
-    edge_dim: int,
+    connection_radius: float,
     n_splits: int,
     test_size: float,
     calib_size: int,
@@ -151,7 +150,7 @@ def construct_graph(
     test_size (float): Proportion of data to use as test set (e.g., 0.2 for 20%)
     calib_size (float): Proportion of data to use as calibration set
         (e.g., 0.5 for 50%)
-    d_threshold (float): Distance threshold to consider interconnected nodes
+    connection_radius (float): Distance threshold to consider interconnected nodes
     seed (int): Random seed for reproducibility
 
     Returns:
@@ -164,7 +163,7 @@ def construct_graph(
     x = torch.tensor(features, dtype=torch.float)
     y = torch.tensor(labels, dtype=torch.long)
 
-    edge_index, edge_attr = prepare_edge_data(coordinates, d_threshold, edge_dim)
+    edge_index, edge_attr = prepare_edge_data(coordinates, connection_radius)
 
     n_nodes = len(labels)
     # First split into train+val and test
@@ -237,14 +236,14 @@ def construct_graph(
     return fold_data, test_data
 
 
-def prepare_edge_data(coordinates, d_threshold: float, edge_dim: int):
+def prepare_edge_data(coordinates, connection_radius: float):
     """Prepares edge connectivity and attributes for a graph neural network from coordinate data.
     This function computes pairwise distances between points and creates edge connections
     based on a distance threshold, making the resulting graph undirected. It also
     generates edge attributes including both raw distances and inverse distances.
     Args:
         coordinates (numpy.ndarray): Array of point coordinates with shape [num_nodes, num_dimensions]
-        d_threshold (float, optional): Maximum distance threshold for creating edges. Defaults to 5.0.
+        connection_radius (float, optional): Maximum distance threshold for creating edges. Defaults to 5.0.
     Returns:
         tuple: Contains:
             - edge_index (torch.Tensor): Tensor of shape [2, num_edges] containing source and
@@ -261,10 +260,10 @@ def prepare_edge_data(coordinates, d_threshold: float, edge_dim: int):
     dist_matrix = distance_matrix(coordinates, coordinates)
     # Find edges based on distance threshold avoiding self-node thru distance > 0
     # to force the model to learn purely from neighboring nodes
-    src, dst = np.where((dist_matrix < d_threshold) & (dist_matrix > 0))
+    src, dst = np.where((dist_matrix < connection_radius) & (dist_matrix > 0))
     # # or alternatively, include self-nodes assuming current node features are also
     # # important for prediction (node own features along with its neighbors)
-    # src, dst = np.where(dist_matrix < d_threshold)
+    # src, dst = np.where(dist_matrix < connection_radius)
     print(f"\nNumber of edges found (directed): {len(src)}")
     # Make the graph undirected by adding reciprocal edges; for each edge A→B,
     # add the reverse edge B→A to assure same information passage both ways
@@ -279,20 +278,12 @@ def prepare_edge_data(coordinates, d_threshold: float, edge_dim: int):
     )
     # Edge Attributes
     edge_distances = dist_matrix[src_undirected, dst_undirected]
-    raw_distances = torch.tensor(edge_distances, dtype=torch.float).unsqueeze(
-        1
-    )  # Shape: [num_edges, 1]
-    edge_attr = raw_distances
-    if edge_dim == 2:
-        inverse_distances_squared = (
-            1.0 / (edge_distances + 1e-6) ** 2
-        )  # Avoid division by zero that matters for self-nodes
-        inverse_distances_squared = torch.tensor(
-            inverse_distances_squared, dtype=torch.float
+    # Avoid division by zero that matters for self-nodes
+    inverse_distances_squared = torch.tensor(
+            1.0 / (edge_distances + 1e-6) ** 2, dtype=torch.float32
         ).unsqueeze(1)  # Shape: [num_edges, 1]
-        edge_attr = torch.cat(
-            [inverse_distances_squared, raw_distances], dim=1
-        )  # Shape: [num_edges, 2]
+    
+    edge_attr = inverse_distances_squared
     return edge_index, edge_attr
 
 
@@ -300,8 +291,7 @@ def export_graph_to_html(
     graph,
     coordinates,
     node_indices,
-    d_threshold,
-    edge_dim,
+    connection_radius,
     save_path: str,
     dataset_idx: Optional[int] = None,
     dataset_tag: str = "train",
@@ -310,7 +300,7 @@ def export_graph_to_html(
     """
     Export the graph to an interactive HTML file using Plotly.
     """
-    edge_index, _ = prepare_edge_data(coordinates[node_indices], d_threshold, edge_dim)
+    edge_index, _ = prepare_edge_data(coordinates[node_indices], connection_radius)
     src, dst = edge_index
     fig = visualize_graph(
         coordinates[node_indices], graph.y[node_indices].numpy(), src, dst
@@ -336,8 +326,7 @@ def main():
     Z_DEPTH = params["data"]["z_depth"]
     N_FEATURES = params["data"]["n_features"]
     N_CLASSES = params["data"]["n_classes"]
-    D_THRESHOLD = params["data"]["d_threshold"]
-    EDGE_DIM = params["data"]["edge_dim"]
+    connection_radius = params["data"]["connection_radius"]
     N_SPLITS = params["data"]["n_splits"]
     TEST_SIZE = params["data"]["test_size"]
     CALIB_SIZE = params["data"]["calib_size"]
@@ -360,8 +349,7 @@ def main():
         coordinates,
         features,
         labels,
-        d_threshold=D_THRESHOLD,
-        edge_dim=EDGE_DIM,
+        connection_radius=connection_radius,
         n_splits=N_SPLITS,
         test_size=TEST_SIZE,
         calib_size=CALIB_SIZE,
@@ -379,8 +367,7 @@ def main():
             graph,
             coordinates,
             node_indices,
-            d_threshold=D_THRESHOLD,
-            edge_dim=EDGE_DIM,
+            connection_radius=connection_radius,
             save_path=dataset_path,
             dataset_idx=i + 1,
             dataset_tag="train",
@@ -390,8 +377,7 @@ def main():
             graph,
             coordinates,
             node_indices,
-            d_threshold=D_THRESHOLD,
-            edge_dim=EDGE_DIM,
+            connection_radius=connection_radius,
             save_path=dataset_path,
             dataset_idx=i + 1,
             dataset_tag="val",
@@ -401,8 +387,7 @@ def main():
         test_data,
         coordinates,
         node_indices,
-        d_threshold=D_THRESHOLD,
-        edge_dim=EDGE_DIM,
+        connection_radius=connection_radius,
         save_path=dataset_path,
         dataset_tag="test",
     )
@@ -411,8 +396,7 @@ def main():
         test_data,
         coordinates,
         node_indices,
-        d_threshold=D_THRESHOLD,
-        edge_dim=EDGE_DIM,
+        connection_radius=connection_radius,
         save_path=dataset_path,
         dataset_tag="calib",
     )
