@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # copy python requirements file first to leverage docker cache
 COPY requirements.txt .
 # install python dependencies and DVC
-RUN pip install --no-cache-dir -r requirements.txt dvc
+RUN pip install --no-cache-dir -r requirements.txt dvc ruff
 # copy the rest of the application code
 COPY . .
 # expose the port the app runs on

@@ -5,24 +5,19 @@ stages:
     deps:
     - path: src/stages/generate_synthetic_data.py
       hash: md5
-      md5: 67ef2db2fdce2bc063762cf80eb25d23
-      size: 13964
+      md5: 886d94c5b34e9780cf07566c7e4ee5ad
+      size: 23543
     params:
       params.yaml:
         data:
-          origin:
-          - 657161
-          - 688292
-          - 0
-          x_spacing: 2.5
-          y_spacing: 2.5
-          z_spacing: 2.5
-          x_length: 50
-          y_length: 50
-          z_depth: 40
+          n_samples: 1000
+          spacing: 50
+          depth: -500
           n_features: 4
           n_classes: 5
-          d_threshold: 5
+          threshold_binary: 0.5
+          min_samples_per_class: 15
+          connection_radius: 150
           n_splits: 5
           test_size: 0.3
           calib_size: 0.5
@@ -30,16 +25,16 @@ stages:
     outs:
     - path: results/data
       hash: md5
-      md5: 2de178f2ed11a1e12e48495d7e386c26.dir
-      size: 108629807
+      md5: ffb67b011e0491686b8f181beaa7b1d2.dir
+      size: 59597088
       nfiles: 14
   train:
     cmd: python src/stages/train.py --model gcn
     deps:
     - path: results/data
       hash: md5
-      md5: 2de178f2ed11a1e12e48495d7e386c26.dir
-      size: 108629807
+      md5: ffb67b011e0491686b8f181beaa7b1d2.dir
+      size: 59597088
       nfiles: 14
     - path: src/models/
       hash: md5
@@ -71,21 +66,21 @@ stages:
     outs:
     - path: results/trained
       hash: md5
-      md5: 082462c84c9084035724cc5d922441c9.dir
-      size: 3580574
+      md5: 12a56f8bbff002ad1c4c8e19c6bfe996.dir
+      size: 3850490
       nfiles: 6
   evaluate:
     cmd: python src/stages/evaluate.py --model gcn
     deps:
     - path: results/data
       hash: md5
-      md5: 2de178f2ed11a1e12e48495d7e386c26.dir
-      size: 108629807
+      md5: ffb67b011e0491686b8f181beaa7b1d2.dir
+      size: 59597088
       nfiles: 14
     - path: results/trained
       hash: md5
-      md5: 082462c84c9084035724cc5d922441c9.dir
-      size: 3580574
+      md5: 12a56f8bbff002ad1c4c8e19c6bfe996.dir
+      size: 3850490
       nfiles: 6
     - path: src/stages/evaluate.py
       hash: md5
@@ -114,6 +109,6 @@ stages:
     outs:
     - path: results/evaluation
       hash: md5
-      md5: 55afa4d7bc7d761a49d374aaf12c2354.dir
-      size: 435087
+      md5: 773bfe902c6c8db7a1930b60ef16e9c8.dir
+      size: 425269
       nfiles: 6
