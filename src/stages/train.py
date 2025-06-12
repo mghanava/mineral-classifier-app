@@ -1,3 +1,12 @@
+"""Training module for Graph Neural Network models.
+
+This module provides functions for training GNN models with features including:
+- Early stopping and learning rate scheduling
+- Gradient clipping and class weight balancing
+- Multiple evaluation metrics tracking
+- Training visualization and model checkpointing
+"""
+
 import argparse
 import os
 import random
@@ -8,6 +17,7 @@ import torch.nn as nn
 import yaml
 from sklearn.metrics import accuracy_score, fbeta_score, matthews_corrcoef
 from sklearn.utils.class_weight import compute_class_weight, compute_sample_weight
+
 from src.models import get_model
 from src.utilities.utils import (
     CalibrationMetrics,
@@ -18,11 +28,9 @@ from src.utilities.utils import (
 
 
 def set_seed(seed: int):
-    """
-    Set random seeds for reproducibility across all relevant libraries
-    """
+    """Set random seeds for reproducibility across all relevant libraries."""
     random.seed(seed)
-    np.random.seed(seed)
+    np.random.default_rng(seed)  # Set NumPy's random seed directly
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
@@ -40,12 +48,50 @@ def train(
     max_grad_norm: float,
     weight_decay: float,
     factor_learning_rate_scheduler: float,
-    patience_learning_rate_scheduler: float,
-    patience_early_stopping: float,
+    patience_learning_rate_scheduler: int,
+    patience_early_stopping: int,
     min_delta_early_stopping: float,
     dataset_idx: int,
     save_path: str,
 ):
+    """Train a Graph Neural Network model with early stopping and learning rate scheduling.
+
+    This function implements a training loop for a GNN model with various features including
+    gradient clipping, class weight balancing, and multiple evaluation metrics.
+
+    Args:
+        data: The input graph data object containing features, edges, and masks for train/val splits
+        model: The GNN model to be trained
+        n_epochs (int): Maximum number of training epochs
+        lr (float): Initial learning rate
+        max_grad_norm (float): Maximum gradient norm for gradient clipping
+        weight_decay (float): L2 regularization factor
+        factor_learning_rate_scheduler (float): Factor by which learning rate is reduced
+        patience_learning_rate_scheduler (float): Number of epochs to wait before reducing lr
+        patience_early_stopping (float): Number of epochs to wait before early stopping
+        min_delta_early_stopping (float): Minimum change in validation loss to be considered as improvement
+        dataset_idx (int): Index of the current dataset for saving plots
+        save_path (str): Directory path where training plots will be saved
+
+    Returns:
+        tuple: (trained_model, best_validation_loss)
+            - trained_model: The trained GNN model
+            - best_validation_loss: The lowest validation loss achieved during training
+
+    The function tracks multiple metrics during training:
+        - Training and validation losses
+        - Validation accuracy, F1 score, and Matthews correlation coefficient
+        - Expected and Maximum Calibration Error
+        - Gradient norms
+
+    Features:
+        - Class-weighted loss computation for imbalanced datasets
+        - Learning rate scheduling based on validation loss
+        - Early stopping when validation loss stops improving
+        - Gradient clipping to prevent exploding gradients
+        - Comprehensive training visualization plots
+
+    """
     y_true_train = data.y[data.train_mask]
     classes_train = np.unique(y_true_train.cpu().numpy())
 
@@ -216,6 +262,11 @@ def train(
 
 
 def main():
+    """Execute the main training pipeline for the GNN model.
+
+    This function loads the dataset, initializes the model with specified parameters,
+    trains the model across multiple folds, and saves the best performing model.
+    """
     dataset_path = "results/data"
     model_trained_path = "results/trained"
     os.makedirs(model_trained_path, exist_ok=True)

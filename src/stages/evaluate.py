@@ -1,13 +1,23 @@
+"""Evaluation module for assessing model performance and calibration.
+
+This module provides functionality to evaluate trained models, including:
+- Model calibration assessment
+- Metrics calculation (accuracy, F1, MCC)
+- Generation of reliability diagrams and confusion matrices
+- Saving of evaluation results and calibrated models
+"""
+
 import argparse
 import json
 import os
-from typing import List
+from typing import Literal, cast
 
 import torch
 import torch.nn.functional as F
 import yaml
 from sklearn.metrics import accuracy_score, fbeta_score, matthews_corrcoef
 from sklearn.utils.class_weight import compute_sample_weight
+
 from src.models import get_model
 from src.utilities.utils import (
     CalibrationMetrics,
@@ -24,7 +34,7 @@ def evaluate_with_calibration(
     calibration_method: str,
     initial_temperature: float,
     n_bins: int,
-    class_names: List,
+    class_names: list,
     lr: float,
     n_epochs: int,
     weight_decay: float,
@@ -36,6 +46,54 @@ def evaluate_with_calibration(
     save_path: str,
     device: torch.device,
 ):
+    """Evaluate a model's performance with and without calibration, and save results.
+
+    This function performs model evaluation, applies calibration, and computes various
+    metrics before and after calibration. It also generates and saves visualization plots
+    and metrics to disk.
+
+    Args:
+        data: PyTorch Geometric data object containing the graph data and masks
+        model: PyTorch model to evaluate
+        calibration_method (str): Method used for calibration ('temperature_scaling', 'vector_scaling', etc.)
+        initial_temperature (float): Initial temperature parameter for temperature scaling
+        n_bins (int): Number of bins to use for reliability diagram and calibration metrics
+        class_names (list): List of class names for confusion matrix plotting
+        lr (float): Learning rate for calibration optimization
+        n_epochs (int): Number of epochs to train calibration
+        weight_decay (float): Weight decay parameter for Adam optimizer during calibration
+        factor_learning_rate_scheduler (float): Factor to reduce learning rate in scheduler
+        patience_learning_rate_scheduler (float): Patience for learning rate scheduler
+        patience_early_stopping (float): Patience for early stopping
+        min_delta_early_stopping (float): Minimum change in loss for early stopping
+        verbose (bool): Whether to print progress during calibration
+        save_path (str): Directory path to save outputs
+        device (torch.device): Device to run computations on
+
+    Returns:
+        dict: Dictionary containing metrics before and after calibration:
+            {
+                'uncalibrated': {
+                    'acc': float,  # Accuracy
+                    'f1': float,   # F1 score (beta=0.5)
+                    'mcc': float,  # Matthews correlation coefficient
+                    'ece': float,  # Expected calibration error
+                    'mce': float   # Maximum calibration error
+                },
+                'calibrated': {
+                    'acc': float,
+                    'f1': float,
+                    'mcc': float,
+                    'ece': float,
+                    'mce': float
+
+    Side Effects:
+        - Saves reliability diagram plot to '{save_path}/reliability_diagram.png'
+        - Saves confusion matrix plot to '{save_path}/confusion_matrix.png'
+        - Saves metrics to '{save_path}/metrics.json'
+        - Saves calibrator model to '{save_path}/calibrator.pkl'
+
+    """
     y_true_test = data.y[data.test_mask]
     y_tru_calib = data.y[data.calib_mask]
     sample_weights_test = compute_sample_weight("balanced", y_true_test.cpu())
@@ -48,44 +106,44 @@ def evaluate_with_calibration(
     )
     # Get base model predictions
     model.eval()
-    with torch.no_grad():
-        logits = model(data)
-        base_probs = F.softmax(logits, dim=1)
-        # Calculate metrics before calibration
-        uncal_probs = base_probs[data.test_mask]
-        uncal_pred = uncal_probs.argmax(dim=1)
+    logits = model(data)
+    base_probs = F.softmax(logits, dim=1)
+    # Calculate metrics before calibration
+    uncal_probs = base_probs[data.test_mask]
+    uncal_pred = uncal_probs.argmax(dim=1)
 
-        cal_metrics = CalibrationMetrics(n_bins=n_bins)
-        cal_metrics_uncalibrated = cal_metrics.calculate_metrics(
-            uncal_probs, y_true_test, sample_weights_test
-        )
-        uncal_metrics = {
-            "acc": accuracy_score(
-                y_true_test.cpu().numpy(),
-                uncal_pred.cpu().numpy(),
-                sample_weight=sample_weights_test.cpu().numpy(),
-            ),
-            "f1": fbeta_score(
-                y_true_test.cpu().numpy(),
-                uncal_pred.cpu().numpy(),
-                sample_weight=sample_weights_test.cpu().numpy(),
-                beta=0.5,
-                average="macro",
-            ),
-            "mcc": matthews_corrcoef(
-                y_true_test.cpu().numpy(),
-                uncal_pred.cpu().numpy(),
-                sample_weight=sample_weights_test.cpu().numpy(),
-            ),
-            "ece": cal_metrics_uncalibrated.ece,
-            "mce": cal_metrics_uncalibrated.mce,
-        }
-    # Generate new logits WITH gradient tracking for calibration
-    model.eval()  # Keep in eval mode, but without no_grad
-    calib_logits = model(data)[data.calib_mask]  # These logits will have grad_fn
-    # Calibrate model with the calibration dataset
+    cal_metrics = CalibrationMetrics(n_bins=n_bins)
+    cal_metrics_uncalibrated = cal_metrics.calculate_metrics(
+        uncal_probs, y_true_test, sample_weights_test
+    )
+    uncal_metrics = {
+        "acc": accuracy_score(
+            y_true_test.cpu().numpy(),
+            uncal_pred.cpu().numpy(),
+            sample_weight=sample_weights_test.cpu().numpy(),
+        ),
+        "f1": fbeta_score(
+            y_true_test.cpu().numpy(),
+            uncal_pred.cpu().numpy(),
+            sample_weight=sample_weights_test.cpu().numpy(),
+            beta=0.5,
+            average="macro",
+        ),
+        "mcc": matthews_corrcoef(
+            y_true_test.cpu().numpy(),
+            uncal_pred.cpu().numpy(),
+            sample_weight=sample_weights_test.cpu().numpy(),
+        ),
+        "ece": cal_metrics_uncalibrated.ece,
+        "mce": cal_metrics_uncalibrated.mce,
+    }
+
+    calib_logits = logits[data.calib_mask]
     calibrator = ModelCalibration(
-        method=calibration_method,
+        method=cast(
+            Literal["temperature", "isotonic", "platt", "beta", "dirichlet"],
+            calibration_method,
+        ),
         initial_temperature=initial_temperature,
         device=device,
         lr=lr,
@@ -161,6 +219,11 @@ def evaluate_with_calibration(
 
 
 def main():
+    """Run evaluation script.
+
+    This function parses command-line arguments, loads the model and evaluation data,
+    performs model evaluation with calibration, saves evaluation results, and prints progress.
+    """
     dataset_path = "results/data"
     model_trained_path = "results/trained"
     evaluation_path = "results/evaluation"

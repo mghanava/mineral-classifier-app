@@ -5,8 +5,8 @@ stages:
     deps:
     - path: src/stages/generate_synthetic_data.py
       hash: md5
-      md5: 886d94c5b34e9780cf07566c7e4ee5ad
-      size: 23543
+      md5: af1bb718902324c2fdcfcc64011f2988
+      size: 3718
     params:
       params.yaml:
         data:
@@ -25,7 +25,7 @@ stages:
     outs:
     - path: results/data
       hash: md5
-      md5: ffb67b011e0491686b8f181beaa7b1d2.dir
+      md5: bb4d526fa537d1623cda55c578712f33.dir
       size: 59597088
       nfiles: 14
   train:
@@ -33,7 +33,7 @@ stages:
     deps:
     - path: results/data
       hash: md5
-      md5: ffb67b011e0491686b8f181beaa7b1d2.dir
+      md5: bb4d526fa537d1623cda55c578712f33.dir
       size: 59597088
       nfiles: 14
     - path: src/models/
@@ -43,8 +43,8 @@ stages:
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: f3537f08bf73f24fe2667e794a888ec4
-      size: 9722
+      md5: b62e1fbb124195b821405b57f8487536
+      size: 12262
     params:
       params.yaml:
         model: gcn
@@ -66,26 +66,26 @@ stages:
     outs:
     - path: results/trained
       hash: md5
-      md5: 12a56f8bbff002ad1c4c8e19c6bfe996.dir
-      size: 3850490
+      md5: baf7c3a651bccfcee35a5f3bd759429f.dir
+      size: 3801145
       nfiles: 6
   evaluate:
     cmd: python src/stages/evaluate.py --model gcn
     deps:
     - path: results/data
       hash: md5
-      md5: ffb67b011e0491686b8f181beaa7b1d2.dir
+      md5: bb4d526fa537d1623cda55c578712f33.dir
       size: 59597088
       nfiles: 14
     - path: results/trained
       hash: md5
-      md5: 12a56f8bbff002ad1c4c8e19c6bfe996.dir
-      size: 3850490
+      md5: baf7c3a651bccfcee35a5f3bd759429f.dir
+      size: 3801145
       nfiles: 6
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 9fdb1e461502eb9d58d20019b23f911c
-      size: 8165
+      md5: 58cb53bd09b4d382589bfceb80df8c72
+      size: 10965
     params:
       params.yaml:
         evaluate:
@@ -109,6 +109,6 @@ stages:
     outs:
     - path: results/evaluation
       hash: md5
-      md5: 773bfe902c6c8db7a1930b60ef16e9c8.dir
-      size: 425269
+      md5: 929077f7e4ed084a9755f12e1ef9932d.dir
+      size: 433759
       nfiles: 6

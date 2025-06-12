@@ -1,7 +1,16 @@
+"""Utility functions and classes for geospatial data processing, model calibration, and visualization.
+
+This module provides:
+- Data generation and preprocessing utilities for geospatial datasets.
+- Calibration metrics and model calibration classes (Temperature Scaling, Platt, Beta, Dirichlet, Isotonic).
+- Graph construction and visualization helpers for PyTorch Geometric.
+- Plotting functions for training, calibration, and evaluation metrics.
+"""
+
 import os
 import pickle
 import time
-from typing import List, Literal, NamedTuple, Optional, Tuple
+from typing import ClassVar, Literal, NamedTuple
 
 import numpy as np
 import plotly.graph_objects as go
@@ -14,14 +23,13 @@ from matplotlib import pyplot
 from scipy.spatial import distance_matrix
 from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
 from sklearn.model_selection import StratifiedKFold, train_test_split
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 from sklearn.utils.class_weight import compute_class_weight
 from torch_geometric.data import Data
 
 
 class LogTime:
-    """
-    A context manager for measuring execution time of code blocks and functions.
+    """A context manager for measuring execution time of code blocks and functions.
 
     Usage as a context manager:
     ```
@@ -33,13 +41,16 @@ class LogTime:
     """
 
     def __init__(self, task_name: str):
+        """Initialize the LogTime context manager with a task name."""
         self.task_name = task_name
 
     def __enter__(self):
+        """Start timing the execution of the code block."""
         self.start_time = time.time()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        """End timing and print the execution time of the code block."""
         self.end_time = time.time()
         self.execution_time = self.end_time - self.start_time
         print(f"{self.task_name} executed in {self.execution_time:.3f} seconds.\n")
@@ -62,32 +73,42 @@ class CalibrationStats(NamedTuple):
 
 
 class CalibrationMetrics:
+    """Calculate calibration metrics for model predictions.
+
+    Measures how often the model is correct when it makes predictions at all confidences.
+        Group Predictions: Create groups of predictions based on predicted
+            probabilities.
+        Calculate Accuracy: For each group, calculate the accuracy
+            (fraction of correct predictions).
+        Calculate Confidence: For each group, calculate the average
+            predicted probability.
+        Calculate Absolute Difference: For each group, calculate the absolute
+            difference between accuracy and confidence.
+        Weight by group frequency or weight: Weight these differences by
+            the number of predictions in each group or their weights.
+        ECE: Sum up the weighted differences
+        MCE: Get maximum of unweighted differences
+
+    Args:
+        n_bins (int): Number of bins for binning confidence scores
+        binary_case_prob_threshold (float): Threshold for binary classification
+        min_samples_per_bin: Minimum samples required per bin
+
+    """
+
     def __init__(
         self,
         n_bins: int = 10,
         binary_case_prob_threshold: float = 0.5,
         min_samples_per_bin: int = 10,
     ):
-        """
-        Calculate calibration metrics for model predictions that measures how
-        often the model is correct when it makes predictions at all confidences.
-            Group Predictions: Create groups of predictions based on predicted
-                probabilities.
-            Calculate Accuracy: For each group, calculate the accuracy
-                (fraction of correct predictions).
-            Calculate Confidence: For each group, calculate the average
-                predicted probability.
-            Calculate Absolute Difference: For each group, calculate the absolute
-                difference between accuracy and confidence.
-            Weight by group frequency or weight: Weight these differences by
-                the number of predictions in each group or their weights.
-            ECE: Sum up the weighted differences
-            MCE: Get maximum of unweighted differences
+        """Initialize the CalibrationMetrics class.
 
         Args:
-            n_bins (int): Number of bins for binning confidence scores
-            binary_case_prob_threshold (float): Threshold for binary classification
-            min_samples_per_bin: Minimum samples required per bin
+            n_bins (int): Number of bins for binning confidence scores.
+            binary_case_prob_threshold (float): Threshold for binary classification.
+            min_samples_per_bin (int): Minimum samples required per bin.
+
         """
         if n_bins < 1:
             raise ValueError("Number of bins must be positive")
@@ -101,8 +122,7 @@ class CalibrationMetrics:
         self.min_samples_per_bin = min_samples_per_bin
 
     def _adaptive_binning(self, max_probs: torch.Tensor, n_bins: int) -> torch.Tensor:
-        """
-        Create adaptive bin edges based on prediction distribution.
+        """Create adaptive bin edges based on prediction distribution.
 
         Args:
             max_probs: Prediction probabilities
@@ -110,6 +130,7 @@ class CalibrationMetrics:
 
         Returns:
             torch.Tensor: Bin edges
+
         """
         # Sort probabilities
         sorted_probs = torch.sort(max_probs)[0]
@@ -138,21 +159,22 @@ class CalibrationMetrics:
         self,
         y_prob: torch.Tensor,
         y_true: torch.Tensor,
-        sample_weights: torch.Tensor = None,
+        sample_weights: torch.Tensor | None = None,
         adaptive_binning: bool = False,
         verbose: bool = False,
     ) -> CalibrationStats:
-        """
-        Compute calibration metrics.
+        """Compute calibration metrics.
 
         Args:
             y_prob (torch.Tensor): Predicted probabilities
             y_true (torch.Tensor): True labels
             sample_weights (torch.Tensor, optional): Sample weights
             adaptive_binning: Whether to use adaptive binning
+            verbose: Whether to print binning statistics
 
         Returns:
             CalibrationStats: Calibration metrics and reliability diagram statistics
+
         """
         # Handle binary and multi-class cases
         is_binary = y_prob.dim() == 1 or y_prob.shape[1] == 1
@@ -167,7 +189,7 @@ class CalibrationMetrics:
             # assure sum of probabilities for each sample is 1 otherwise treat tensor
             # as logits and apply softmax to normalize
             floating_point_tolerance = 1e-3
-            if torch.any(torch.abs((y_prob.sum(dim=1) - 1)) > floating_point_tolerance):
+            if torch.any(torch.abs(y_prob.sum(dim=1) - 1) > floating_point_tolerance):
                 y_prob = F.softmax(y_prob, dim=1)
             max_probs, pred_classes = torch.max(y_prob, dim=1)
 
@@ -240,7 +262,7 @@ class CalibrationMetrics:
         bin_errors = bin_accuracies - bin_confidences
         # ece is the weighted average of the bins’ accuracy/confidence absolute difference
         ece = (torch.abs(bin_errors) @ bin_weights / total_weight).item()
-        # mce is the maximum f the bins’ accuracy/confidence absolute difference
+        # mce is the maximum of the bins’ accuracy/confidence absolute difference
         mce = torch.max(torch.abs(bin_errors)).item()
 
         # Filter bin edges to only include edges of non-empty bins (redundant for adaptive binning)
@@ -272,7 +294,43 @@ class CalibrationMetrics:
 
 
 class EarlyStopping:
+    """Implements early stopping to terminate training when a monitored metric stops improving.
+
+    Attributes
+    ----------
+    patience : int
+        Number of epochs to wait for improvement before stopping.
+    min_delta : float
+        Minimum change to qualify as an improvement.
+    best_loss : float
+        Best score seen so far.
+    epochs_without_improvement : int
+        Number of epochs since last improvement.
+    early_stop : bool
+        Whether early stopping has been triggered.
+    decreasing_score : bool
+        Whether a lower score is considered better.
+
+    Methods
+    -------
+    __call__(loss_val)
+        Call to update early stopping state with new loss value.
+    reset_counter()
+        Reset the counter for epochs without improvement.
+    best_score
+        Property to get the best score seen so far.
+
+    """
+
     def __init__(self, patience=50, min_delta=0.001, decreasing_score: bool = True):
+        """Initialize the EarlyStopping object.
+
+        Args:
+            patience (int): Number of epochs to wait for improvement before stopping.
+            min_delta (float): Minimum change to qualify as an improvement.
+            decreasing_score (bool): Whether a lower score is considered better.
+
+        """
         self.patience = patience
         self.min_delta = min_delta
         self.best_loss = float("inf") if decreasing_score else -float("inf")
@@ -281,6 +339,12 @@ class EarlyStopping:
         self.decreasing_score = decreasing_score
 
     def __call__(self, loss_val):
+        """Update early stopping state with new loss value.
+
+        Args:
+            loss_val (float): The current loss value to evaluate for early stopping.
+
+        """
         stop_check_condition = (
             loss_val < self.best_loss - self.min_delta
             if self.decreasing_score
@@ -296,26 +360,83 @@ class EarlyStopping:
             self.early_stop = True
 
     def reset_counter(self):
-        """Reset the counter when learning rate changes"""
+        """Reset the counter when learning rate changes."""
         self.epochs_without_improvement = 0
 
     @property
     def best_score(self):
-        """Return the best score seen so far"""
+        """Return the best score seen so far."""
         return self.best_loss
 
 
 class TemperatureScaling(nn.Module):
+    """Applies temperature scaling to logits for model calibration.
+
+    Temperature scaling is a post-processing technique for calibrating the confidence of model predictions.
+    It rescales the logits by a learned temperature parameter to improve the reliability of predicted probabilities.
+
+    Args:
+        device: The device on which to store the temperature parameter.
+        initial_temperature (float): Initial value for the temperature parameter.
+
+    Methods:
+        forward(logits): Applies temperature scaling to the input logits.
+
+    """
+
     def __init__(self, device, initial_temperature: float = 0.9):
+        """Initialize the TemperatureScaling module with a temperature parameter.
+
+        Args:
+            device: The device on which to store the temperature parameter.
+            initial_temperature (float): Initial value for the temperature parameter.
+
+        """
         super().__init__()
         self.T = nn.Parameter(torch.tensor(initial_temperature, device=device))
 
     def forward(self, logits):
+        """Apply Beta calibration to the input logits.
+
+        Args:
+            logits (torch.Tensor): First component of the logits transformation.
+                Shape: [batch_size, num_classes] for multi-class or [batch_size] for binary.
+
+        Returns:
+            torch.Tensor: Calibrated logits using the bivariate logistic regression model.
+                Shape matches input logits.
+
+        """
         return logits / self.T
 
 
 class PlattScaling(nn.Module):
+    """Applies Platt scaling to logits for model calibration.
+
+    Platt scaling is a post-processing technique for calibrating the confidence of model predictions.
+    It applies a class-specific linear transformation to the logits to improve the reliability of predicted probabilities.
+
+    Args:
+        n_classes (int): Number of classes.
+        device: The device on which to store the parameters.
+
+    Methods:
+        forward(s_prime, s_double_prime): Applies Platt scaling to the input logits.
+
+    """
+
     def __init__(self, n_classes, device):
+        """Initialize Platt scaling parameters for model calibration.
+
+        Args:
+            n_classes (int): Number of classes in the classification problem.
+            device: The device (CPU/GPU) on which to store and compute the parameters.
+
+        The initialization creates two learnable parameters for each class:
+        - a_raw: Raw slope parameter (will be passed through ReLU to ensure positive)
+        - b: Intercept parameter
+
+        """
         super().__init__()
         # Parameters for Platt Scaling: a (slope) and b (intercept) for each class
         # Initialize slopes to 1.0 + small noise
@@ -334,12 +455,11 @@ class PlattScaling(nn.Module):
 
     @property
     def a(self):
-        # Apply ReLU to ensure a >= 0 for all classes
+        """Apply ReLU to ensure a >= 0 for all classes."""
         return F.relu(self.a_raw)
 
     def forward(self, s_prime, s_double_prime):
-        """
-        Apply Platt scaling to each class
+        """Apply Platt scaling to each class.
 
         Args:
             s_prime: Tensor of shape [batch_size, num_classes]
@@ -347,6 +467,7 @@ class PlattScaling(nn.Module):
 
         Returns:
             Calibrated logits of shape [batch_size, num_classes]
+
         """
         logits = s_prime + s_double_prime
         # Apply class-specific scaling parameters
@@ -355,7 +476,30 @@ class PlattScaling(nn.Module):
 
 
 class BetaCalibration(nn.Module):
+    """Applies Beta calibration to logits for model calibration.
+
+    Beta calibration extends Platt scaling by using three parameters (a, b, c) per class to calibrate model outputs. The calibration function is:
+    β(p) = sigmoid(c + a*log(p) + b*log(1-p))
+
+    Args:
+        n_classes (int): Number of classes.
+        device: The device on which to store the parameters.
+
+    Methods:
+        forward(s_prime, s_double_prime): Applies Beta calibration to the input logits.
+
+    """
+
     def __init__(self, n_classes, device):
+        """Initialize the BetaCalibration module with parameters for each class.
+
+        Beta calibration extends Platt scaling by using three parameters (a, b, c) per class to calibrate the confidence scores. The parameters are learned through optimization.
+
+        Args:
+            n_classes (int): Number of classes in the classification problem.
+            device: The device (CPU/GPU) on which to store and compute the parameters.
+
+        """
         super().__init__()
         # Raw parameters (unconstrained)
         self.a_raw = nn.Parameter(
@@ -378,22 +522,60 @@ class BetaCalibration(nn.Module):
 
     @property
     def a(self):
-        # Apply ReLU to ensure a >= 0
+        """Apply ReLU to ensure a >= 0."""
         return F.relu(self.a_raw)
 
     @property
     def b(self):
-        # Apply ReLU to ensure b >= 0
+        """Apply ReLU to ensure b >= 0."""
         return F.relu(self.b_raw)
 
     def forward(self, s_prime, s_double_prime):
+        """Apply Beta calibration to the input logits.
+
+        Args:
+            s_prime (torch.Tensor): First component of the logits transformation
+            s_double_prime (torch.Tensor): Second component of the logits transformation
+
+        Returns:
+            torch.Tensor: Calibrated logits using the bivariate logistic regression model
+
+        """
         # Bivariate logistic regression model: c + a * s' + b * s''
         calibrated_logits = self.c + self.a * s_prime + self.b * s_double_prime
         return calibrated_logits
 
 
 class DirichletCalibration(nn.Module):
+    """Applies Dirichlet calibration to logits for model calibration.
+
+    Dirichlet calibration learns a transformation matrix W and bias vector b that maps from the log probabilities (log p) of the model's predictions to calibrated logits:
+    calibrated_logits = W * log(p) + b
+
+    Args:
+        n_classes (int): Number of classes in the classification problem.
+        device: The device on which to store and compute the parameters.
+
+    Methods:
+        forward(logits): Applies Dirichlet calibration to the input logits.
+
+    """
+
     def __init__(self, n_classes, device):
+        """Initialize the DirichletCalibration module.
+
+        Dirichlet calibration learns a transformation matrix W and bias vector b that maps from the log probabilities of the model's uncalibrated predictions to calibrated logits:
+        calibrated_logits = W * log(p) + b
+
+        Args:
+            n_classes: Number of classes in the classification problem
+            device: The device (CPU/GPU) on which to store and compute parameters
+
+        The parameters are initialized as:
+            weights: Near-identity matrix + small random noise
+            biases: Zero vector of length n_classes
+
+        """
         super().__init__()
         self.n_classes = n_classes
         # Transformation parameters
@@ -408,6 +590,18 @@ class DirichletCalibration(nn.Module):
         self.biases = nn.Parameter(torch.zeros(n_classes, device=device))
 
     def forward(self, logits):
+        """Apply forward pass through the Dirichlet calibrator.
+
+        Converts raw logits from a classifier into calibrated logits by first applying
+        softmax to get probabilities, taking log, then applying a linear transformation.
+
+        Args:
+            logits (torch.Tensor): Raw logits from classifier model, shape (batch_size, num_classes)
+
+        Returns:
+            torch.Tensor: Calibrated logits after Dirichlet transformation, shape (batch_size, num_classes)
+
+        """
         # convert classifier raw logits into log probabilities (processed logits)
         log_p = torch.log_softmax(logits, dim=1)
         # Apply the linear transformation on the processed logits: Dirichlet map (q; W, b) = (W * log(q) + b)
@@ -416,13 +610,37 @@ class DirichletCalibration(nn.Module):
 
 
 class IsotonicRegressionCalibration:
+    """Applies isotonic regression calibration to model predictions.
+
+    Isotonic regression finds a non-decreasing function that best fits the relationship
+    between predicted probabilities and true probabilities. This calibration method is
+    non-parametric and can capture any monotonic miscalibration pattern.
+
+    Attributes:
+        device: The device on which to perform computations.
+
+    Methods:
+        _fit_isotonic_calibrator: Fits isotonic regression for a single class.
+        _predict_isotonic_calibration: Applies calibration to new predictions.
+        _isotonic_regression: Performs isotonic regression using Pool Adjacent Violators algorithm.
+
+    """
+
     def __init__(self, device):
+        """Initialize the utility class.
+
+        Args:
+            device: The device to be used for processing (e.g., 'cpu' or 'cuda').
+
+        Returns:
+            None
+
+        """
         super().__init__()
         self.device = device
 
     def _fit_isotonic_calibrator(self, logits, binary_targets, sample_weight=None):
-        """
-        Fit isotonic regression for a single class.
+        """Fit isotonic regression for a single class.
 
         Args:
             logits (torch.Tensor): Model scores for the class
@@ -431,6 +649,7 @@ class IsotonicRegressionCalibration:
 
         Returns:
             dict: Calibrator parameters
+
         """
         # Sort logits and correspondingly reorder targets and weights
         indices = torch.argsort(logits)
@@ -464,8 +683,7 @@ class IsotonicRegressionCalibration:
         return {"X_thresholds": x_thresholds, "y_thresholds": y_thresholds}
 
     def _predict_isotonic_calibration(self, calibrator, logits):
-        """
-        Apply calibration to new logits.
+        """Apply calibration to new logits.
 
         Args:
             calibrator (dict): Calibrator parameters
@@ -473,6 +691,7 @@ class IsotonicRegressionCalibration:
 
         Returns:
             torch.Tensor: Calibrated probabilities
+
         """
         X_thresholds = calibrator["X_thresholds"]
         y_thresholds = calibrator["y_thresholds"]
@@ -530,16 +749,16 @@ class IsotonicRegressionCalibration:
 
         return calibrated
 
-    def _isotonic_regression(self, y, sample_weight=None):
-        """
-        Perform isotonic regression using the Pool Adjacent Violators algorithm.
+    def _isotonic_regression(self, y, sample_weight):
+        """Perform isotonic regression using the Pool Adjacent Violators algorithm.
 
         Args:
             y (torch.Tensor): Target values
-            sample_weight (torch.Tensor, optional): Sample weights
+            sample_weight (torch.Tensor): Sample weights
 
         Returns:
             torch.Tensor: Fitted non-decreasing sequence
+
         """
         n_samples = len(y)
         result = torch.zeros_like(y, device=self.device)
@@ -588,7 +807,49 @@ class IsotonicRegressionCalibration:
 
 
 class ModelCalibration:
-    VALID_METHODS = {"temperature", "isotonic", "platt", "beta", "dirichlet"}
+    """A class for calibrating machine learning model predictions.
+
+    This class implements various calibration methods to improve the reliability of model
+    probability estimates. Supported methods include Temperature Scaling, Isotonic Regression,
+    Platt Scaling, Beta Calibration, and Dirichlet Calibration.
+
+    Attributes
+    ----------
+    VALID_METHODS : set
+        Set of supported calibration methods
+    method : str
+        The chosen calibration method
+    device : torch.device
+        Device for computation (CPU/GPU)
+    lr : float
+        Learning rate for optimization
+    n_epochs : int
+        Maximum number of training epochs
+    reg_lambda : float
+        Regularization strength
+    reg_mu : float
+        Regularization strength for bias terms
+    eps : float
+        Small value for numerical stability
+    initial_temperature : float
+        Initial temperature for scaling
+    verbose : bool
+        Whether to print detailed information
+    calibrated : bool
+        Whether the model has been calibrated
+    model : torch.nn.Module
+        The calibration model
+
+    """
+
+    # VALID_METHODS = {"temperature", "isotonic", "platt", "beta", "dirichlet"}
+    VALID_METHODS: ClassVar[list[str]] = [
+        "temperature",
+        "isotonic",
+        "platt",
+        "beta",
+        "dirichlet",
+    ]
 
     def __init__(
         self,
@@ -605,25 +866,32 @@ class ModelCalibration:
         initial_temperature: float = 0.9,
         verbose: bool = False,
         factor_learning_rate_scheduler: float = 0.1,
-        patience_learning_rate_scheduler: float = 20,
-        patience_early_stopping: float = 50,
+        patience_learning_rate_scheduler: int = 20,
+        patience_early_stopping: int = 50,
         min_delta_early_stopping: float = 0.001,
-        save_path: str = None,
+        save_path: str | None = None,
     ):
-        """
-        Initialize the calibration model.
+        """Initialize the calibration model.
 
         Args:
             method (str): Calibration method. Options: "beta" (Beta Calibration)
-            or "temperature" (Temperature Scaling).
+                or "temperature" (Temperature Scaling).
             device (torch.device): Device for computation
             lr (float): Learning rate for optimization.
+            weight_decay_adam_optimizer (float): Weight decay parameter for Adam optimizer.
             n_epochs (int): Maximum number of iterations for optimization.
             reg_lambda (float): Regularization strength for platt scaling, beta calibration or for off-diagonal elements
                 in dirichlet calibration.
-            reg_mu (float): Regularization strength for intercept (bias) terms in dirichlet calibration
-            eps (float): Minimum value when calculating logarithm of probabilities (p > eps)
+            reg_mu (float): Regularization strength for intercept (bias) terms in dirichlet calibration.
+            eps (float): Minimum value when calculating logarithm of probabilities (p > eps).
             initial_temperature (float): Initial temperature value for temperature scaling.
+            verbose (bool): Whether to print detailed information during training.
+            factor_learning_rate_scheduler (float): Factor by which to reduce learning rate on plateau.
+            patience_learning_rate_scheduler (int): Number of epochs with no improvement before reducing learning rate.
+            patience_early_stopping (int): Number of epochs with no improvement before early stopping.
+            min_delta_early_stopping (float): Minimum change in monitored quantity to qualify as an improvement.
+            save_path (str, optional): Directory path to save training plots and model parameters.
+
         """
         if method not in self.VALID_METHODS:
             raise ValueError(f"Method must be one of {self.VALID_METHODS}")
@@ -656,14 +924,14 @@ class ModelCalibration:
         labels_train,
         sample_weights_train=None,
     ):
-        """
-        Fit the calibration model to the training data.
+        """Fit the calibration model to the training data.
 
         Args:
             logits_train (torch.Tensor): Logits from the model (shape: [n_samples] for binary,
                 [n_samples, n_classes] for multi-class).
             labels_train (torch.Tensor): Ground truth labels (shape: [n_samples]).
             sample_weights_train (torch.Tensor): Weights of each sample (shape: [n_samples]).
+
         """
         if sample_weights_train is None:
             sample_weights_train = torch.ones_like(
@@ -766,7 +1034,7 @@ class ModelCalibration:
                 loss = criterion(calibrated_logits, labels_train)
                 # Add L2 regularization for smoothness
                 loss += self.reg_lambda * sum([p**2 for p in self.model.parameters()])
-                loss.backward(retain_graph=True)
+                loss.backward()
                 optimizer.step()
                 track_losses.append(loss.item())
                 track_gradients.append(self._calculate_parameter_gradients(self.model))
@@ -1036,11 +1304,9 @@ class ModelCalibration:
             pyplot.savefig(
                 f"{self.save_path}/calibration_{self.method}_loss_and_gradients.png"
             )
-        pyplot.show()
 
     def predict_probability(self, logits_test):
-        """
-        Predict calibrated probabilities for test logits.
+        """Predict calibrated probabilities for test logits.
 
         Args:
             logits_test (torch.Tensor): Logits from the model
@@ -1049,6 +1315,7 @@ class ModelCalibration:
         Returns:
             torch.Tensor: Calibrated probabilities
             (shape: [n_samples] for binary, [n_samples, n_classes] for multi-class).
+
         """
         if not self.calibrated:
             raise RuntimeError("Model has not been fitted yet. Call 'fit' first.")
@@ -1124,17 +1391,19 @@ class ModelCalibration:
     def evaluate_calibration(
         self, logits_test, labels_test, sample_weights_test=None, n_bins=10
     ):
-        """
-        Calculate the Expected Calibration Error (ECE).
+        """Calculate the Expected Calibration Error (ECE) for uncalibrated and calibrated predictions.
 
-        Parameters:
-            logits_test (torch.Tensor): Model logits
-            labels_test (torch.Tensor): True labels
-            sample_weights_test (numpy.ndarray, optional): Sample weights
-            n_bins (int): Number of bins for ECE calculation
+        Args:
+            logits_test (torch.Tensor): Model logits/scores before calibration.
+            labels_test (torch.Tensor): True class labels for test samples.
+            sample_weights_test (torch.Tensor, optional): Sample weights for test data. Defaults to None.
+            n_bins (int, optional): Number of bins for ECE calculation. Defaults to 10.
 
         Returns:
-            dict: Dictionary containing ECE before and after calibration
+            dict: Dictionary containing:
+                - 'ece_before': Expected Calibration Error before calibration
+                - 'ece_after': Expected Calibration Error after calibration
+
         """
         if not self.use_binary_calibration:
             probs_uncalibrated = torch.softmax(torch.tensor(logits_test).float(), dim=1)
@@ -1281,8 +1550,11 @@ class ModelCalibration:
 
     def save(self, file_path: str) -> None:
         """Save the calibrator to a file using pickle.
+
         Args:
-           filepath: Path to saved calibrator state"""
+           filepath: Path to saved calibrator state
+
+        """
         if not file_path.endswith(".pkl"):
             raise ValueError("File path must end with .pkl")
         with open(file_path, "wb") as f:
@@ -1298,6 +1570,7 @@ class ModelCalibration:
 
         Returns:
             ModelCalibration: Loaded calibrator instance
+
         """
         try:
             if not filepath.endswith(".pkl"):
@@ -1310,290 +1583,298 @@ class ModelCalibration:
                         calibrator.model.to(device)
                 return calibrator
         except (pickle.UnpicklingError, AttributeError, ImportError) as e:
-            raise RuntimeError(f"Failed to load calibrator: {str(e)}")
+            raise RuntimeError(f"Failed to load calibrator: {e!s}")
 
 
-def load_data(
-    origin: tuple = (657161, 688292, 0),
-    x_spacing: float = 2.5,
-    y_spacing: float = 2.5,
-    z_spacing: float = 2.5,
-    x_length: float = 50,
-    y_length: float = 50,
-    z_depth: float = 40,
-    n_features: int = 4,
+def generate_mineral_data(
+    n_samples: int = 500,
+    spacing: float = 50,
+    depth: float = -500.0,
+    n_features: int = 10,
     n_classes: int = 5,
-    random_seed: int = 14,
+    threshold_binary: float = 0.3,
+    min_samples_per_class: int = 15,
+    seed: int = 42,
 ):
-    """
-    Generate synthetic drill hole data on a regular grid.
+    """Generate synthetic mineral exploration data with realistic features.
 
-    Parameters:
-    -----------
-    origin : tuple
-        (easting, northing, depth) of the starting point
-    x_spacing : float
-        Spacing between points in easting direction (meters)
-    y_spacing : float
-        Spacing between points in northing direction (meters)
-    z_spacing : float
-        Spacing between points in depth direction (meters)
-    x_length : float
-        Total length in easting direction (meters)
-    y_length : float
-        Total length in northing direction (meters)
-    z_depth : float
-        Total depth to sample (meters)
+    Parameters
+    ----------
+    n_samples : int
+        Number of drill core samples to generate
+    spacing : float
+        Average distance between samples in meters
+    depth : float
+        Max ranges for depth coordinates (usually negative)
     n_features : int
-        Number of features to generate for each point
-    n_classes: int
-        Number of classes
-    random_seed : int
+        Number of features to generate
+    n_classes : int
+        Number of classes for gold concentration.
+        Use 2 for binary classification (gold/no gold),
+        or higher values for finer-grained concentration levels
+    threshold_binary: float
+        Threshold for binary classification
+    min_samples_per_class : int
+        Minimum number of samples required for each class
+    seed : int
         Random seed for reproducibility
 
-    Returns:
-    --------
-    coordinates : np.ndarray
-        Array of shape (n_points, 3) containing (easting, northing, depth)
-    features : np.ndarray
-        Array of shape (n_points, n_features) with values in [0, 1]
-    labels : np.ndarray
-        Array of shape (n_points,) with integer labels [0, 1, 2, 3, 4]
+    Returns
+    -------
+    coordinates : ndarray
+        Array of shape (n_samples, 3) containing x, y, z coordinates
+    features : ndarray
+        Scaled array of shape (n_samples, n_features) containing mineral features
+    labels : ndarray
+        Array of shape (n_samples,) containing gold concentration labels (0-4)
+
     """
-    np.random.seed(random_seed)
+    rng = np.random.default_rng(seed)  # Set random seed for reproducibility
 
-    # Calculate number of points in each direction
-    nx = int(x_length / x_spacing) + 1
-    ny = int(y_length / y_spacing) + 1
-    nz = int(z_depth / z_spacing) + 1
+    # Calculate the grid size based on n_samples and spacing
+    grid_size = int(np.sqrt(n_samples)) + 1
+    area_size = grid_size * spacing
 
-    # Generate coordinate grids
-    x = np.linspace(origin[0], origin[0] + x_length, nx)
-    y = np.linspace(origin[1], origin[1] + y_length, ny)
-    z = np.linspace(origin[2], origin[2] - z_depth, nz)  # Negative for depth
+    # Define x_range and y_range based on spacing and n_samples
+    x_range = (0, area_size)
+    y_range = (0, area_size)
 
-    # Create 3D grid
-    X, Y, Z = np.meshgrid(x, y, z)
+    # 1. Generate spatial coordinates with appropriate spacing
+    # First create a grid
+    x_grid = np.linspace(x_range[0], x_range[1], grid_size)
+    y_grid = np.linspace(y_range[0], y_range[1], grid_size)
 
-    # Reshape to (n_points, 3)
-    coordinates = np.column_stack((X.ravel(), Y.ravel(), Z.ravel()))
-    n_points = len(coordinates)
+    # Create all possible grid points
+    xx, yy = np.meshgrid(x_grid, y_grid)
+    grid_points = np.column_stack((xx.ravel(), yy.ravel()))
 
-    # Generate synthetic features
-    features = np.zeros((n_points, n_features))
+    # Add some random jitter to make it more realistic (not exactly on grid)
+    jitter = spacing * rng.uniform(0.3, 0.6, 1)  # % of spacing for natural randomness
+    grid_points[:, 0] += rng.uniform(-jitter, jitter, len(grid_points))
+    grid_points[:, 1] += rng.uniform(-jitter, jitter, len(grid_points))
 
-    # Generate each feature with some spatial correlation
-    for i in range(n_features):
-        # Create base feature with spatial correlation
-        feature = (
-            np.sin(coordinates[:, 0] / (50 * (i + 1)))
-            + np.cos(coordinates[:, 1] / (50 * (i + 1)))
-            + np.exp(-coordinates[:, 2] / (30 * (i + 1)))
+    # Select n_samples points from the grid
+    indices = rng.choice(
+        len(grid_points), min(n_samples, len(grid_points)), replace=False
+    )
+    xy_coordinates = grid_points[indices]
+
+    # Generate z coordinates (depth)
+    z_coordinates = rng.uniform(depth, 0, n_samples)
+
+    # Combine to form complete coordinates
+    coordinates = np.column_stack((xy_coordinates, z_coordinates))
+
+    # 2. Create mineralization hotspots (mineralization centers)
+    # In a mineral exploration context, hotspot strengths represent the maximum concentration or intensity of gold
+    # at each "source" location in the simulated area. Not all gold deposits are created equal - some have higher
+    # mineral content than others. Values greater than 1.0 represent "high-grade" hotspots that can potentially yield
+    # gold values above the baseline (before applying distance decay). Values below 1.0 represent "lower-grade" hotspots
+    # that will produce somewhat weaker signals. The range isn't centered at 1.0 (it's 0.7-1.2) to create a slight
+    # positive skew, which is common in real mineral deposits
+    n_hotspots = rng.integers(1, 5)
+    hotspot_strengths = rng.uniform(0.7, 1.2, n_hotspots)
+    hotspots = np.zeros((n_hotspots, 3))
+    hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
+    hotspots[:, 1] = rng.uniform(y_range[0], y_range[1], n_hotspots)
+    hotspots[:, 2] = rng.uniform(depth, 0, n_hotspots)
+
+    # 3. Calculate gold values based on distance to nearest hotspot
+    # Reshape for broadcasting: coordinates (n_samples, 3), hotspots (n_hotspots, 3)
+    # Result: distances will be (n_samples, n_hotspots)
+    distances = np.sqrt(
+        np.sum(
+            (coordinates[:, np.newaxis, :] - hotspots[np.newaxis, :, :]) ** 2,
+            axis=2,
         )
-        # Add some random noise
-        feature += np.random.randn(n_points) * 0.1
-        features[:, i] = feature
-
-    # Scale features to [0, 1]
-    scaler = MinMaxScaler()
-    features = scaler.fit_transform(features)
-
-    # Generate labels based on feature combinations and spatial patterns
-    label_prob = (
-        0.3 * np.sin(coordinates[:, 0] / 50) * np.cos(coordinates[:, 1] / 50)
-        + 0.3 * np.exp(-coordinates[:, 2] / 50)
-        + 0.4 * np.mean(features, axis=1)
     )
-    # Scale to [0, 1]
-    label_prob = (label_prob - label_prob.min()) / (label_prob.max() - label_prob.min())
-    # Convert to 5 classes [0, 1, 2, 3, 4]
-    labels = np.digitize(
-        label_prob,
-        bins=[(1 + i) * (1 / n_classes) for i in range(n_classes - 1)],
-    )
+
+    # Find closest hotspot for each sample
+    min_indices = np.argmin(distances, axis=1)
+    min_distances = np.min(distances, axis=1)
+
+    # Get the strength of each sample's closest hotspot
+    closest_strengths = hotspot_strengths[min_indices]
+
+    # Calculate gold values using exponential decay with distance
+    noise_level = rng.uniform(0.01, 0.1)
+    exp_decay_factor = rng.uniform(0.001, 0.01)
+    gold_values = closest_strengths * np.exp(
+        -min_distances * exp_decay_factor
+    ) + rng.normal(0, noise_level, size=n_samples)
+
+    # Clip values to 0-1 range
+    gold_values = np.clip(gold_values, 0, 1)
+
+    # 4. Convert to categorical labels
+    if n_classes == 2:  # Binary classification: gold/no gold
+        labels = (gold_values >= threshold_binary).astype(int)
+    else:  # Multi-class classification
+        # Create bins for digitizing
+        bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]  # n_classes-1 bin edges
+        labels = np.digitize(gold_values, bins)  # 0 to n_classes-1
+
+    # 5. Check if we have the minimum number of samples per class
+    # Add samples for underrepresented classes if needed
+    class_counts = [np.sum(labels == i) for i in range(n_classes)]
+
+    for class_idx in range(n_classes):
+        samples_needed = max(0, min_samples_per_class - class_counts[class_idx])
+
+        if samples_needed > 0:
+            print(f"\nAdding {samples_needed} more samples for class {class_idx}")
+
+            # Parameters for each class based on distance from hotspots
+            if n_classes == 2:  # Binary case: gold/no gold
+                if class_idx == 0:  # No gold - far from hotspots
+                    max_dist = 600
+                    min_dist = 300
+                else:  # Gold - close to hotspots
+                    max_dist = 200
+                    min_dist = 0
+            else:  # Multi-class case
+                # Calculate distance ranges based on number of classes
+                # Class 0 is furthest from hotspots, highest class is closest
+                class_range = 600 / n_classes
+                max_dist = 600 - class_idx * class_range
+                min_dist = max(0, max_dist - class_range)
+
+            new_coordinates = []
+            new_gold_values = []
+
+            while len(new_coordinates) < samples_needed:
+                # Pick a random hotspot
+                hotspot_idx = rng.integers(0, n_hotspots)
+
+                # Sample at appropriate distance
+                angle = rng.uniform(0, 2 * np.pi)
+                phi = rng.uniform(0, np.pi)
+                distance = rng.uniform(min_dist, max_dist)
+
+                # Convert to Cartesian coordinates
+                dx = distance * np.sin(phi) * np.cos(angle)
+                dy = distance * np.sin(phi) * np.sin(angle)
+                dz = distance * np.cos(phi)
+
+                new_x = hotspots[hotspot_idx, 0] + dx
+                new_y = hotspots[hotspot_idx, 1] + dy
+                new_z = hotspots[hotspot_idx, 2] + dz
+
+                # Keep within bounds
+                new_x = max(x_range[0], min(x_range[1], new_x))
+                new_y = max(y_range[0], min(y_range[1], new_y))
+                new_z = max(depth, min(0, new_z))
+
+                # Calculate gold value
+                pt = np.array([new_x, new_y, new_z])
+                distances = np.sqrt(np.sum((pt - hotspots) ** 2, axis=1))
+                min_idx = np.argmin(distances)
+                min_dist = distances[min_idx]
+                strength = hotspot_strengths[min_idx]
+
+                gold_value = strength * np.exp(
+                    -min_dist * exp_decay_factor
+                ) + rng.normal(0, noise_level)
+                gold_value = max(0, min(1, gold_value))
+
+                # Check if it falls in the desired class
+                if n_classes == 2:  # Binary case
+                    new_label = int(gold_value >= threshold_binary)
+                else:  # Multi-class case
+                    bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]
+                    new_label = np.digitize([gold_value], bins)[0]
+
+                if new_label == class_idx:
+                    new_coordinates.append([new_x, new_y, new_z])
+                    new_gold_values.append(gold_value)
+
+            # Add new samples
+            if new_coordinates:
+                coordinates = np.vstack([coordinates, np.array(new_coordinates)])
+                gold_values = np.append(gold_values, new_gold_values)
+
+    # Recalculate labels for all samples
+    if n_classes == 2:  # Binary classification: gold/no gold
+        labels = (gold_values >= threshold_binary).astype(int)
+    else:  # Multi-class classification
+        bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]
+        labels = np.digitize(gold_values, bins)
+
+    # 6. Generate features for all samples
+    n_total_samples = len(coordinates)
+    features = np.zeros((n_total_samples, n_features))
+
+    # Define possible features based on priority/importance
+    feature_generators = [
+        # Pathfinder elements - strongly correlated with gold
+        lambda gold_value: gold_value * 800 + rng.normal(0, 30),  # Arsenic
+        lambda gold_value: gold_value * 400 + rng.normal(0, 15),  # Silver
+        lambda gold_value: gold_value * 200 + rng.normal(0, 20),  # Copper
+        # Somewhat correlated elements
+        lambda gold_value: gold_value * 100 + rng.normal(0, 30),  # Lead
+        lambda gold_value: gold_value * 50 + rng.normal(0, 20),  # Zinc
+        # Geological features
+        lambda gold_value: 60 + rng.normal(0, 10) - gold_value * 10,  # Silica
+        lambda gold_value: gold_value * 8 + rng.normal(0, 1),  # Sulfides
+        lambda gold_value: gold_value * 5 + rng.normal(0, 0.5),  # Alteration
+        lambda gold_value: gold_value * 6 + rng.normal(0, 0.7),  # Vein density
+        # Less correlated feature
+        lambda gold_value: rng.normal(5, 1),  # Rock competency
+        # Additional features if needed
+        lambda gold_value: gold_value * 3 + rng.normal(0, 0.8),  # Bismuth
+        lambda gold_value: gold_value * 50 + rng.normal(0, 15),  # Antimony
+        lambda gold_value: rng.normal(3, 1.5),  # Iron
+        lambda gold_value: gold_value * 10 + rng.normal(0, 2),  # Tellurium
+        lambda gold_value: 20 - gold_value * 5 + rng.normal(0, 3),  # Carbonate
+    ]
+
+    # Feature names for reference
+    feature_names = [
+        "Arsenic",
+        "Silver",
+        "Copper",
+        "Lead",
+        "Zinc",
+        "Silica",
+        "Sulfides",
+        "Alteration",
+        "Vein_density",
+        "Rock_competency",
+        "Bismuth",
+        "Antimony",
+        "Iron",
+        "Tellurium",
+        "Carbonate",
+    ]
+
+    # Ensure we don't try to generate more features than we have generators for
+    actual_n_features = min(n_features, len(feature_names))
+    if actual_n_features < n_features:
+        print(
+            f"Warning: Requested {n_features} features but only {actual_n_features} are defined."
+            f"Generating {actual_n_features} features."
+        )
+
+    # Create correlations between gold and features
+    for i in range(n_total_samples):
+        gold_value = gold_values[i]
+
+        # Generate each feature based on the number requested
+        for j in range(actual_n_features):
+            features[i, j] = feature_generators[j](gold_value)
+
+    # Ensure all features are positive (where it makes sense)
+    features = np.maximum(features, 0)
 
     # Print summary
-    print("Generated data shape:")
-    print(f"Coordinates: {coordinates.shape}")
-    print(f"Features: {features.shape}")
-    print(f"Labels: {labels.shape}")
-    print("\nFeature statistics:")
-    print(f"Min values: {features.min(axis=0)}")
-    print(f"Max values: {features.max(axis=0)}")
+    print(f"Generated {n_total_samples} samples with {actual_n_features} features.")
+    print(f"{n_hotspots} hotspots with respective strengths {hotspot_strengths}")
     print("\nLabel distribution:")
     for i in range(n_classes):
         count = np.sum(labels == i)
-        print(f"Class {i}: {count} points ({count/n_points*100:.1f}%)")
+        print(f"Class {i}: {count} points ({count / n_total_samples * 100:.2f}%)")
 
     return coordinates, features, labels
-
-
-def prepare_edge_data(coordinates, d_threshold: float = 5.0):
-    """Prepares edge connectivity and attributes for a graph neural network from coordinate data.
-    This function computes pairwise distances between points and creates edge connections
-    based on a distance threshold, making the resulting graph undirected. It also
-    generates edge attributes including both raw distances and inverse distances.
-    Args:
-        coordinates (numpy.ndarray): Array of point coordinates with shape [num_nodes, num_dimensions]
-        d_threshold (float, optional): Maximum distance threshold for creating edges. Defaults to 5.0.
-    Returns:
-        tuple: Contains:
-            - edge_index (torch.Tensor): Tensor of shape [2, num_edges] containing source and
-              destination node indices for each edge
-            - edge_attr (torch.Tensor): Tensor of shape [num_edges, 2] containing edge attributes
-              [inverse_distance, raw_distance] for each edge
-    Notes:
-        - Self-loops are explicitly excluded (nodes cannot connect to themselves)
-        - The graph is made undirected by adding reciprocal edges
-        - Edge attributes include both inverse distance (1/d) and raw distance (d)
-    """
-
-    # Compute pairwise Euclidean distances
-    dist_matrix = distance_matrix(coordinates, coordinates)
-    # Find edges based on distance threshold avoiding self-node thru distance > 0
-    # to force the model to learn purely from neighboring nodes
-    src, dst = np.where((dist_matrix < d_threshold) & (dist_matrix > 0))
-    # # or alternatively, include self-nodes assuming current node features are also
-    # # important for prediction (node own features along with its neighbors)
-    # src, dst = np.where(dist_matrix < d_threshold)
-    print(f"\nNumber of edges found (directed): {len(src)}")
-    # Make the graph undirected by adding reciprocal edges; for each edge A→B,
-    # add the reverse edge B→A to assure same information passage both ways
-    # between connected points (we can get node properties of A from B or B
-    # from A using edge attributes)
-    src_undirected = np.concatenate([src, dst])
-    dst_undirected = np.concatenate([dst, src])
-    print(f"Number of edges after making undirected: {len(src_undirected)}")
-    # Create edge_index tensor
-    edge_index = torch.tensor(
-        np.array([src_undirected, dst_undirected]), dtype=torch.long
-    )
-    # Edge Attributes (inverse of distance and raw distance)
-    edge_distances = dist_matrix[src_undirected, dst_undirected]
-    inverse_distances = 1.0 / edge_distances
-    raw_distances = torch.tensor(edge_distances, dtype=torch.float).unsqueeze(
-        1
-    )  # Shape: [num_edges, 1]
-    inverse_distances = torch.tensor(inverse_distances, dtype=torch.float).unsqueeze(
-        1
-    )  # Shape: [num_edges, 1]
-    edge_attr = torch.cat(
-        [inverse_distances, raw_distances], dim=1
-    )  # Shape: [num_edges, 2]
-    return edge_index, edge_attr
-
-
-def construct_graph(
-    coordinates,
-    features,
-    labels,
-    n_splits=5,
-    test_size=0.3,
-    calib_size: int = 0.50,
-    d_threshold=5,
-    random_state=42,
-):
-    """
-    Create graphs from geospatial data using distance matrix with a held-out
-    test set, an optional held-out calibration set, and stratified k-fold splits
-    for the remaining data
-
-    Parameters:
-    -----------
-    coordinates (array-like): Coordinate points for constructing the graph
-    features (array-like): Node features
-    labels (array-like): Node labels for stratification
-    n_splits (int): Number of folds for cross-validation
-    test_size (float): Proportion of data to use as test set (e.g., 0.2 for 20%)
-    calib_size (float): Proportion of data to use as calibration set
-        (e.g., 0.5 for 50%)
-    d_threshold (float): Distance threshold to consider interconnected nodes
-    random_state (int): Random seed for reproducibility
-
-    Returns:
-    --------
-    tuple containing:
-        - list of Data: PyG Data objects for each fold (train/val splits)
-        - Data: Single PyG Data object for test (and an optional calibration) set
-    """
-    # Convert features and labels to torch tensors
-    x = torch.tensor(features, dtype=torch.float)
-    y = torch.tensor(labels, dtype=torch.long)
-
-    edge_index, edge_attr = prepare_edge_data(coordinates, d_threshold)
-
-    n_nodes = len(labels)
-    # First split into train+val and test
-    train_val_idx, temp_idx = train_test_split(
-        np.arange(n_nodes),
-        test_size=test_size,
-        stratify=labels,
-        random_state=random_state,
-    )
-    # Initialize stratified k-fold on the train+val data
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
-
-    # Create a list to store Data objects for each fold
-    fold_data = []
-
-    # Generate folds from the train+val data
-    for fold_idx, (train_idx, val_idx) in enumerate(
-        skf.split(features[train_val_idx], labels[train_val_idx])
-    ):
-        # Map the fold indices back to original indices
-        train_idx = train_val_idx[train_idx]
-        val_idx = train_val_idx[val_idx]
-
-        # Create boolean masks for this fold
-        train_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        val_mask = torch.zeros(n_nodes, dtype=torch.bool)
-
-        train_mask[train_idx] = True
-        val_mask[val_idx] = True
-
-        # Create PyG Data object for this fold (train/val only)
-        data = Data(
-            x=x,
-            y=y,
-            edge_index=edge_index,
-            edge_attr=edge_attr,
-            train_mask=train_mask,
-            val_mask=val_mask,
-            fold=fold_idx,
-        )
-
-        fold_data.append(data)
-
-    if calib_size is None:
-        test_idx = temp_idx
-        # Create separate test Data object
-        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        test_mask[test_idx] = True
-        test_data = Data(
-            x=x, y=y, edge_index=edge_index, edge_attr=edge_attr, test_mask=test_mask
-        )
-    else:
-        test_idx, calib_idx = train_test_split(
-            temp_idx,
-            train_size=calib_size,
-            stratify=labels[temp_idx],
-            random_state=random_state,
-        )
-        # Create separate test Data object
-        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        test_mask[test_idx] = True
-        # Create separate calibration Data object
-        calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        calib_mask[calib_idx] = True
-        test_data = Data(
-            x=x,
-            y=y,
-            edge_index=edge_index,
-            edge_attr=edge_attr,
-            test_mask=test_mask,
-            calib_mask=calib_mask,
-        )
-    return fold_data, test_data
 
 
 def visualize_graph(
@@ -1605,10 +1886,10 @@ def visualize_graph(
     label_map={0: "low", 1: "medium-low", 2: "medium", 3: "medium-high", 4: "high"},
     title="3D Geospatial Graph",
 ):
-    """
-    Create an interactive 3D visualization of the geospatial graph.
+    """Create an interactive 3D visualization of the geospatial graph.
 
-    parameters:
+    Parameters
+    ----------
         coordinates (array-like): Coordinate points for constructing the graph
         labels (array-like): Node labels for stratification
         src (array-like): Source nodes
@@ -1616,14 +1897,16 @@ def visualize_graph(
         edge_opacity (float): Opacity of edge between nodes
         title (str): Title for the visualization
 
-    Returns:
+    Returns
+    -------
         None: Displays the interactive plot
+
     """
     # Create color map for different classes
     unique_classes = len(np.unique(labels))
     colors = pyplot.cm.rainbow(np.linspace(0, 1, unique_classes))
     color_map = {
-        i: f"rgb({int(255*c[0])},{int(255*c[1])},{int(255*c[2])})"
+        i: f"rgb({int(255 * c[0])},{int(255 * c[1])},{int(255 * c[2])})"
         for i, c in enumerate(colors)
     }
 
@@ -1648,7 +1931,7 @@ def visualize_graph(
     edge_y = []
     edge_z = []
 
-    for s, d in zip(src, dst):
+    for s, d in zip(src, dst, strict=False):
         edge_x.extend([coordinates[s, 0], coordinates[d, 0], None])
         edge_y.extend([coordinates[s, 1], coordinates[d, 1], None])
         edge_z.extend([coordinates[s, 2], coordinates[d, 2], None])
@@ -1695,6 +1978,263 @@ def visualize_graph(
     return fig
 
 
+ScalerType = StandardScaler | MinMaxScaler | RobustScaler
+
+
+def scale_data(data: np.ndarray, scaler: ScalerType) -> np.ndarray:
+    """Scale input data using the specified scaler.
+
+    Parameters
+    ----------
+    data : np.ndarray
+        Input data to be scaled
+    scaler : ScalerType
+        Scaler object (StandardScaler, MinMaxScaler, or RobustScaler)
+
+    Returns
+    -------
+    np.ndarray
+        Scaled data transformed by the fitted scaler
+
+    """
+    return scaler.fit_transform(data)
+
+
+def construct_graph(
+    coordinates,
+    features,
+    labels,
+    connection_radius: float,
+    n_splits: int,
+    test_size: float,
+    calib_size: int,
+    seed: int,
+):
+    """Create graphs from geospatial data using distance matrix with a held-out test set.
+
+    Args:
+    coordinates (array-like): Coordinate points for constructing the graph
+    features (array-like): Node features
+    labels (array-like): Node labels for stratification
+    n_splits (int): Number of folds for cross-validation
+    test_size (float): Proportion of data to use as test set (e.g., 0.2 for 20%)
+    calib_size (float): Proportion of data to use as calibration set
+        (e.g., 0.5 for 50%)
+    connection_radius (float): Distance threshold to consider interconnected nodes
+    seed (int): Random seed for reproducibility
+
+    Returns:
+    tuple containing:
+        - list of Data: PyG Data objects for each fold (train/val splits)
+        - Data: Single PyG Data object for test (and an optional calibration) set
+
+    """
+    # Convert features and labels to torch tensors
+    x = torch.tensor(features, dtype=torch.float32)
+    y = torch.tensor(labels, dtype=torch.long)
+
+    edge_index, edge_attr = prepare_edge_data(coordinates, connection_radius)
+
+    n_nodes = len(labels)
+    # First split into train+val and test
+    train_val_idx, temp_idx = train_test_split(
+        np.arange(n_nodes),
+        test_size=test_size,
+        stratify=labels,
+        random_state=seed,
+    )
+    # Initialize stratified k-fold on the train+val data
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+
+    # Create a list to store Data objects for each fold
+    fold_data = []
+
+    # Generate folds from the train+val data
+    for fold_idx, (train_idx, val_idx) in enumerate(
+        skf.split(features[train_val_idx], labels[train_val_idx])
+    ):
+        # Map the fold indices back to original indices
+        train_idx = train_val_idx[train_idx]
+        val_idx = train_val_idx[val_idx]
+
+        # Create boolean masks for this fold
+        train_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        val_mask = torch.zeros(n_nodes, dtype=torch.bool)
+
+        train_mask[train_idx] = True
+        val_mask[val_idx] = True
+
+        # Create PyG Data object for this fold (train/val only)
+        data = Data(
+            x=x,
+            y=y,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            train_mask=train_mask,
+            val_mask=val_mask,
+            fold=fold_idx,
+        )
+
+        fold_data.append(data)
+
+    if calib_size is None:
+        test_idx = temp_idx
+        # Create separate test Data object
+        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        test_mask[test_idx] = True
+        test_data = Data(
+            x=x,
+            y=y,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            test_mask=test_mask,
+        )
+    else:
+        test_idx, calib_idx = train_test_split(
+            temp_idx,
+            train_size=calib_size,
+            stratify=labels[temp_idx],
+            random_state=seed,
+        )
+        # Create separate test Data object
+        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        test_mask[test_idx] = True
+        # Create separate calibration Data object
+        calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
+        calib_mask[calib_idx] = True
+        test_data = Data(
+            x=x,
+            y=y,
+            edge_index=edge_index,
+            edge_attr=edge_attr,
+            test_mask=test_mask,
+            calib_mask=calib_mask,
+        )
+    return fold_data, test_data
+
+
+def prepare_edge_data(coordinates, connection_radius: float = 150):
+    """Prepare edge connectivity and attributes for a graph neural network from coordinate data. This function computes pairwise distances between points and creates edge connections based on a distance threshold, making the resulting graph undirected. It also generates edge attributes including both raw distances and inverse distances.
+
+    Args:
+        coordinates (numpy.ndarray): Array of point coordinates with shape [num_nodes, num_dimensions]
+        connection_radius (float): Distance to consider interconnected nodes and create edges. Defaults to 150.0.
+
+    Returns:
+        tuple: Contains:
+            - edge_index (torch.Tensor): Tensor of shape [2, num_edges] containing source and
+              destination node indices for each edge
+            - edge_attr (torch.Tensor): Tensor of shape [num_edges, 2] containing edge attributes
+              [inverse_distance, raw_distance] for each edge
+    Notes:
+        - Self-loops are explicitly excluded (nodes cannot connect to themselves)
+        - The graph is made undirected by adding reciprocal edges
+        - Edge attributes could include both inverse squared distance (1/d) and raw distance (d)
+
+    """
+    # Compute pairwise Euclidean distances
+    dist_matrix = distance_matrix(coordinates, coordinates)
+    # Find edges based on distance threshold avoiding self-node thru distance > 0
+    # to force the model to learn purely from neighboring nodes
+    src, dst = np.where((dist_matrix < connection_radius) & (dist_matrix > 0))
+    # # or alternatively, include self-nodes assuming current node features are also
+    # # important for prediction (node own features along with its neighbors)
+    # src, dst = np.where(dist_matrix < connection_radius)
+    print(f"\nNumber of edges found (directed): {len(src)}")
+    # Make the graph undirected by adding reciprocal edges; for each edge A→B,
+    # add the reverse edge B→A to assure same information passage both ways
+    # between connected points (we can get node properties of A from B or B
+    # from A using edge attributes)
+    src_undirected = np.concatenate([src, dst])
+    dst_undirected = np.concatenate([dst, src])
+    print(f"Number of edges after making undirected: {len(src_undirected)}")
+    # Create edge_index tensor
+    edge_index = torch.tensor(
+        np.array([src_undirected, dst_undirected]), dtype=torch.long
+    )
+    # Edge Attributes
+    edge_distances = dist_matrix[src_undirected, dst_undirected]
+    # Avoid division by zero that matters for self-nodes
+    inverse_distances_squared = torch.tensor(
+        1.0 / (edge_distances + 1e-6) ** 2, dtype=torch.float32
+    ).unsqueeze(1)  # Shape: [num_edges, 1]
+
+    edge_attr = inverse_distances_squared
+    return edge_index, edge_attr
+
+
+def export_graph_to_html(
+    graph,
+    coordinates,
+    node_indices,
+    connection_radius,
+    save_path: str,
+    dataset_idx: int | None = None,
+    dataset_tag: str = "train",
+    filename="graph.html",
+):
+    """Export the graph to an interactive HTML file using Plotly."""
+    edge_index, _ = prepare_edge_data(coordinates[node_indices], connection_radius)
+    src, dst = edge_index
+    fig = visualize_graph(
+        coordinates[node_indices], graph.y[node_indices].numpy(), src, dst
+    )
+    if dataset_idx is not None:
+        filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}.html"
+    else:
+        filename = f"{save_path}/{dataset_tag}_graph.html"
+    fig.write_html(filename)
+    print(f"Graph exported to {filename}")
+
+
+def export_all_graphs_to_html(
+    fold_data,
+    test_data,
+    coordinates,
+    connection_radius,
+    save_path: str,
+):
+    for i, graph in enumerate(fold_data):
+        node_indices = graph.train_mask
+        export_graph_to_html(
+            graph,
+            coordinates,
+            node_indices,
+            connection_radius=connection_radius,
+            save_path=save_path,
+            dataset_idx=i + 1,
+            dataset_tag="train",
+        )
+        node_indices = graph.val_mask
+        export_graph_to_html(
+            graph,
+            coordinates,
+            node_indices,
+            connection_radius=connection_radius,
+            save_path=save_path,
+            dataset_idx=i + 1,
+            dataset_tag="val",
+        )
+    node_indices = test_data.test_mask
+    export_graph_to_html(
+        test_data,
+        coordinates,
+        node_indices,
+        connection_radius=connection_radius,
+        save_path=save_path,
+        dataset_tag="test",
+    )
+    node_indices = test_data.calib_mask
+    export_graph_to_html(
+        test_data,
+        coordinates,
+        node_indices,
+        connection_radius=connection_radius,
+        save_path=save_path,
+        dataset_tag="calib",
+    )
+
+
 def plot_training(
     train_losses,
     val_losses,
@@ -1705,10 +2245,9 @@ def plot_training(
     val_ece,
     val_mce,
     title="Training Plot",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
 ):
-    """
-    Plot training and validation losses and accuracies.
+    """Plot training and validation losses and accuracies.
 
     Args:
         train_losses (list): Training losses
@@ -1716,6 +2255,7 @@ def plot_training(
         train_accuracies (list): Training accuracies
         val_accuracies (list): Validation accuracies
         title (str): Plot title
+
     """
     fig, axs = pyplot.subplots(2, 2, figsize=(14, 12))
     ax = axs.ravel()
@@ -1752,7 +2292,6 @@ def plot_training(
     pyplot.suptitle(title)
     if save_path:
         pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
-    pyplot.show()
     return fig
 
 
@@ -1760,17 +2299,17 @@ def plot_confusion_matrix(
     y_true,
     y_pred,
     sample_weights,
-    classes: List,
+    classes: list,
     title: str = "Confusion Matrix",
-    save_path: Optional[str] = None,
+    save_path: str | None = None,
 ):
-    """
-    Plot confusion matrix using seaborn.
+    """Plot confusion matrix using seaborn.
 
     Args:
         y_true (numpy.ndarray): True labels
         y_pred (numpy.ndarray): Predicted labels
         classes (list): Class names
+
     """
     cm = confusion_matrix(y_true, y_pred, sample_weight=sample_weights)
     cm = np.round(cm).astype(int)
@@ -1784,7 +2323,7 @@ def plot_confusion_matrix(
     pyplot.title(title)
     if save_path:
         pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
-    pyplot.show()
+    # pyplot.show()
 
 
 def plot_roc_curve(ax, y_true, y_prob, sample_weights, title="ROC Curve"):
@@ -1800,13 +2339,12 @@ def plot_roc_curve(ax, y_true, y_prob, sample_weights, title="ROC Curve"):
 
 def plot_reliability_diagram(
     uncalibrated_stats: CalibrationStats,
-    calibrated_stats: Optional[CalibrationStats] = None,
+    calibrated_stats: CalibrationStats | None = None,
     title: str = "Reliability Diagram",
-    save_path: Optional[str] = None,
-    figsize: Tuple[int, int] = (7, 7),
+    save_path: str | None = None,
+    figsize: tuple[int, int] = (7, 7),
 ):
-    """
-    Plot reliability diagram comparing uncalibrated and optionally calibrated model statistics.
+    """Plot reliability diagram comparing uncalibrated and optionally calibrated model statistics.
 
     Args:
         uncalibrated_stats: CalibrationStats for the uncalibrated model
@@ -1814,6 +2352,7 @@ def plot_reliability_diagram(
         title: Plot title
         save_path: Optional path to save the figure
         figsize: Figure size as (width, height)
+
     """
     fig, ax1 = pyplot.subplots(figsize=figsize)
     ax1 = pyplot.gca()
@@ -1897,5 +2436,4 @@ def plot_reliability_diagram(
 
     if save_path:
         pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
-    pyplot.show()
     return fig
