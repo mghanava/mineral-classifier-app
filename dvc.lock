@@ -5,8 +5,8 @@ stages:
     deps:
     - path: src/stages/generate_synthetic_data.py
       hash: md5
-      md5: af1bb718902324c2fdcfcc64011f2988
-      size: 3718
+      md5: 882311df1dadc3c1bc2c6bc27b4e81c3
+      size: 2526
     params:
       params.yaml:
         data:
@@ -25,7 +25,7 @@ stages:
     outs:
     - path: results/data
       hash: md5
-      md5: bb4d526fa537d1623cda55c578712f33.dir
+      md5: 27d059b403155f0a19f52d631967aeb9.dir
       size: 59597088
       nfiles: 14
   train:
@@ -33,7 +33,7 @@ stages:
     deps:
     - path: results/data
       hash: md5
-      md5: bb4d526fa537d1623cda55c578712f33.dir
+      md5: 27d059b403155f0a19f52d631967aeb9.dir
       size: 59597088
       nfiles: 14
     - path: src/models/
@@ -43,8 +43,8 @@ stages:
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: b62e1fbb124195b821405b57f8487536
-      size: 12262
+      md5: f02dfbe0a0998a824e5eba46c07396ad
+      size: 12269
     params:
       params.yaml:
         model: gcn
@@ -66,26 +66,26 @@ stages:
     outs:
     - path: results/trained
       hash: md5
-      md5: baf7c3a651bccfcee35a5f3bd759429f.dir
-      size: 3801145
+      md5: d9b42e8154cd623b38300f79a88e1624.dir
+      size: 3732249
       nfiles: 6
   evaluate:
     cmd: python src/stages/evaluate.py --model gcn
     deps:
     - path: results/data
       hash: md5
-      md5: bb4d526fa537d1623cda55c578712f33.dir
+      md5: 27d059b403155f0a19f52d631967aeb9.dir
       size: 59597088
       nfiles: 14
     - path: results/trained
       hash: md5
-      md5: baf7c3a651bccfcee35a5f3bd759429f.dir
-      size: 3801145
+      md5: d9b42e8154cd623b38300f79a88e1624.dir
+      size: 3732249
       nfiles: 6
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 58cb53bd09b4d382589bfceb80df8c72
-      size: 10965
+      md5: 06e432beb766af241fe946de3444b865
+      size: 11544
     params:
       params.yaml:
         evaluate:
@@ -97,7 +97,7 @@ stages:
           - medium
           - medium-high
           - high
-          calibration_method: temperature
+          calibration_method: dirichlet
           n_epochs: 1000
           lr: 0.001
           weight_decay_adam_optimizer: 0.0005
@@ -106,9 +106,13 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
     outs:
     - path: results/evaluation
       hash: md5
-      md5: 929077f7e4ed084a9755f12e1ef9932d.dir
-      size: 433759
+      md5: 50a385fe014843bf219f4ba72b83e7c0.dir
+      size: 419344
       nfiles: 6

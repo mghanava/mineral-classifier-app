@@ -50,7 +50,7 @@ evaluate:
   - medium
   - medium-high
   - high
-  calibration_method: temperature
+  calibration_method: dirichlet
   n_epochs: 1000
   lr: 1.0e-3
   weight_decay_adam_optimizer: 5.0e-4
@@ -59,3 +59,7 @@ evaluate:
   patience_learning_rate_scheduler: 20
   patience_early_stopping: 50
   min_delta_early_stopping: 1.0e-3
+  reg_lambda: 1.0e-2
+  reg_mu: 1.0e-2
+  eps: 1.0e-8
+  seed: 40

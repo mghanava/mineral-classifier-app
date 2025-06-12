@@ -10,7 +10,6 @@ This module provides functionality to evaluate trained models, including:
 import argparse
 import json
 import os
-from typing import Literal, cast
 
 import torch
 import torch.nn.functional as F
@@ -21,8 +20,8 @@ from sklearn.utils.class_weight import compute_sample_weight
 from src.models import get_model
 from src.utilities.utils import (
     CalibrationMetrics,
+    CalibrationPipeline,
     LogTime,
-    ModelCalibration,
     plot_confusion_matrix,
     plot_reliability_diagram,
 )
@@ -37,14 +36,18 @@ def evaluate_with_calibration(
     class_names: list,
     lr: float,
     n_epochs: int,
-    weight_decay: float,
+    weight_decay_adam_optimizer: float,
+    reg_lambda: float,
+    reg_mu: float,
+    eps: float,
     factor_learning_rate_scheduler: float,
-    patience_learning_rate_scheduler: float,
-    patience_early_stopping: float,
+    patience_learning_rate_scheduler: int,
+    patience_early_stopping: int,
     min_delta_early_stopping: float,
-    verbose: bool,
-    save_path: str,
-    device: torch.device,
+    device: torch.device = torch.device("cpu"),
+    verbose: bool = False,
+    seed: int = 42,
+    save_path: str | None = None,
 ):
     """Evaluate a model's performance with and without calibration, and save results.
 
@@ -61,7 +64,7 @@ def evaluate_with_calibration(
         class_names (list): List of class names for confusion matrix plotting
         lr (float): Learning rate for calibration optimization
         n_epochs (int): Number of epochs to train calibration
-        weight_decay (float): Weight decay parameter for Adam optimizer during calibration
+        weight_decay_adam_optimizer (float): Weight decay parameter for Adam optimizer during calibration
         factor_learning_rate_scheduler (float): Factor to reduce learning rate in scheduler
         patience_learning_rate_scheduler (float): Patience for learning rate scheduler
         patience_early_stopping (float): Patience for early stopping
@@ -137,27 +140,30 @@ def evaluate_with_calibration(
         "ece": cal_metrics_uncalibrated.ece,
         "mce": cal_metrics_uncalibrated.mce,
     }
-
     calib_logits = logits[data.calib_mask]
-    calibrator = ModelCalibration(
-        method=cast(
-            Literal["temperature", "isotonic", "platt", "beta", "dirichlet"],
-            calibration_method,
-        ),
-        initial_temperature=initial_temperature,
-        device=device,
+    # calibrator_save_path = os.path.join(save_path, "calibrator.pt")
+    pipeline = CalibrationPipeline(base_model=model, device=device)
+    pipeline.calibrate(
+        calib_logits,
+        y_tru_calib,
+        sample_weights_calib,
+        method=calibration_method,
         lr=lr,
-        weight_decay_adam_optimizer=weight_decay,
+        weight_decay_adam_optimizer=weight_decay_adam_optimizer,
         n_epochs=n_epochs,
+        reg_lambda=reg_lambda,
+        reg_mu=reg_mu,
+        eps=eps,
+        initial_temperature=initial_temperature,
         verbose=verbose,
-        patience_early_stopping=patience_early_stopping,
         factor_learning_rate_scheduler=factor_learning_rate_scheduler,
         patience_learning_rate_scheduler=patience_learning_rate_scheduler,
+        patience_early_stopping=patience_early_stopping,
         min_delta_early_stopping=min_delta_early_stopping,
+        seed=seed,
         save_path=save_path,
-    )
-    calibrator.fit(calib_logits, y_tru_calib, sample_weights_calib)
-    cal_probs = calibrator.predict_probability(logits[data.test_mask])
+    ).save(filepath=save_path)
+    cal_probs = pipeline.predict_from_logits(logits[data.test_mask])
     cal_pred = cal_probs.argmax(dim=1)
     cal_metrics_calibrated = cal_metrics.calculate_metrics(
         cal_probs, y_true_test, sample_weights_test, verbose=False
@@ -193,7 +199,7 @@ def evaluate_with_calibration(
     plot_reliability_diagram(
         uncalibrated_stats=cal_metrics_uncalibrated,
         calibrated_stats=cal_metrics_calibrated,
-        title=f"Reliability Diagram for {calibrator.method}",
+        title=f"Reliability Diagram for {calibration_method}",
         save_path=reliability_path,
     )
     print(f"Saving confusion matrix to {confusion_path}!")
@@ -210,10 +216,10 @@ def evaluate_with_calibration(
     metrics = {"uncalibrated": uncal_metrics, "calibrated": cal_metrics}
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=4)
-    # Save the calibrator
-    file_name = f"{save_path}/calibrator.pkl"
-    print(f"Saving calibrated model to {file_name}\n")
-    calibrator.save(file_name)
+    # # Save the calibrator
+    # file_name = f"{save_path}/calibrator.pkl"
+    # print(f"Saving calibrated model to {file_name}\n")
+    # calibrator.save(file_name)
 
     return metrics
 
@@ -261,6 +267,10 @@ def main():
     PATIENCE_EARLY_STOPPING = params["evaluate"]["patience_early_stopping"]
     MIN_DELTA_EARLY_STOPPING = params["evaluate"]["min_delta_early_stopping"]
     VERBOSE = params["evaluate"]["verbose"]
+    SEED = params["evaluate"]["seed"]
+    REG_LAMBDA = params["evaluate"]["reg_lambda"]
+    REG_MU = params["evaluate"]["reg_mu"]
+    EPS = params["evaluate"]["eps"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\nUsing device: {device} for evaluation\n")
@@ -275,7 +285,7 @@ def main():
             class_names=CLASS_NAMES,
             lr=LEARNING_RATE,
             n_epochs=N_EPOCHS,
-            weight_decay=WEIGHT_DEACY,
+            weight_decay_adam_optimizer=WEIGHT_DEACY,
             factor_learning_rate_scheduler=FACTOR,
             patience_learning_rate_scheduler=PATIENCE_LEARNING_RATE_SCHEDULER,
             patience_early_stopping=PATIENCE_EARLY_STOPPING,
@@ -283,6 +293,10 @@ def main():
             save_path=evaluation_path,
             verbose=VERBOSE,
             device=device,
+            eps=EPS,
+            reg_lambda=REG_LAMBDA,
+            reg_mu=REG_MU,
+            seed=SEED,
         )
 
 

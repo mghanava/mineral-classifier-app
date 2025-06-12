@@ -8,9 +8,8 @@ This module provides:
 """
 
 import os
-import pickle
 import time
-from typing import ClassVar, Literal, NamedTuple
+from typing import Any, ClassVar, Literal, NamedTuple
 
 import numpy as np
 import plotly.graph_objects as go
@@ -806,7 +805,7 @@ class IsotonicRegressionCalibration:
         return result
 
 
-class ModelCalibration:
+class CalibratedModel:
     """A class for calibrating machine learning model predictions.
 
     This class implements various calibration methods to improve the reliability of model
@@ -850,9 +849,19 @@ class ModelCalibration:
         "beta",
         "dirichlet",
     ]
+    model: (
+        TemperatureScaling
+        | PlattScaling
+        | BetaCalibration
+        | DirichletCalibration
+        | None
+    )
+
+    iso_calibrators: list | None
 
     def __init__(
         self,
+        base_model=None,
         method: Literal[
             "temperature", "isotonic", "platt", "beta", "dirichlet"
         ] = "temperature",
@@ -870,6 +879,7 @@ class ModelCalibration:
         patience_early_stopping: int = 50,
         min_delta_early_stopping: float = 0.001,
         save_path: str | None = None,
+        seed: int = 42,
     ):
         """Initialize the calibration model.
 
@@ -896,6 +906,7 @@ class ModelCalibration:
         if method not in self.VALID_METHODS:
             raise ValueError(f"Method must be one of {self.VALID_METHODS}")
 
+        self.base_model = base_model  # Original model that outputs logits
         self.method = method
         self.device = device
         self.lr = lr
@@ -917,6 +928,7 @@ class ModelCalibration:
         self.patience_early_stopping = patience_early_stopping
         self.min_delta_early_stopping = min_delta_early_stopping
         self.save_path = save_path
+        self.seed = seed
 
     def fit(
         self,
@@ -938,8 +950,7 @@ class ModelCalibration:
                 labels_train, dtype=torch.float32, device=self.device
             )
 
-        unique_classes = torch.unique(labels_train)
-        self.classes = unique_classes.sort()[0]
+        self.classes = torch.unique(labels_train)
         self.n_classes = len(self.classes)
 
         single_logit = logits_train.dim() == 1 or (
@@ -984,14 +995,31 @@ class ModelCalibration:
             elif self.method == "beta":
                 self.model = BetaCalibration(n_classes=2, device=self.device)
 
-            split = int(0.8 * len(logits_train))
-            logits_val = logits_train[split:]
-            labels_val = labels_train[split:]
-            sample_weights_val = sample_weights_train[split:]
-            logits_train = logits_train[:split]
-            labels_train = labels_train[:split]
+            # split the calibration data into training and validation
+            labels_cpu = (
+                labels_train.cpu().numpy()
+                if labels_train.is_cuda
+                else labels_train.numpy()
+            )
+            # Stratified split
+            indices = torch.arange(len(logits_train))
+            train_idx, val_idx = train_test_split(
+                indices, test_size=0.25, stratify=labels_cpu, random_state=self.seed
+            )
+            # Apply the split (first val then train as train is updated inplace)
+            logits_val = logits_train[val_idx]
+            labels_val = labels_train[val_idx]
+            sample_weights_val = sample_weights_train[val_idx]
+            logits_train = logits_train[train_idx]
+            labels_train = labels_train[train_idx]
 
-            if self.method == "platt" or self.method == "beta":
+            # Initialize with default values
+            s_prime = torch.empty(0, device=self.device)  # Initialize with empty tensor
+            s_double_prime = torch.empty(0, device=self.device)
+            val_s_prime = torch.empty(0, device=self.device)
+            val_s_double_prime = torch.empty(0, device=self.device)
+
+            if self.method in ["platt", "beta"]:
                 # Calculate s_prime and s_double_prime locally
                 probs_train = torch.sigmoid(logits_train).clamp(self.eps, 1 - self.eps)
                 s_prime = torch.log(probs_train)
@@ -1025,11 +1053,13 @@ class ModelCalibration:
             track_gradients = []
             for epoch in range(self.n_epochs):
                 optimizer.zero_grad()
-                calibrated_logits = (
-                    self.model(logits_train)
-                    if self.method == "temperature"
-                    else self.model(s_prime, s_double_prime)
-                )
+                if self.method == "temperature":
+                    calibrated_logits = self.model(logits_train)
+                else:
+                    assert len(s_prime) > 0 and len(s_double_prime) > 0, (
+                        "Variables not initialized for this method"
+                    )
+                    calibrated_logits = self.model(s_prime, s_double_prime)
                 # For Temperature Scaling, use logits directly
                 loss = criterion(calibrated_logits, labels_train)
                 # Add L2 regularization for smoothness
@@ -1071,6 +1101,8 @@ class ModelCalibration:
                 self._plot_loss_and_gradients(self.model, track_losses, track_gradients)
         else:
             model = IsotonicRegressionCalibration(device=self.device)
+            if self.classes is None:
+                raise RuntimeError("Classes were not properly found during fitting!")
             self.iso_calibrators = [
                 model._fit_isotonic_calibrator(
                     logits_train,
@@ -1099,20 +1131,40 @@ class ModelCalibration:
                     n_classes=self.n_classes, device=self.device
                 )
             # split the calibration data into training and validation
-            split = int(0.8 * len(logits_train))
-            logits_val = logits_train[split:]
-            labels_val = labels_train[split:]
-            sample_weights_val = sample_weights_train[split:]
-            logits_train = logits_train[:split]
-            labels_train = labels_train[:split]
+            labels_cpu = (
+                labels_train.cpu().numpy()
+                if labels_train.is_cuda
+                else labels_train.numpy()
+            )
+            # Stratified split
+            indices = torch.arange(len(logits_train))
+            train_idx, val_idx = train_test_split(
+                indices, test_size=0.25, stratify=labels_cpu, random_state=self.seed
+            )
+            # Apply the split (first val then train as train is updated inplace)
+            logits_val = logits_train[val_idx]
+            labels_val = labels_train[val_idx]
+            sample_weights_val = sample_weights_train[val_idx]
+            logits_train = logits_train[train_idx]
+            labels_train = labels_train[train_idx]
 
             optimizer = optim.Adam(
                 self.model.parameters(),
                 lr=self.lr,
                 weight_decay=self.weight_decay_adam_optimizer,
             )
+            # Initialize with default values
+            s_prime = torch.empty(0, device=self.device)  # Initialize with empty tensor
+            s_double_prime = torch.empty(0, device=self.device)
+            val_s_prime = torch.empty(0, device=self.device)
+            val_s_double_prime = torch.empty(0, device=self.device)
+            if self.n_classes is None:
+                raise RuntimeError(
+                    "Number of classes were not properly found during fitting!"
+                )
+            labels_train_one_hot = torch.empty(0, device=self.device)
 
-            if self.method == "temperature" or self.method == "dirichlet":
+            if self.method in ["temperature", "dirichlet"]:
                 class_weights_train = torch.tensor(
                     compute_class_weight(
                         class_weight="balanced",
@@ -1162,14 +1214,16 @@ class ModelCalibration:
             track_gradients = []
             for epoch in range(self.n_epochs):
                 optimizer.zero_grad()
-                calibrated_logits = (
-                    self.model(logits_train)
-                    if self.method == "temperature" or self.method == "dirichlet"
-                    else self.model(s_prime, s_double_prime)
-                )
+                if self.method in ["temperature", "dirichlet"]:
+                    calibrated_logits = self.model(logits_train)
+                else:
+                    assert len(s_prime) > 0 and len(s_double_prime) > 0, (
+                        "Variables not initialized for this method"
+                    )
+                    calibrated_logits = self.model(s_prime, s_double_prime)
                 loss = (
                     criterion(calibrated_logits, labels_train)
-                    if self.method == "temperature" or self.method == "dirichlet"
+                    if self.method in ["temperature", "dirichlet"]
                     else criterion(calibrated_logits, labels_train_one_hot)
                 )
                 if self.method != "dirichlet":
@@ -1207,7 +1261,7 @@ class ModelCalibration:
                 with torch.no_grad():
                     calibrated_logits_val = (
                         self.model(logits_val)
-                        if self.method == "temperature" or self.method == "dirichlet"
+                        if self.method in ["temperature", "dirichlet"]
                         else self.model(val_s_prime, val_s_double_prime)
                     )
                     calibrated_probs_val = torch.softmax(calibrated_logits_val, dim=1)
@@ -1236,6 +1290,8 @@ class ModelCalibration:
                 self._plot_loss_and_gradients(self.model, track_losses, track_gradients)
         else:
             model = IsotonicRegressionCalibration(device=self.device)
+            if self.classes is None:
+                raise RuntimeError("Classes were not properly found during fitting!")
             # Fit a separate calibrator for each class
             self.iso_calibrators = []
             for i, cls in enumerate(self.classes):
@@ -1305,11 +1361,11 @@ class ModelCalibration:
                 f"{self.save_path}/calibration_{self.method}_loss_and_gradients.png"
             )
 
-    def predict_probability(self, logits_test):
+    def predict(self, X):
         """Predict calibrated probabilities for test logits.
 
         Args:
-            logits_test (torch.Tensor): Logits from the model
+            X (torch.Tensor): New raw data
             (shape: [n_samples] for binary, [n_samples, n_classes] for multi-class).
 
         Returns:
@@ -1318,75 +1374,15 @@ class ModelCalibration:
 
         """
         if not self.calibrated:
-            raise RuntimeError("Model has not been fitted yet. Call 'fit' first.")
-        if not isinstance(logits_test, torch.Tensor):
-            logits_test = torch.tensor(
-                logits_test, dtype=torch.float32, device=self.device
-            )
+            raise RuntimeError("Call fit() first")
+        if not hasattr(self, "base_model"):
+            raise ValueError("base_model required for raw data prediction")
 
-        n_samples = logits_test.shape[0]
-        if self.method != "isotonic":
-            with torch.no_grad():
-                if self.use_binary_calibration:
-                    # Create probability matrix for both classes
-                    calibrated_probs = torch.zeros((n_samples, 2), dtype=torch.float32)
-                    if self.method == "temperature":
-                        # Use logits directly
-                        calibrated_logits = self.model(logits_test)
-                        pos_probs = torch.sigmoid(calibrated_logits)
-                        calibrated_probs[:, 0] = 1.0 - pos_probs
-                        calibrated_probs[:, 1] = pos_probs
-                    else:
-                        # Calculate s_prime and s_double_prime locally for platt scaling & Beta Calibration
-                        probs = torch.sigmoid(logits_test).clamp(self.eps, 1 - self.eps)
-                        s_prime = torch.log(probs)
-                        s_double_prime = -torch.log(1 - probs)
-                        calibrated_logits = self.model(s_prime, s_double_prime)
-                        pos_probs = torch.sigmoid(calibrated_logits)
-                        calibrated_probs[:, 0] = 1.0 - pos_probs
-                        calibrated_probs[:, 1] = pos_probs
-                else:
-                    if self.method == "temperature" or self.method == "dirichlet":
-                        calibrated_logits = self.model(logits_test)
-                        calibrated_probs = torch.softmax(calibrated_logits, dim=1)
-                    else:
-                        probs = torch.softmax(logits_test, dim=1).clamp(
-                            self.eps, 1 - self.eps
-                        )
-                        s_prime = torch.log(probs)
-                        s_double_prime = -torch.log(1 - probs)
-                        calibrated_logits = self.model(s_prime, s_double_prime)
-                        calibrated_probs = torch.sigmoid(calibrated_logits)
-        else:
-            model = IsotonicRegressionCalibration(device=self.device)
-
-            if self.use_binary_calibration:
-                pos_probs = model._predict_isotonic_calibration(
-                    self.iso_calibrators[0], logits_test
-                )
-                # Create probability matrix for both classes
-                calibrated_probs = torch.zeros(
-                    (n_samples, 2), dtype=torch.float32, device=self.device
-                )
-                calibrated_probs[:, 0] = 1.0 - pos_probs
-                calibrated_probs[:, 1] = pos_probs
-            else:
-                # For multi-class, get calibrated probabilities for each class
-                calibrated_probs = torch.zeros(
-                    (n_samples, self.n_classes), dtype=torch.float32, device=self.device
-                )
-
-                for i, calibrator in enumerate(self.iso_calibrators):
-                    class_logits = logits_test[:, i]
-                    calibrated_probs[:, i] = model._predict_isotonic_calibration(
-                        calibrator, class_logits
-                    )
-
-        # Normalize probabilities to sum to 1
-        calibrated_probs = calibrated_probs / torch.clamp(
-            torch.sum(calibrated_probs, dim=1, keepdim=True), min=self.eps
-        )
-        return calibrated_probs
+        with torch.no_grad():
+            # Step 1: Get uncalibrated logits
+            logits = self.base_model(X.to(self.device))
+            # Step 2: AApply calibration and convert to probabilities
+            return self._apply_calibration(logits)
 
     def evaluate_calibration(
         self, logits_test, labels_test, sample_weights_test=None, n_bins=10
@@ -1414,7 +1410,7 @@ class ModelCalibration:
             labels_test, probs_uncalibrated, sample_weights_test, n_bins
         )
 
-        probs_calibrated = self.predict_probability(logits_test)
+        probs_calibrated = self.predict(logits_test)
         ece_after = self._compute_weighted_ece(
             labels_test, probs_calibrated, sample_weights_test, n_bins
         )
@@ -1453,137 +1449,361 @@ class ModelCalibration:
 
         return ece.item()
 
-    def __getstate__(self):
-        """Prepare the object for serialization."""
+    def _apply_calibration(self, logits):
+        """Core calibration logic for all methods."""
+        # n_samples = logits.shape[0]
+
+        # Binary case handling
+        if self.use_binary_calibration:
+            if self.method == "isotonic":
+                pos_probs = self._isotonic_predict_binary(logits)
+                return torch.stack([1 - pos_probs, pos_probs], dim=1)
+            else:
+                calibrated = self._parametric_calibrate_binary(logits)
+                return (
+                    torch.sigmoid(calibrated)
+                    if self.method == "temperature"
+                    else torch.sigmoid(calibrated).unsqueeze(1)
+                )
+
+        # Multi-class case
+        if self.method == "isotonic":
+            return self._isotonic_predict_multiclass(logits)
+        else:
+            calibrated = self._parametric_calibrate_multiclass(logits)
+            return torch.softmax(calibrated, dim=1)
+
+    # Helper methods
+    def _parametric_calibrate_binary(self, logits):
+        """Handle Platt/Beta/Temperature scaling for binary."""
+        if self.method == "temperature":
+            return self.model(logits)
+
+        probs = torch.sigmoid(logits).clamp(self.eps, 1 - self.eps)
+        s_prime = torch.log(probs)
+        s_double_prime = -torch.log(1 - probs)
+        return self.model(s_prime, s_double_prime)
+
+    def _parametric_calibrate_multiclass(self, logits):
+        """Handle Platt/Beta/Temperature/Dirichlet for multi-class."""
+        if self.method in ["temperature", "dirichlet"]:
+            return self.model(logits)
+
+        probs = torch.softmax(logits, dim=1).clamp(self.eps, 1 - self.eps)
+        s_prime = torch.log(probs)
+        s_double_prime = -torch.log(1 - probs)
+        return self.model(s_prime, s_double_prime)
+
+    def _isotonic_predict_binary(self, logits):
+        """Isotonic binary prediction."""
+        if self.iso_calibrators is None:
+            raise RuntimeError(
+                "Calibration model was not properly initialized during fitting"
+            )
+        return IsotonicRegressionCalibration(
+            device=self.device
+        )._predict_isotonic_calibration(self.iso_calibrators[0], logits)
+
+    def _isotonic_predict_multiclass(self, logits):
+        if self.iso_calibrators is None:
+            raise RuntimeError(
+                "Calibration model was not properly initialized during fitting"
+            )
+        """Isotonic multi-class prediction"""
+        probs = torch.zeros(logits.shape, device=self.device)
+        for i, _ in enumerate(self.iso_calibrators):
+            probs[:, i] = self._isotonic_predict_binary(logits[:, i])
+        return probs / probs.sum(dim=1, keepdim=True).clamp(min=self.eps)
+
+    def save_calibrated_model(self, filepath: str) -> None:
+        """Save the complete calibrated model state for pipeline deployment.
+
+        Args:
+            filepath: Path to save the calibrated model
+
+        """
+        if not self.calibrated:
+            raise RuntimeError("Model must be calibrated before saving")
+
+        # Create comprehensive state dictionary
         state = {
             "method": self.method,
-            "device": str(self.device),  # Save as string
-            "calibrated": self.calibrated,
             "use_binary_calibration": self.use_binary_calibration,
-            "classes": self.classes.cpu() if self.classes is not None else None,
+            "classes": self.classes,
             "n_classes": self.n_classes,
-            # Save model state if exists
-            "model_state": self.model.state_dict() if self.model is not None else None,
-            # Save isotonic calibrators if exists
-            "iso_calibrators": self.iso_calibrators
-            if self.iso_calibrators is not None
-            else None,
-            # Save all hyperparameters
-            "hyperparams": {
-                "lr": self.lr,
-                "n_epochs": self.n_epochs,
-                "weight_decay_adam_optimizer": self.weight_decay_adam_optimizer,
-                "reg_lambda": self.reg_lambda,
-                "reg_mu": self.reg_mu,
-                "eps": self.eps,
-                "initial_temperature": self.initial_temperature,
-                "factor_learning_rate_scheduler": self.factor_learning_rate_scheduler,
-                "patience_learning_rate_scheduler": self.patience_learning_rate_scheduler,
-                "patience_early_stopping": self.patience_early_stopping,
-                "min_delta_early_stopping": self.min_delta_early_stopping,
-            },
+            "eps": self.eps,
+            "calibrated": self.calibrated,
+            "model_state": None,
+            "iso_calibrators": None,
         }
-        return state
 
-    def __setstate__(self, state):
-        """Reconstruct the object from serialized state."""
-        # Restore basic attributes
-        self.method = state["method"]
-        self.device = torch.device(state["device"])
-        self.calibrated = state["calibrated"]
-        self.use_binary_calibration = state["use_binary_calibration"]
-        self.classes = (
-            state["classes"].to(self.device) if state["classes"] is not None else None
-        )
-        self.n_classes = state["n_classes"]
+        # Save parametric model state
+        if self.model is not None:
+            state["model_state"] = {
+                "state_dict": self.model.state_dict(),
+                "model_class": self.model.__class__.__name__,
+            }
 
-        # Restore hyperparameters
-        hyperparams = state["hyperparams"]
-        self.lr = hyperparams["lr"]
-        self.n_epochs = hyperparams["n_epochs"]
-        self.weight_decay_adam_optimizer = hyperparams["weight_decay_adam_optimizer"]
-        self.reg_lambda = hyperparams["reg_lambda"]
-        self.reg_mu = hyperparams["reg_mu"]
-        self.eps = hyperparams["eps"]
-        self.initial_temperature = hyperparams["initial_temperature"]
-        self.factor_learning_rate_scheduler = hyperparams[
-            "factor_learning_rate_scheduler"
-        ]
-        self.patience_learning_rate_scheduler = hyperparams[
-            "patience_learning_rate_scheduler"
-        ]
-        self.patience_early_stopping = hyperparams["patience_early_stopping"]
-        self.min_delta_early_stopping = hyperparams["min_delta_early_stopping"]
+        # Save isotonic calibrators
+        if self.iso_calibrators is not None:
+            state["iso_calibrators"] = self.iso_calibrators
 
-        # Rebuild the calibration model
-        if state["method"] == "isotonic":
-            # Handle isotonic calibrators
-            self.iso_calibrators = state["iso_calibrators"]
-            self.model = None  # Isotonic doesn't use the model attribute
-        else:
-            # Handle parametric calibrators
-            self.iso_calibrators = None
-            if state["model_state"] is not None:
-                if state["model_type"] == "TemperatureScaling":
-                    self.model = TemperatureScaling(
-                        device=self.device, initial_temperature=self.initial_temperature
-                    )
-                elif state["model_type"] == "PlattScaling":
-                    self.model = PlattScaling(
-                        n_classes=self.n_classes, device=self.device
-                    )
-                elif state["model_type"] == "BetaCalibration":
-                    self.model = BetaCalibration(
-                        n_classes=self.n_classes, device=self.device
-                    )
-                elif state["model_type"] == "DirichletCalibration":
-                    self.model = DirichletCalibration(
-                        n_classes=self.n_classes, device=self.device
-                    )
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
-                self.model.load_state_dict(state["model_state"])
-                self.model.to(self.device)
+        # Save with both pickle and torch formats for robustness
+        # torch.save(state, filepath)
+        torch.save(state, os.path.join(filepath, "calibrator.pt"))
 
-        # Restore other attributes not saved in state
-        self.verbose = getattr(self, "verbose", False)  # Default if not present
-        self.save_path = getattr(self, "save_path", None)
+        # # Also save a human-readable summary
+        # summary_path = filepath.replace(".pkl", "_summary.txt")
+        # self._save_calibration_summary(summary_path, state)
 
-    def save(self, file_path: str) -> None:
-        """Save the calibrator to a file using pickle.
-
-        Args:
-           filepath: Path to saved calibrator state
-
-        """
-        if not file_path.endswith(".pkl"):
-            raise ValueError("File path must end with .pkl")
-        with open(file_path, "wb") as f:
-            pickle.dump(self, f)
+        print(f"Calibrated model saved to: {filepath}")
 
     @classmethod
-    def load(cls, filepath: str, device: str = None) -> "ModelCalibration":
-        """Load a calibrator from file with safe deserialization.
+    def load_calibrated_model(
+        cls, filepath: str, device: torch.device | None = None
+    ) -> "CalibratedModel":
+        """Load a previously saved calibrated model for inference.
 
         Args:
-            filepath: Path to saved calibrator state
-            device: Target device (None to use original device)
+            filepath: Path to the saved calibrated model
+            device: Target device for the model
 
         Returns:
-            ModelCalibration: Loaded calibrator instance
+            CalibratedModel: Loaded calibrated model ready for inference
 
         """
-        try:
-            if not filepath.endswith(".pkl"):
-                raise ValueError("File path must end with .pkl")
-            with open(filepath, "rb") as f:
-                calibrator = pickle.load(f)
-                if device is not None:
-                    calibrator.device = torch.device(device)
-                    if calibrator.model is not None:
-                        calibrator.model.to(device)
-                return calibrator
-        except (pickle.UnpicklingError, AttributeError, ImportError) as e:
-            raise RuntimeError(f"Failed to load calibrator: {e!s}")
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Calibrated model file not found: {filepath}")
+
+        # Load state (weights_only=False since we're saving custom objects)
+        state = torch.load(filepath, weights_only=False, map_location="cpu")
+
+        # Create new instance with minimal initialization
+        instance = cls.__new__(cls)
+        instance.device = device or torch.device("cpu")
+        instance.method = state["method"]
+        instance.use_binary_calibration = state["use_binary_calibration"]
+        instance.classes = state["classes"]
+        instance.n_classes = state["n_classes"]
+        instance.eps = state["eps"]
+        instance.calibrated = state["calibrated"]
+        instance.base_model = None  # Will be set externally if needed
+
+        # Restore parametric model
+        if state["model_state"] is not None:
+            model_class_name = state["model_state"]["model_class"]
+
+            # Reconstruct the appropriate model
+            if model_class_name == "TemperatureScaling":
+                instance.model = TemperatureScaling(device=instance.device)
+            elif model_class_name == "PlattScaling":
+                instance.model = PlattScaling(
+                    n_classes=instance.n_classes, device=instance.device
+                )
+            elif model_class_name == "BetaCalibration":
+                instance.model = BetaCalibration(
+                    n_classes=instance.n_classes, device=instance.device
+                )
+            elif model_class_name == "DirichletCalibration":
+                instance.model = DirichletCalibration(
+                    n_classes=instance.n_classes, device=instance.device
+                )
+            else:
+                raise ValueError(f"Unknown model class: {model_class_name}")
+
+            # Load the state dictionary
+            instance.model.load_state_dict(state["model_state"]["state_dict"])
+            instance.model.eval()  # Set to evaluation mode
+        else:
+            instance.model = None
+
+        # Restore isotonic calibrators
+        instance.iso_calibrators = state.get("iso_calibrators")
+
+        print(f"Calibrated model loaded from: {filepath}")
+        return instance
+
+    def predict_proba(self, logits: torch.Tensor) -> torch.Tensor:
+        """Predict calibrated probabilities from logits (primary inference method).
+
+        Args:
+            logits: Model logits tensor
+
+        Returns:
+            Calibrated probabilities
+
+        """
+        if not self.calibrated:
+            raise RuntimeError("Model must be calibrated before prediction")
+
+        with torch.no_grad():
+            return self._apply_calibration(logits.to(self.device))
+
+    def predict_with_base_model(self, X: Data) -> torch.Tensor:
+        """End-to-end prediction with base model + calibration.
+
+        Args:
+            X: Raw input data
+
+        Returns:
+            Calibrated probabilities
+
+        """
+        if self.base_model is None:
+            raise ValueError("base_model must be set for end-to-end prediction")
+
+        with torch.no_grad():
+            logits = self.base_model(X.to(str(self.device)))
+            return self._apply_calibration(logits)
+
+    def set_base_model(self, base_model: nn.Module) -> None:
+        """Set the base model for end-to-end prediction.
+
+        Args:
+            base_model: The trained base model that outputs logits
+
+        """
+        self.base_model = base_model
+        if hasattr(base_model, "eval"):
+            base_model.eval()
+
+    def _save_calibration_summary(self, filepath: str, state: dict[str, Any]) -> None:
+        """Save human-readable calibration summary."""
+        with open(filepath, "w") as f:
+            f.write("CALIBRATION MODEL SUMMARY\n")
+            f.write("=" * 50 + "\n\n")
+            f.write(f"Method: {state['method']}\n")
+            f.write(f"Number of classes: {state['n_classes']}\n")
+            f.write(f"Binary calibration: {state['use_binary_calibration']}\n")
+            f.write(
+                f"Classes: {state['classes'].tolist() if state['classes'] is not None else None}\n"
+            )
+
+            if state["model_state"] is not None:
+                f.write(f"\nParametric Model: {state['model_state']['model_class']}\n")
+                if hasattr(self.model, "T"):
+                    f.write(f"Temperature: {self.model.T.item():.4f}\n")
+
+            if state["iso_calibrators"] is not None:
+                f.write(
+                    f"\nIsotonic calibrators: {len(state['iso_calibrators'])} classes\n"
+                )
+
+    def get_calibration_info(self) -> dict[str, Any]:
+        """Get information about the current calibration state.
+
+        Returns:
+            Dictionary with calibration information
+
+        """
+        info = {
+            "calibrated": self.calibrated,
+            "method": self.method,
+            "n_classes": self.n_classes,
+            "use_binary_calibration": self.use_binary_calibration,
+            "has_base_model": self.base_model is not None,
+        }
+
+        if self.calibrated and self.model is not None:
+            if hasattr(self.model, "T"):
+                info["temperature"] = self.model.T.item()
+            elif hasattr(self.model, "a") and hasattr(self.model, "b"):
+                info["parameters"] = {
+                    "a": self.model.a.detach().cpu().numpy().tolist(),
+                    "b": self.model.b.detach().cpu().numpy().tolist(),
+                }
+
+        return info
+
+
+# Pipeline utility class for easier deployment
+class CalibrationPipeline:
+    """High-level pipeline class for model calibration and deployment."""
+
+    def __init__(
+        self, base_model: nn.Module, device: torch.device = torch.device("cpu")
+    ):
+        self.base_model = base_model
+        self.device = device
+        self.calibrated_model = None
+
+    def calibrate(
+        self,
+        logits_train: torch.Tensor,
+        labels_train: torch.Tensor,
+        sample_weights_train: torch.Tensor | None,
+        save_path: str | None = None,
+        method: Literal[
+            "temperature", "isotonic", "platt", "beta", "dirichlet"
+        ] = "temperature",
+        **calibration_kwargs,
+    ) -> "CalibrationPipeline":
+        """Calibrate the model using training data.
+
+        Args:
+            logits_train: Training logits
+            labels_train: Training labels
+            method: Calibration method
+            **calibration_kwargs: Additional arguments for CalibratedModel
+
+        Returns:
+            Self for method chaining
+
+        """
+        self.calibrated_model = CalibratedModel(
+            base_model=self.base_model,
+            method=method,
+            device=self.device,
+            save_path=save_path,
+            **calibration_kwargs,
+        )
+
+        self.calibrated_model.fit(logits_train, labels_train, sample_weights_train)
+        return self
+
+    def save(self, filepath: str) -> "CalibrationPipeline":
+        """Save the calibrated pipeline."""
+        if self.calibrated_model is None:
+            raise RuntimeError("Pipeline must be calibrated before saving")
+
+        self.calibrated_model.save_calibrated_model(filepath)
+        return self
+
+    @classmethod
+    def load(
+        cls,
+        filepath: str,
+        base_model: nn.Module,
+        device: torch.device = torch.device("cpu"),
+    ) -> "CalibrationPipeline":
+        """Load a calibrated pipeline."""
+        pipeline = cls(base_model, device)
+        pipeline.calibrated_model = CalibratedModel.load_calibrated_model(
+            filepath, device
+        )
+        pipeline.calibrated_model.set_base_model(base_model)
+        return pipeline
+
+    def predict(self, X: torch.Tensor) -> torch.Tensor:
+        """Make calibrated predictions."""
+        if self.calibrated_model is None:
+            raise RuntimeError(
+                "Pipeline must be calibrated or loaded before prediction"
+            )
+
+        return self.calibrated_model.predict_with_base_model(X)
+
+    def predict_from_logits(self, logits: torch.Tensor) -> torch.Tensor:
+        """Make calibrated predictions from logits."""
+        if self.calibrated_model is None:
+            raise RuntimeError(
+                "Pipeline must be calibrated or loaded before prediction"
+            )
+
+        return self.calibrated_model.predict_proba(logits)
 
 
 def generate_mineral_data(
@@ -2323,7 +2543,7 @@ def plot_confusion_matrix(
     pyplot.title(title)
     if save_path:
         pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
-    # pyplot.show()
+
 
 
 def plot_roc_curve(ax, y_true, y_prob, sample_weights, title="ROC Curve"):
