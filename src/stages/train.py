@@ -9,7 +9,6 @@ This module provides functions for training GNN models with features including:
 
 import argparse
 import os
-import random
 
 import numpy as np
 import torch
@@ -26,18 +25,17 @@ from src.utilities.utils import (
     plot_training,
 )
 
-
-def set_seed(seed: int):
-    """Set random seeds for reproducibility across all relevant libraries."""
-    random.seed(seed)
-    np.random.default_rng(seed)  # Set NumPy's random seed directly
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    os.environ["PYTHONHASHSEED"] = str(seed)
+# def set_seed(seed: int):
+#     """Set random seeds for reproducibility across all relevant libraries."""
+#     random.seed(seed)
+#     np.random.default_rng(seed)  # Set NumPy's random seed directly
+#     torch.manual_seed(seed)
+#     if torch.cuda.is_available():
+#         torch.cuda.manual_seed(seed)
+#         torch.cuda.manual_seed_all(seed)
+#     torch.backends.cudnn.deterministic = True
+#     torch.backends.cudnn.benchmark = False
+#     os.environ["PYTHONHASHSEED"] = str(seed)
 
 
 def train(
@@ -295,7 +293,7 @@ def main():
     PATIENCE_EARLY_STOPPING = params["train"]["patience_early_stopping"]
     MIN_DELTA_EARLY_STOPPING = params["train"]["min_delta_early_stopping"]
     SEED = params["train"]["seed"]
-    set_seed(seed=SEED)
+    # set_seed(seed=SEED)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\nUsing device: {device} for training")

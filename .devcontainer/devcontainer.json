@@ -45,7 +45,8 @@
       "python.linting.pylintEnabled": false,
       "python.linting.flake8Enabled": false,
       // Auto-save settings
-      "files.autoSave": "onFocusChange",
+      "files.autoSave": "afterDelay",
+      "files.autoSaveDelay": 1000,
       "extensions": [
         "ms-python.python",
         "charliermarsh.ruff",

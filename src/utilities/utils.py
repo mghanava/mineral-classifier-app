@@ -9,7 +9,7 @@ This module provides:
 
 import os
 import time
-from typing import Any, ClassVar, Literal, NamedTuple
+from typing import ClassVar, Literal, NamedTuple
 
 import numpy as np
 import plotly.graph_objects as go
@@ -841,7 +841,6 @@ class CalibratedModel:
 
     """
 
-    # VALID_METHODS = {"temperature", "isotonic", "platt", "beta", "dirichlet"}
     VALID_METHODS: ClassVar[list[str]] = [
         "temperature",
         "isotonic",
@@ -884,9 +883,10 @@ class CalibratedModel:
         """Initialize the calibration model.
 
         Args:
+            base_model (nn.Module, optional): The original model that outputs logits.
             method (str): Calibration method. Options: "beta" (Beta Calibration)
                 or "temperature" (Temperature Scaling).
-            device (torch.device): Device for computation
+            device (torch.device): Device for computation.
             lr (float): Learning rate for optimization.
             weight_decay_adam_optimizer (float): Weight decay parameter for Adam optimizer.
             n_epochs (int): Maximum number of iterations for optimization.
@@ -901,6 +901,7 @@ class CalibratedModel:
             patience_early_stopping (int): Number of epochs with no improvement before early stopping.
             min_delta_early_stopping (float): Minimum change in monitored quantity to qualify as an improvement.
             save_path (str, optional): Directory path to save training plots and model parameters.
+            seed (int): Random seed for reproducibility.
 
         """
         if method not in self.VALID_METHODS:
@@ -945,364 +946,97 @@ class CalibratedModel:
             sample_weights_train (torch.Tensor): Weights of each sample (shape: [n_samples]).
 
         """
+        self._validate_inputs(logits_train, labels_train)
+        self._setup_class_info(logits_train, labels_train)
+
         if sample_weights_train is None:
             sample_weights_train = torch.ones_like(
                 labels_train, dtype=torch.float32, device=self.device
             )
-
-        self.classes = torch.unique(labels_train)
-        self.n_classes = len(self.classes)
-
-        single_logit = logits_train.dim() == 1 or (
-            logits_train.dim() == 2 and logits_train.shape[1] == 1
-        )
-        # Check if binary or multi-class
-        if self.n_classes <= 2 and single_logit:
-            self.use_binary_calibration = True
-
-            if self.method == "dirichlet":
-                raise ValueError(
-                    f"{single_logit * 1} logit does not match minimum number of 2 logits for Dirichlet calibration!"
-                )
-            # Binary classification
-            logits_train = logits_train.reshape(labels_train.shape)
-            self._fit_binary(logits_train, labels_train, sample_weights_train)
-
+        if self.method == "isotonic":
+            self._fit_non_parametric(logits_train, labels_train, sample_weights_train)
         else:
-            self.use_binary_calibration = False
+            self._fit_parametric(logits_train, labels_train, sample_weights_train)
 
-            # If necessary, expand logits to match class count
-            if logits_train.shape[1] != self.n_classes:
-                raise ValueError(
-                    f"Number of logits columns ({logits_train.shape[1]}) does not match "
-                    f"number of classes ({self.n_classes})"
-                )
-            # Multi-class classification (including binary classification with
-            # two explicit logits value for each class)
-            self._fit_multi_class(logits_train, labels_train, sample_weights_train)
+        self.calibrated = True
 
-    def _fit_binary(self, logits_train, labels_train, sample_weights_train):
-        """Fit calibration model for binary classification."""
-        labels_train = labels_train.float()
-
-        if self.method != "isotonic":
-            if self.method == "temperature":
-                self.model = TemperatureScaling(
-                    device=self.device, initial_temperature=self.initial_temperature
-                )
-            elif self.method == "platt":
-                self.model = PlattScaling(n_classes=2, device=self.device)
-            elif self.method == "beta":
-                self.model = BetaCalibration(n_classes=2, device=self.device)
-
-            # split the calibration data into training and validation
-            labels_cpu = (
-                labels_train.cpu().numpy()
-                if labels_train.is_cuda
-                else labels_train.numpy()
-            )
-            # Stratified split
-            indices = torch.arange(len(logits_train))
-            train_idx, val_idx = train_test_split(
-                indices, test_size=0.25, stratify=labels_cpu, random_state=self.seed
-            )
-            # Apply the split (first val then train as train is updated inplace)
-            logits_val = logits_train[val_idx]
-            labels_val = labels_train[val_idx]
-            sample_weights_val = sample_weights_train[val_idx]
-            logits_train = logits_train[train_idx]
-            labels_train = labels_train[train_idx]
-
-            # Initialize with default values
-            s_prime = torch.empty(0, device=self.device)  # Initialize with empty tensor
-            s_double_prime = torch.empty(0, device=self.device)
-            val_s_prime = torch.empty(0, device=self.device)
-            val_s_double_prime = torch.empty(0, device=self.device)
-
-            if self.method in ["platt", "beta"]:
-                # Calculate s_prime and s_double_prime locally
-                probs_train = torch.sigmoid(logits_train).clamp(self.eps, 1 - self.eps)
-                s_prime = torch.log(probs_train)
-                s_double_prime = -torch.log(1 - probs_train)
-                probs_val = torch.sigmoid(logits_val).clamp(self.eps, 1 - self.eps)
-                val_s_prime = torch.log(probs_val)
-                val_s_double_prime = -torch.log(1 - probs_val)
-
-            pos_weight = labels_train.size(0) / (2 * labels_train.sum())
-
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
-            optimizer = optim.Adam(
-                self.model.parameters(),
-                lr=self.lr,
-                weight_decay=self.weight_decay_adam_optimizer,
-            )
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode="min",
-                factor=self.factor_learning_rate_scheduler,
-                patience=self.patience_learning_rate_scheduler,
-            )
-
-            last_lr = self.lr
-            early_stopping = EarlyStopping(
-                patience=self.patience_early_stopping,
-                min_delta=self.min_delta_early_stopping,
-            )
-
-            track_losses = []
-            track_gradients = []
-            for epoch in range(self.n_epochs):
-                optimizer.zero_grad()
-                if self.method == "temperature":
-                    calibrated_logits = self.model(logits_train)
-                else:
-                    assert len(s_prime) > 0 and len(s_double_prime) > 0, (
-                        "Variables not initialized for this method"
-                    )
-                    calibrated_logits = self.model(s_prime, s_double_prime)
-                # For Temperature Scaling, use logits directly
-                loss = criterion(calibrated_logits, labels_train)
-                # Add L2 regularization for smoothness
-                loss += self.reg_lambda * sum([p**2 for p in self.model.parameters()])
-                loss.backward()
-                optimizer.step()
-                track_losses.append(loss.item())
-                track_gradients.append(self._calculate_parameter_gradients(self.model))
-                # Evaluation on validation set
-                with torch.no_grad():
-                    calibrated_logits_val = (
-                        self.model(logits_val)
-                        if self.method == "temperature"
-                        else self.model(val_s_prime, val_s_double_prime)
-                    )
-                    calibrated_probs_val = torch.sigmoid(calibrated_logits_val)
-                    # Compute ECE on validation set
-                    ece_val = self._compute_weighted_ece(
-                        labels_val, calibrated_probs_val, sample_weights_val
-                    )
-                # Update learning rate
-                scheduler.step(ece_val)
-                # Get current learning rate
-                current_lr = optimizer.param_groups[0]["lr"]
-                # Print message if learning rate has changed
-                if current_lr != last_lr:
-                    print(
-                        f"Learning rate decreased from {last_lr:.5e} to {current_lr:.5e}"
-                    )
-                    last_lr = current_lr
-                    early_stopping.reset_counter()
-                # Check for early stopping
-                early_stopping(ece_val)
-                if early_stopping.early_stop:
-                    print(f"\nEarly stopping triggered after {epoch + 1} epochs!\n")
-                    break
-            if self.verbose:
-                # print optimum parameters based on model type
-                self._plot_loss_and_gradients(self.model, track_losses, track_gradients)
-        else:
-            model = IsotonicRegressionCalibration(device=self.device)
-            if self.classes is None:
-                raise RuntimeError("Classes were not properly found during fitting!")
+    def _fit_non_parametric(self, logits, labels, sample_weights):
+        model = IsotonicRegressionCalibration(device=self.device)
+        if self.classes is None:
+            raise RuntimeError("Classes were not properly found during fitting!")
+        if self.use_binary_calibration:
             self.iso_calibrators = [
                 model._fit_isotonic_calibrator(
-                    logits_train,
-                    (labels_train == self.classes[1]).float(),
-                    sample_weights_train,
+                    logits,
+                    (labels == self.classes[1]).float(),
+                    sample_weights,
                 )
             ]
-
-        self.calibrated = True
-
-    def _fit_multi_class(self, logits_train, labels_train, sample_weights_train):
-        """Fit calibration model for multi-class classification."""
-        if self.method != "isotonic":
-            if self.method == "temperature":
-                self.model = TemperatureScaling(
-                    device=self.device, initial_temperature=self.initial_temperature
-                )
-            elif self.method == "platt":
-                self.model = PlattScaling(n_classes=self.n_classes, device=self.device)
-            elif self.method == "beta":
-                self.model = BetaCalibration(
-                    n_classes=self.n_classes, device=self.device
-                )
-            elif self.method == "dirichlet":
-                self.model = DirichletCalibration(
-                    n_classes=self.n_classes, device=self.device
-                )
-            # split the calibration data into training and validation
-            labels_cpu = (
-                labels_train.cpu().numpy()
-                if labels_train.is_cuda
-                else labels_train.numpy()
-            )
-            # Stratified split
-            indices = torch.arange(len(logits_train))
-            train_idx, val_idx = train_test_split(
-                indices, test_size=0.25, stratify=labels_cpu, random_state=self.seed
-            )
-            # Apply the split (first val then train as train is updated inplace)
-            logits_val = logits_train[val_idx]
-            labels_val = labels_train[val_idx]
-            sample_weights_val = sample_weights_train[val_idx]
-            logits_train = logits_train[train_idx]
-            labels_train = labels_train[train_idx]
-
-            optimizer = optim.Adam(
-                self.model.parameters(),
-                lr=self.lr,
-                weight_decay=self.weight_decay_adam_optimizer,
-            )
-            # Initialize with default values
-            s_prime = torch.empty(0, device=self.device)  # Initialize with empty tensor
-            s_double_prime = torch.empty(0, device=self.device)
-            val_s_prime = torch.empty(0, device=self.device)
-            val_s_double_prime = torch.empty(0, device=self.device)
-            if self.n_classes is None:
-                raise RuntimeError(
-                    "Number of classes were not properly found during fitting!"
-                )
-            labels_train_one_hot = torch.empty(0, device=self.device)
-
-            if self.method in ["temperature", "dirichlet"]:
-                class_weights_train = torch.tensor(
-                    compute_class_weight(
-                        class_weight="balanced",
-                        classes=labels_train.unique().cpu().numpy(),
-                        y=labels_train.cpu().numpy(),
-                    ),
-                    dtype=torch.float32,
-                    device=self.device,
-                )
-                criterion = nn.CrossEntropyLoss(weight=class_weights_train)
-            else:
-                # Create one-hot encoded labels
-                labels_train_one_hot = F.one_hot(
-                    labels_train, num_classes=self.n_classes
-                ).float()
-                # Calculate class weights for balanced loss
-                class_counts = labels_train_one_hot.sum(dim=0)
-                pos_weights = labels_train.size(0) / (2 * class_counts)
-                # Use multi-label binary cross entropy (effectively one-vs-rest for each class)
-                criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weights)
-                # Forward pass
-                probs_train = torch.softmax(logits_train, dim=1).clamp(
-                    self.eps, 1 - self.eps
-                )
-                s_prime = torch.log(probs_train)
-                s_double_prime = -torch.log(1 - probs_train)
-                probs_val = torch.softmax(logits_val, dim=1).clamp(
-                    self.eps, 1 - self.eps
-                )
-                val_s_prime = torch.log(probs_val)
-                val_s_double_prime = -torch.log(1 - probs_val)
-
-            last_lr = self.lr
-            # ReduceLROnPlateau reduces the learning rate when a metric has stopped improving
-            scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode="min",
-                factor=self.factor_learning_rate_scheduler,
-                patience=self.patience_learning_rate_scheduler,
-            )
-            early_stopping = EarlyStopping(
-                patience=self.patience_early_stopping,
-                min_delta=self.min_delta_early_stopping,
-            )
-
-            track_losses = []
-            track_gradients = []
-            for epoch in range(self.n_epochs):
-                optimizer.zero_grad()
-                if self.method in ["temperature", "dirichlet"]:
-                    calibrated_logits = self.model(logits_train)
-                else:
-                    assert len(s_prime) > 0 and len(s_double_prime) > 0, (
-                        "Variables not initialized for this method"
-                    )
-                    calibrated_logits = self.model(s_prime, s_double_prime)
-                loss = (
-                    criterion(calibrated_logits, labels_train)
-                    if self.method in ["temperature", "dirichlet"]
-                    else criterion(calibrated_logits, labels_train_one_hot)
-                )
-                if self.method != "dirichlet":
-                    # Add L2 regularization for smoothness
-                    loss += self.reg_lambda * sum(
-                        [torch.norm(p) ** 2 for p in self.model.parameters()]
-                    )
-                else:
-                    # Add ODIR (Off-Diagonal and Intercept Regularization)
-                    # Intuition Behind ODIR:
-                    # Diagonal Elements: The diagonal elements of weights are not regularized because they capture
-                    # class-specific biases (e.g., some classes may be inherently more confident than others).
-                    # Off-Diagonal Elements: The off-diagonal elements are regularized because they represent interactions
-                    # between classes, which are more likely to overfit to noise in the data.
-                    # Intercept Terms (Biases): The intercept terms are regularized separately because they operate on an
-                    # additive scale, unlike the multiplicative scale of the transformation matrix.
-                    off_diag_elemnts = self.model.weights.triu(
-                        diagonal=1
-                    ) + self.model.weights.tril(diagonal=-1)
-                    off_diag_penalty = (
-                        self.reg_lambda
-                        * off_diag_elemnts.pow(2).sum()
-                        / (self.n_classes * (self.n_classes - 1))
-                    )  # The term 1/(k*(k-1)) normalizes the penalty by the number of off-diagonal elements.
-                    # The term 1/k normalizes the penalty by the number of classes (mean over classes).
-                    intercept_penalty = self.reg_mu * self.model.biases.pow(2).mean()
-                    loss += off_diag_penalty + intercept_penalty
-
-                loss.backward(retain_graph=True)
-                optimizer.step()
-                track_losses.append(loss.item())
-                track_gradients.append(self._calculate_parameter_gradients(self.model))
-
-                # Evaluation on validation set
-                with torch.no_grad():
-                    calibrated_logits_val = (
-                        self.model(logits_val)
-                        if self.method in ["temperature", "dirichlet"]
-                        else self.model(val_s_prime, val_s_double_prime)
-                    )
-                    calibrated_probs_val = torch.softmax(calibrated_logits_val, dim=1)
-                    # Compute ECE on validation set
-                    ece_val = self._compute_weighted_ece(
-                        labels_val, calibrated_probs_val, sample_weights_val
-                    )
-                # Update learning rate
-                scheduler.step(ece_val)
-                # Get current learning rate
-                current_lr = optimizer.param_groups[0]["lr"]
-                # Print message if learning rate has changed
-                if current_lr != last_lr:
-                    print(
-                        f"Learning rate decreased from {last_lr:.5e} to {current_lr:.5e}"
-                    )
-                    last_lr = current_lr
-                    early_stopping.reset_counter()
-                # Check for early stopping
-                early_stopping(ece_val)
-                if early_stopping.early_stop:
-                    print(f"\nEarly stopping triggered after {epoch + 1} epochs!\n")
-                    break
-            if self.verbose:
-                # print optimum parameters based on model type
-                self._plot_loss_and_gradients(self.model, track_losses, track_gradients)
         else:
-            model = IsotonicRegressionCalibration(device=self.device)
-            if self.classes is None:
-                raise RuntimeError("Classes were not properly found during fitting!")
             # Fit a separate calibrator for each class
-            self.iso_calibrators = []
-            for i, cls in enumerate(self.classes):
-                class_logits = logits_train[:, i]
-                class_labels = (labels_train == cls).float()
-                calibrator = model._fit_isotonic_calibrator(
-                    class_logits, class_labels, sample_weights_train
+            self.iso_calibrators = [
+                model._fit_isotonic_calibrator(
+                    logits[:, i], (labels == cls).float(), sample_weights
                 )
-                self.iso_calibrators.append(calibrator)
+                for i, cls in enumerate(self.classes)
+            ]
 
-        self.calibrated = True
+    def _fit_parametric(self, logits, labels, sample_weights):
+        # 1. Initialize model and split data
+        self.model = self._create_parametric_model()
+        assert self.model is not None, "model is not properly initialized!"
+        (
+            logits_train,
+            logits_val,
+            labels_train,
+            labels_val,
+            sample_weights_train,
+            sample_weights_val,
+        ) = self._train_val_split(logits, labels, sample_weights)
+        # 2. Prepare method-specific transformations
+        train_s_prime, train_s_double_prime, val_s_prime, val_s_double_prime = (
+            None,
+            None,
+            None,
+            None,
+        )
+        criterion = None
+
+        if self.method in ["temperature", "dirichlet"]:
+            # Temperature/Dirichlet use raw logits
+            train_s_prime, train_s_double_prime = logits_train, None
+            val_s_prime, val_s_double_prime = logits_val, None
+            if self.use_binary_calibration:
+                criterion = nn.BCEWithLogitsLoss(
+                    pos_weight=self._get_pos_weights(labels_train)
+                )
+            else:
+                criterion = nn.CrossEntropyLoss(
+                    weight=self._get_class_weights(labels_train)
+                )
+        elif self.method in ["platt", "beta"]:
+            # Calculate s_prime and s_double_prime locally
+            train_s_prime, train_s_double_prime = (
+                self._calculate_s_prime_s_double_prime(logits_train)
+            )
+            val_s_prime, val_s_double_prime = self._calculate_s_prime_s_double_prime(
+                logits_val
+            )
+            # For binary or multi-class (multi-label binary cross entropy; i.e, effectively one-vs-rest for each class)
+            criterion = nn.BCEWithLogitsLoss(
+                pos_weight=self._get_pos_weights(labels_train)
+            )
+        # 3. Train with unified loop
+        self._train_model(
+            criterion,
+            train_data=(
+                train_s_prime,
+                train_s_double_prime,
+                labels_train,
+                sample_weights_train,
+            ),
+            val_data=(val_s_prime, val_s_double_prime, labels_val, sample_weights_val),
+        )
 
     def _calculate_parameter_gradients(self, model):
         total_norm = 0.0
@@ -1319,32 +1053,32 @@ class CalibratedModel:
         # print optimum parameters based on model type
         if self.save_path is not None:
             optimum_params_path = os.path.join(self.save_path, "optimum_params.txt")
-        if self.method == "temperature":
-            # Save the optimum parameters to a file
-            with open(optimum_params_path, "w") as f:
-                f.write(f"Temperature scaling optimum T: {model.T.item():.4f}")
+            if self.method == "temperature":
+                # Save the optimum parameters to a file
+                with open(optimum_params_path, "w") as f:
+                    f.write(f"Temperature scaling optimum T: {model.T.item():.4f}")
 
-        elif self.method == "dirichlet":
-            # Save the optimum parameters to a file
-            with open(optimum_params_path, "w") as f:
-                f.write(
-                    f"Dirichlet calibration optimum parameters:\nweights \n{model.weights.detach().cpu().numpy()}"
-                    f"\nbiases:\n {model.biases.detach().cpu().numpy()}"
-                )
-        elif self.method == "platt":
-            # Save the optimum parameters to a file
-            with open(optimum_params_path, "w") as f:
-                f.write(
-                    f"Platt scaling optimum parameters:\na- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}"
-                )
-        else:
-            # Save the optimum parameters to a file
-            with open(optimum_params_path, "w") as f:
-                f.write(
-                    f"Beta calibration optimum parameters:"
-                    f"a- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}, "
-                    f"c- {model.c.detach().cpu().numpy()}"
-                )
+            elif self.method == "dirichlet":
+                # Save the optimum parameters to a file
+                with open(optimum_params_path, "w") as f:
+                    f.write(
+                        f"Dirichlet calibration optimum parameters:\nweights \n{model.weights.detach().cpu().numpy()}"
+                        f"\nbiases:\n {model.biases.detach().cpu().numpy()}"
+                    )
+            elif self.method == "platt":
+                # Save the optimum parameters to a file
+                with open(optimum_params_path, "w") as f:
+                    f.write(
+                        f"Platt scaling optimum parameters:\na- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}"
+                    )
+            else:
+                # Save the optimum parameters to a file
+                with open(optimum_params_path, "w") as f:
+                    f.write(
+                        f"Beta calibration optimum parameters:"
+                        f"a- {model.a.detach().cpu().numpy()}, b- {model.b.detach().cpu().numpy()}, "
+                        f"c- {model.c.detach().cpu().numpy()}"
+                    )
         # Plot loss and gradients
         fig, axs = pyplot.subplots(1, 2, figsize=(20, 6))
         axs[0].plot(range(len(track_losses)), track_losses)
@@ -1375,8 +1109,8 @@ class CalibratedModel:
         """
         if not self.calibrated:
             raise RuntimeError("Call fit() first")
-        if not hasattr(self, "base_model"):
-            raise ValueError("base_model required for raw data prediction")
+        if self.base_model is None:
+            raise ValueError("base_model must be set before prediction")
 
         with torch.no_grad():
             # Step 1: Get uncalibrated logits
@@ -1384,40 +1118,7 @@ class CalibratedModel:
             # Step 2: AApply calibration and convert to probabilities
             return self._apply_calibration(logits)
 
-    def evaluate_calibration(
-        self, logits_test, labels_test, sample_weights_test=None, n_bins=10
-    ):
-        """Calculate the Expected Calibration Error (ECE) for uncalibrated and calibrated predictions.
-
-        Args:
-            logits_test (torch.Tensor): Model logits/scores before calibration.
-            labels_test (torch.Tensor): True class labels for test samples.
-            sample_weights_test (torch.Tensor, optional): Sample weights for test data. Defaults to None.
-            n_bins (int, optional): Number of bins for ECE calculation. Defaults to 10.
-
-        Returns:
-            dict: Dictionary containing:
-                - 'ece_before': Expected Calibration Error before calibration
-                - 'ece_after': Expected Calibration Error after calibration
-
-        """
-        if not self.use_binary_calibration:
-            probs_uncalibrated = torch.softmax(torch.tensor(logits_test).float(), dim=1)
-        else:
-            probs_uncalibrated = torch.sigmoid(torch.tensor(logits_test).float())
-
-        ece_before = self._compute_weighted_ece(
-            labels_test, probs_uncalibrated, sample_weights_test, n_bins
-        )
-
-        probs_calibrated = self.predict(logits_test)
-        ece_after = self._compute_weighted_ece(
-            labels_test, probs_calibrated, sample_weights_test, n_bins
-        )
-
-        return {"ece_before": ece_before, "ece_after": ece_after}
-
-    def _compute_weighted_ece(self, y_true, y_prob, sample_weights=None, n_bins=10):
+    def _compute_weighted_ece(self, y_true, y_prob, sample_weights, n_bins=10):
         if not self.use_binary_calibration:
             confidence, predictions = torch.max(y_prob, dim=1)
         else:
@@ -1447,7 +1148,7 @@ class CalibratedModel:
 
                 ece += bin_weight * torch.abs(bin_confidence - bin_accuracy)
 
-        return ece.item()
+        return ece
 
     def _apply_calibration(self, logits):
         """Core calibration logic for all methods."""
@@ -1476,22 +1177,21 @@ class CalibratedModel:
     # Helper methods
     def _parametric_calibrate_binary(self, logits):
         """Handle Platt/Beta/Temperature scaling for binary."""
+        if self.model is None:
+            raise RuntimeError("Calibration model not initialized")
         if self.method == "temperature":
             return self.model(logits)
-
-        probs = torch.sigmoid(logits).clamp(self.eps, 1 - self.eps)
-        s_prime = torch.log(probs)
-        s_double_prime = -torch.log(1 - probs)
+        s_prime, s_double_prime = self._calculate_s_prime_s_double_prime(logits)
         return self.model(s_prime, s_double_prime)
 
     def _parametric_calibrate_multiclass(self, logits):
         """Handle Platt/Beta/Temperature/Dirichlet for multi-class."""
+        if self.model is None:
+            raise RuntimeError("Calibration model not initialized")
+
         if self.method in ["temperature", "dirichlet"]:
             return self.model(logits)
-
-        probs = torch.softmax(logits, dim=1).clamp(self.eps, 1 - self.eps)
-        s_prime = torch.log(probs)
-        s_double_prime = -torch.log(1 - probs)
+        s_prime, s_double_prime = self._calculate_s_prime_s_double_prime(logits)
         return self.model(s_prime, s_double_prime)
 
     def _isotonic_predict_binary(self, logits):
@@ -1550,16 +1250,241 @@ class CalibratedModel:
 
         # Ensure directory exists
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
         # Save with both pickle and torch formats for robustness
-        # torch.save(state, filepath)
         torch.save(state, os.path.join(filepath, "calibrator.pt"))
-
-        # # Also save a human-readable summary
-        # summary_path = filepath.replace(".pkl", "_summary.txt")
-        # self._save_calibration_summary(summary_path, state)
-
         print(f"Calibrated model saved to: {filepath}")
+
+    def _train_val_split(self, logits, labels, sample_weights):
+        """Stratified split of calibration data into train/val sets.
+
+        Args:
+            logits: Tensor of shape [n_samples, ...]
+            labels: Tensor of shape [n_samples]
+            sample_weights: Tensor of shape [n_samples]
+
+        Returns:
+            Tuple of (train_logits, val_logits, train_labels, val_labels, train_weights, val_weights)
+
+        """
+        # Convert to CPU numpy for sklearn (if not already)
+        labels_np = labels.cpu().numpy() if labels.is_cuda else labels.numpy()
+        indices = torch.arange(len(logits))
+
+        # Stratified split
+        test_size = 0.25
+        train_idx, val_idx = train_test_split(
+            indices, test_size=test_size, stratify=labels_np, random_state=self.seed
+        )
+
+        # Apply split
+        train_logits = logits[train_idx]
+        val_logits = logits[val_idx]
+        train_labels = labels[train_idx]
+        val_labels = labels[val_idx]
+        train_weights = sample_weights[train_idx]
+        val_weights = sample_weights[val_idx]
+
+        return (
+            train_logits,
+            val_logits,
+            train_labels,
+            val_labels,
+            train_weights,
+            val_weights,
+        )
+
+    def _create_parametric_model(self):
+        """Instantiate the correct parametric model."""
+        if self.method == "temperature":
+            return TemperatureScaling(
+                device=self.device, initial_temperature=self.initial_temperature
+            )
+        elif self.method == "platt":
+            return PlattScaling(n_classes=self.n_classes, device=self.device)
+        elif self.method == "beta":
+            return BetaCalibration(n_classes=self.n_classes, device=self.device)
+        elif self.method == "dirichlet":
+            return DirichletCalibration(n_classes=self.n_classes, device=self.device)
+
+    def _validate_inputs(self, logits, labels):
+        """Validate shapes/dtypes of logits and labels."""
+        if not isinstance(logits, torch.Tensor):
+            raise TypeError(f"logits must be torch.Tensor, got {type(logits)}")
+
+        if logits.shape[0] != labels.shape[0]:
+            raise ValueError(
+                f"Batch size mismatch: logits ({logits.shape[0]}), "
+                f"labels ({labels.shape[0]})"
+            )
+        if self.method == "dirichlet" and logits.dim() != 2:
+            raise ValueError(
+                "Dirichlet calibration requires 2D logits [batch, classes]"
+            )
+
+    def _setup_class_info(self, logits, labels):
+        """Initialize class-related attributes."""
+        self.classes = torch.unique(labels)
+        self.n_classes = len(self.classes)
+
+        # Determine if binary (special case)
+        self.use_binary_calibration = self.n_classes <= 2 and (
+            logits.dim() == 1 or logits.shape[1] == 1
+        )
+
+        if self.method == "dirichlet" and self.use_binary_calibration:
+            raise ValueError(
+                "Dirichlet calibration requires multi-class logits "
+                f"(got {logits.shape} for {self.n_classes} classes)"
+            )
+
+    def _train_model(self, criterion, train_data, val_data):
+        """Unified training loop for all parametric calibration methods.
+
+        Args:
+            train_data: Tuple of (s_prime, s_double_prime, labels, sample_weights)
+            val_data: Tuple of (val_s_prime, val_s_double_prime, val_labels, _)
+
+        """
+        # Unpack data
+        s_prime, s_double_prime, labels, _ = train_data
+        val_s_prime, val_s_double_prime, val_labels, val_sample_weights = val_data
+        if self.model is None:
+            raise RuntimeError("Calibration model not initialized")
+        # Initialize training components
+        optimizer = optim.Adam(
+            self.model.parameters(),
+            lr=self.lr,
+            weight_decay=self.weight_decay_adam_optimizer,
+        )
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode="min",
+            factor=self.factor_learning_rate_scheduler,
+            patience=self.patience_learning_rate_scheduler,
+        )
+        early_stopping = EarlyStopping(
+            patience=self.patience_early_stopping,
+            min_delta=self.min_delta_early_stopping,
+        )
+
+        track_losses = []
+        track_gradients = []
+        # Training loop
+        for epoch in range(self.n_epochs):
+            self.model.train()
+            optimizer.zero_grad()
+
+            # Forward pass
+            if self.method in ["temperature", "dirichlet"]:
+                calibrated = self.model(s_prime)
+                # make a validation data type check to make it robust
+                loss = criterion(calibrated, labels)
+            else:  # Platt/Beta
+                calibrated = self.model(s_prime, s_double_prime)
+                if self.n_classes is None:
+                    raise ValueError("n_classes must be initialized before training")
+                loss = criterion(
+                    calibrated, F.one_hot(labels, num_classes=self.n_classes).float()
+                )
+
+            # Regularization
+            loss += self._compute_regularization()
+
+            # Backward pass
+            loss.backward(retain_graph=True)
+            optimizer.step()
+            track_losses.append(loss.item())
+            track_gradients.append(self._calculate_parameter_gradients(self.model))
+
+            # Validation
+            with torch.no_grad():
+                self.model.eval()
+                if self.method in ["temperature", "dirichlet"]:
+                    val_calibrated = self.model(val_s_prime)
+                else:
+                    val_calibrated = self.model(val_s_prime, val_s_double_prime)
+                val_probs = (
+                    torch.sigmoid(val_calibrated)
+                    if self.use_binary_calibration
+                    else torch.softmax(val_calibrated, dim=1)
+                )
+                ece = self._compute_weighted_ece(
+                    val_labels, val_probs, sample_weights=val_sample_weights, n_bins=15
+                )
+
+            # LR scheduling and early stopping
+            scheduler.step(ece)
+            early_stopping(ece)
+
+            if early_stopping.early_stop:
+                if self.verbose:
+                    print(f"Early stopping at epoch {epoch}")
+                break
+
+        if self.verbose:
+            # print optimum parameters based on model type
+            self._plot_loss_and_gradients(self.model, track_losses, track_gradients)
+
+    # Helper methods used by _train_model
+    def _get_class_weights(self, labels):
+        """Compute balanced class weights for CrossEntropyLoss."""
+        if self.classes is None:
+            raise ValueError("classes must be initialized before training")
+        if not hasattr(self, "classes") or len(self.classes) <= 2:
+            return None
+        return torch.tensor(
+            compute_class_weight(
+                "balanced", classes=self.classes.cpu().numpy(), y=labels.cpu().numpy()
+            ),
+            device=self.device,
+            dtype=torch.float32,
+        )
+
+    def _get_pos_weights(self, labels):
+        """Compute pos_weight for BCEWithLogitsLoss."""
+        # counts = torch.bincount(labels)
+        # return (labels.shape[0] - counts) / counts.clamp(min=1)
+        if self.use_binary_calibration:
+            return labels.size(0) / (2 * labels.sum())
+        else:
+            if self.n_classes is None:
+                raise ValueError("n_classes must be initialized before training")
+            labels_train_one_hot = F.one_hot(labels, num_classes=self.n_classes).float()
+            # Calculate class weights for balanced loss
+            class_counts = labels_train_one_hot.sum(dim=0)
+            return labels.size(0) / (2 * class_counts)
+
+    def _compute_regularization(self):
+        """Method-specific regularization terms."""
+        if self.model is None:
+            raise RuntimeError("Calibration model not initialized")
+        if self.method == "dirichlet":
+            # Add ODIR (Off-Diagonal and Intercept Regularization)
+            # Intuition Behind ODIR:
+            # Diagonal Elements: The diagonal elements of weights are not regularized because they capture
+            # class-specific biases (e.g., some classes may be inherently more confident than others).
+            # Off-Diagonal Elements: The off-diagonal elements are regularized because they represent interactions
+            # between classes, which are more likely to overfit to noise in the data.
+            # Intercept Terms (Biases): The intercept terms are regularized separately because they operate on an
+            # additive scale, unlike the multiplicative scale of the transformation matrix.
+            off_diag = self.model.weights.triu(1) + self.model.weights.tril(-1)
+            return (
+                self.reg_lambda * off_diag.pow(2).mean()
+                + self.reg_mu * self.model.biases.pow(2).mean()  # intercept_penalty
+            )
+        else:
+            return self.reg_lambda * sum(
+                p.pow(2).sum() for p in self.model.parameters()
+            )
+
+    def _calculate_s_prime_s_double_prime(self, logits):
+        probs_train = (
+            torch.sigmoid(logits)
+            if self.use_binary_calibration
+            else torch.softmax(logits, dim=1)
+        )
+        probs_train = probs_train.clamp(self.eps, 1 - self.eps)
+        return torch.log(probs_train), -torch.log(1 - probs_train)
 
     @classmethod
     def load_calibrated_model(
@@ -1670,53 +1595,53 @@ class CalibratedModel:
         if hasattr(base_model, "eval"):
             base_model.eval()
 
-    def _save_calibration_summary(self, filepath: str, state: dict[str, Any]) -> None:
-        """Save human-readable calibration summary."""
-        with open(filepath, "w") as f:
-            f.write("CALIBRATION MODEL SUMMARY\n")
-            f.write("=" * 50 + "\n\n")
-            f.write(f"Method: {state['method']}\n")
-            f.write(f"Number of classes: {state['n_classes']}\n")
-            f.write(f"Binary calibration: {state['use_binary_calibration']}\n")
-            f.write(
-                f"Classes: {state['classes'].tolist() if state['classes'] is not None else None}\n"
-            )
+    # def _save_calibration_summary(self, filepath: str, state: dict[str, Any]) -> None:
+    #     """Save human-readable calibration summary."""
+    #     with open(filepath, "w") as f:
+    #         f.write("CALIBRATION MODEL SUMMARY\n")
+    #         f.write("=" * 50 + "\n\n")
+    #         f.write(f"Method: {state['method']}\n")
+    #         f.write(f"Number of classes: {state['n_classes']}\n")
+    #         f.write(f"Binary calibration: {state['use_binary_calibration']}\n")
+    #         f.write(
+    #             f"Classes: {state['classes'].tolist() if state['classes'] is not None else None}\n"
+    #         )
 
-            if state["model_state"] is not None:
-                f.write(f"\nParametric Model: {state['model_state']['model_class']}\n")
-                if hasattr(self.model, "T"):
-                    f.write(f"Temperature: {self.model.T.item():.4f}\n")
+    #         if state["model_state"] is not None:
+    #             f.write(f"\nParametric Model: {state['model_state']['model_class']}\n")
+    #             if hasattr(self.model, "T"):
+    #                 f.write(f"Temperature: {self.model.T.item():.4f}\n")
 
-            if state["iso_calibrators"] is not None:
-                f.write(
-                    f"\nIsotonic calibrators: {len(state['iso_calibrators'])} classes\n"
-                )
+    #         if state["iso_calibrators"] is not None:
+    #             f.write(
+    #                 f"\nIsotonic calibrators: {len(state['iso_calibrators'])} classes\n"
+    #             )
 
-    def get_calibration_info(self) -> dict[str, Any]:
-        """Get information about the current calibration state.
+    # def get_calibration_info(self) -> dict[str, Any]:
+    #     """Get information about the current calibration state.
 
-        Returns:
-            Dictionary with calibration information
+    #     Returns:
+    #         Dictionary with calibration information
 
-        """
-        info = {
-            "calibrated": self.calibrated,
-            "method": self.method,
-            "n_classes": self.n_classes,
-            "use_binary_calibration": self.use_binary_calibration,
-            "has_base_model": self.base_model is not None,
-        }
+    #     """
+    #     info = {
+    #         "calibrated": self.calibrated,
+    #         "method": self.method,
+    #         "n_classes": self.n_classes,
+    #         "use_binary_calibration": self.use_binary_calibration,
+    #         "has_base_model": self.base_model is not None,
+    #     }
 
-        if self.calibrated and self.model is not None:
-            if hasattr(self.model, "T"):
-                info["temperature"] = self.model.T.item()
-            elif hasattr(self.model, "a") and hasattr(self.model, "b"):
-                info["parameters"] = {
-                    "a": self.model.a.detach().cpu().numpy().tolist(),
-                    "b": self.model.b.detach().cpu().numpy().tolist(),
-                }
+    #     if self.calibrated and self.model is not None:
+    #         if hasattr(self.model, "T"):
+    #             info["temperature"] = self.model.T.item()
+    #         elif hasattr(self.model, "a") and hasattr(self.model, "b"):
+    #             info["parameters"] = {
+    #                 "a": self.model.a.detach().cpu().numpy().tolist(),
+    #                 "b": self.model.b.detach().cpu().numpy().tolist(),
+    #             }
 
-        return info
+    #     return info
 
 
 # Pipeline utility class for easier deployment
@@ -1787,7 +1712,7 @@ class CalibrationPipeline:
         pipeline.calibrated_model.set_base_model(base_model)
         return pipeline
 
-    def predict(self, X: torch.Tensor) -> torch.Tensor:
+    def predict(self, X: Data) -> torch.Tensor:
         """Make calibrated predictions."""
         if self.calibrated_model is None:
             raise RuntimeError(
@@ -1806,6 +1731,105 @@ class CalibrationPipeline:
         return self.calibrated_model.predict_proba(logits)
 
 
+def _change_label_distribution(
+    labels: np.ndarray,
+    min_samples_per_class: int,
+    n_classes: int,
+    depth: float,
+    x_range: tuple,
+    y_range: tuple,
+    coordinates: np.ndarray,
+    hotspots: np.ndarray,
+    hotspot_strengths: np.ndarray,
+    gold_values: np.ndarray,
+    exp_decay_factor: float,
+    noise_level: float,
+    seed: int,
+):
+    rng = np.random.default_rng(seed)
+    n_hotspots = hotspots.shape[0]
+
+    # Calculate class counts and needed samples
+    class_counts = np.bincount(labels, minlength=n_classes)
+    samples_needed = np.maximum(0, min_samples_per_class - class_counts)
+
+    # If no samples needed, return early
+    if not np.any(samples_needed > 0):
+        return labels, coordinates, gold_values
+
+    # Pre-calculate distance ranges for each class
+    if n_classes == 2:
+        # Binary case: class 0 (far), class 1 (near)
+        class_dist_ranges = [(300, 600), (0, 200)]
+    else:
+        # Multi-class: evenly spaced distance ranges
+        max_distance = 600
+        class_ranges = np.linspace(0, max_distance, n_classes + 1)
+        class_dist_ranges = [
+            (class_ranges[i], class_ranges[i + 1]) for i in range(n_classes)
+        ]
+
+    # Generate new samples for each class that needs them
+    new_coordinates = []
+    new_gold_values = []
+    new_labels = []
+
+    for class_idx in range(n_classes):
+        if samples_needed[class_idx] <= 0:
+            continue
+
+        print(
+            f"\nAdding {samples_needed[class_idx]} more samples for class {class_idx}"
+        )
+        min_dist, max_dist = class_dist_ranges[class_idx]
+
+        # Generate all needed samples at once
+        hotspot_indices = rng.integers(0, n_hotspots, size=samples_needed[class_idx])
+        angles = rng.uniform(0, 2 * np.pi, size=samples_needed[class_idx])
+        distances = rng.uniform(min_dist, max_dist, size=samples_needed[class_idx])
+
+        # Convert to Cartesian coordinates
+        dx = distances * np.cos(angles)
+        dy = distances * np.sin(angles)
+        dz = np.zeros_like(distances)  # Assuming 2D movement for simplicity
+
+        # Calculate new positions
+        new_x = hotspots[hotspot_indices, 0] + dx
+        new_y = hotspots[hotspot_indices, 1] + dy
+        new_z = hotspots[hotspot_indices, 2] + dz
+
+        # Clip to bounds
+        new_x = np.clip(new_x, x_range[0], x_range[1])
+        new_y = np.clip(new_y, y_range[0], y_range[1])
+        new_z = np.clip(new_z, depth, 0)
+
+        # Calculate gold values
+        pts = np.column_stack([new_x, new_y, new_z])
+        distances = np.min(
+            np.sqrt(np.sum((pts[:, np.newaxis] - hotspots) ** 2, axis=2)), axis=1
+        )
+        nearest_idx = np.argmin(
+            np.sqrt(np.sum((pts[:, np.newaxis] - hotspots) ** 2, axis=2)), axis=1
+        )
+        strengths = hotspot_strengths[nearest_idx]
+
+        gold_vals = strengths * np.exp(-distances * exp_decay_factor)
+        gold_vals += rng.normal(0, noise_level, size=len(gold_vals))
+        gold_vals = np.clip(gold_vals, 0, 1)
+
+        new_coordinates.append(pts)
+        new_gold_values.append(gold_vals)
+        new_labels.append(np.full(samples_needed[class_idx], class_idx))
+
+    # Combine new samples with existing data
+    if new_coordinates:
+        coordinates = np.vstack([coordinates, *new_coordinates])
+        gold_values = np.concatenate([gold_values, *new_gold_values])
+        labels = np.concatenate([labels, *new_labels])
+
+    return labels, coordinates, gold_values
+
+
 def generate_mineral_data(
     n_samples: int = 500,
     spacing: float = 50,
@@ -1813,7 +1837,7 @@ def generate_mineral_data(
     n_features: int = 10,
     n_classes: int = 5,
     threshold_binary: float = 0.3,
-    min_samples_per_class: int = 15,
+    min_samples_per_class: int | None = 15,
     seed: int = 42,
 ):
     """Generate synthetic mineral exploration data with realistic features.
@@ -1834,8 +1858,8 @@ def generate_mineral_data(
         or higher values for finer-grained concentration levels
     threshold_binary: float
         Threshold for binary classification
-    min_samples_per_class : int
-        Minimum number of samples required for each class
+    min_samples_per_class : int, optional
+        Minimum number of samples required for each class. If None, no minimum is enforced.
     seed : int
         Random seed for reproducibility
 
@@ -1846,7 +1870,7 @@ def generate_mineral_data(
     features : ndarray
         Scaled array of shape (n_samples, n_features) containing mineral features
     labels : ndarray
-        Array of shape (n_samples,) containing gold concentration labels (0-4)
+        Array of shape (n_samples,) containing gold concentration labels (0-n_classes)
 
     """
     rng = np.random.default_rng(seed)  # Set random seed for reproducibility
@@ -1934,91 +1958,23 @@ def generate_mineral_data(
         bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]  # n_classes-1 bin edges
         labels = np.digitize(gold_values, bins)  # 0 to n_classes-1
 
-    # 5. Check if we have the minimum number of samples per class
-    # Add samples for underrepresented classes if needed
-    class_counts = [np.sum(labels == i) for i in range(n_classes)]
-
-    for class_idx in range(n_classes):
-        samples_needed = max(0, min_samples_per_class - class_counts[class_idx])
-
-        if samples_needed > 0:
-            print(f"\nAdding {samples_needed} more samples for class {class_idx}")
-
-            # Parameters for each class based on distance from hotspots
-            if n_classes == 2:  # Binary case: gold/no gold
-                if class_idx == 0:  # No gold - far from hotspots
-                    max_dist = 600
-                    min_dist = 300
-                else:  # Gold - close to hotspots
-                    max_dist = 200
-                    min_dist = 0
-            else:  # Multi-class case
-                # Calculate distance ranges based on number of classes
-                # Class 0 is furthest from hotspots, highest class is closest
-                class_range = 600 / n_classes
-                max_dist = 600 - class_idx * class_range
-                min_dist = max(0, max_dist - class_range)
-
-            new_coordinates = []
-            new_gold_values = []
-
-            while len(new_coordinates) < samples_needed:
-                # Pick a random hotspot
-                hotspot_idx = rng.integers(0, n_hotspots)
-
-                # Sample at appropriate distance
-                angle = rng.uniform(0, 2 * np.pi)
-                phi = rng.uniform(0, np.pi)
-                distance = rng.uniform(min_dist, max_dist)
-
-                # Convert to Cartesian coordinates
-                dx = distance * np.sin(phi) * np.cos(angle)
-                dy = distance * np.sin(phi) * np.sin(angle)
-                dz = distance * np.cos(phi)
-
-                new_x = hotspots[hotspot_idx, 0] + dx
-                new_y = hotspots[hotspot_idx, 1] + dy
-                new_z = hotspots[hotspot_idx, 2] + dz
-
-                # Keep within bounds
-                new_x = max(x_range[0], min(x_range[1], new_x))
-                new_y = max(y_range[0], min(y_range[1], new_y))
-                new_z = max(depth, min(0, new_z))
-
-                # Calculate gold value
-                pt = np.array([new_x, new_y, new_z])
-                distances = np.sqrt(np.sum((pt - hotspots) ** 2, axis=1))
-                min_idx = np.argmin(distances)
-                min_dist = distances[min_idx]
-                strength = hotspot_strengths[min_idx]
-
-                gold_value = strength * np.exp(
-                    -min_dist * exp_decay_factor
-                ) + rng.normal(0, noise_level)
-                gold_value = max(0, min(1, gold_value))
-
-                # Check if it falls in the desired class
-                if n_classes == 2:  # Binary case
-                    new_label = int(gold_value >= threshold_binary)
-                else:  # Multi-class case
-                    bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]
-                    new_label = np.digitize([gold_value], bins)[0]
-
-                if new_label == class_idx:
-                    new_coordinates.append([new_x, new_y, new_z])
-                    new_gold_values.append(gold_value)
-
-            # Add new samples
-            if new_coordinates:
-                coordinates = np.vstack([coordinates, np.array(new_coordinates)])
-                gold_values = np.append(gold_values, new_gold_values)
-
-    # Recalculate labels for all samples
-    if n_classes == 2:  # Binary classification: gold/no gold
-        labels = (gold_values >= threshold_binary).astype(int)
-    else:  # Multi-class classification
-        bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]
-        labels = np.digitize(gold_values, bins)
+    # (Optional) 5. Check if we have the minimum number of samples per class
+    if min_samples_per_class is not None:
+        labels, coordinates, gold_values = _change_label_distribution(
+            labels,
+            min_samples_per_class,
+            n_classes,
+            depth,
+            x_range,
+            y_range,
+            coordinates,
+            hotspots,
+            hotspot_strengths,
+            gold_values,
+            exp_decay_factor,
+            noise_level,
+            seed,
+        )
 
     # 6. Generate features for all samples
     n_total_samples = len(coordinates)
@@ -2543,7 +2499,6 @@ def plot_confusion_matrix(
     pyplot.title(title)
     if save_path:
         pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
-
 
 
 def plot_roc_curve(ax, y_true, y_prob, sample_weights, title="ROC Curve"):

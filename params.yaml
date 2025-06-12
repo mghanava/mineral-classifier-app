@@ -2,12 +2,12 @@ data:
   n_samples: 1000
   spacing: 50
   depth: -500
-  n_features: 4
+  n_features: 7
   n_classes: 5
   threshold_binary: 0.5
-  min_samples_per_class: 15
+  min_samples_per_class: 20
   connection_radius: 150
-  n_splits: 5
+  n_splits: 2
   test_size: 0.3
   calib_size: 0.50
   seed: 10
@@ -42,7 +42,7 @@ train:
 
 # Evaluation parameters
 evaluate:
-  initial_temperature: 0.9
+  initial_temperature: 1.1
   n_bins: 10
   class_names:
   - low
@@ -55,7 +55,7 @@ evaluate:
   lr: 1.0e-3
   weight_decay_adam_optimizer: 5.0e-4
   verbose: true
-  factor_learning_rate_scheduler: 0.5
+  factor_learning_rate_scheduler: 0.4
   patience_learning_rate_scheduler: 20
   patience_early_stopping: 50
   min_delta_early_stopping: 1.0e-3

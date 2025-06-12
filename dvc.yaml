@@ -3,6 +3,7 @@ stages:
     cmd: python src/stages/generate_synthetic_data.py
     deps:
       - src/stages/generate_synthetic_data.py
+      - src/utilities/utils.py
     params:
       - data
     outs:
@@ -11,6 +12,7 @@ stages:
     cmd: python src/stages/train.py --model ${model}
     deps:
       - src/stages/train.py
+      - src/utilities/utils.py
       - src/models/
       - results/data
     params:
@@ -23,8 +25,8 @@ stages:
     cmd: python src/stages/evaluate.py --model ${model}
     deps:
       - src/stages/evaluate.py
+      - src/utilities/utils.py
       - results/trained
-      - results/data
     params:
       - evaluate
     outs:
