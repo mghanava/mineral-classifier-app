@@ -1,10 +1,10 @@
-"""Generate synthetic mineral exploration data and create graph datasets.
+"""Module for generating synthetic mineral exploration data and graph datasets.
 
-This module provides functions to:
-- Generate synthetic mineral exploration data with realistic features
-- Scale and preprocess the generated data
-- Construct graph datasets for machine learning
-- Export interactive 3D visualizations of the graphs
+This module provides functionality to:
+- Generate synthetic mineral exploration data
+- Construct graph datasets from the synthetic data
+- Export interactive visualizations of the generated data
+- Save the generated datasets for model training
 """
 
 import os
@@ -13,7 +13,7 @@ import torch
 import yaml
 from sklearn.preprocessing import StandardScaler
 
-from src.utilities.utils import (
+from src.utilities.data_utils import (
     construct_graph,
     export_all_graphs_to_html,
     generate_mineral_data,
@@ -35,6 +35,7 @@ def main():
     DEPTH = params["data"]["depth"]
     N_FEATURES = params["data"]["n_features"]
     N_CLASSES = params["data"]["n_classes"]
+    CLASS_NAMES = params["evaluate"]["class_names"]
     THRESHOLD_BINARY = params["data"]["threshold_binary"]
     MIN_SAMPLES_PER_ClASS = params["data"]["min_samples_per_class"]
     CONNECTION_RADIUS = params["data"]["connection_radius"]
@@ -42,6 +43,8 @@ def main():
     TEST_SIZE = params["data"]["test_size"]
     CALIB_SIZE = params["data"]["calib_size"]
     SEED = params["data"]["seed"]
+
+    LABELS_MAP = dict(zip(range(len(CLASS_NAMES)), CLASS_NAMES, strict=True))
 
     # Generate synthetic data
     coordinates, features, labels = generate_mineral_data(
@@ -71,7 +74,7 @@ def main():
     torch.save(test_data, os.path.join(dataset_path, "test_data.pt"))
     # export the interactive 3D plots
     export_all_graphs_to_html(
-        fold_data, test_data, coordinates, CONNECTION_RADIUS, dataset_path
+        fold_data, test_data, coordinates, CONNECTION_RADIUS, LABELS_MAP, dataset_path
     )
 
 

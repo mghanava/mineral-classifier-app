@@ -3,7 +3,7 @@ data:
   spacing: 50
   depth: -500
   n_features: 7
-  n_classes: 5
+  n_classes: 2
   threshold_binary: 0.5
   min_samples_per_class: 20
   connection_radius: 150
@@ -38,7 +38,6 @@ train:
   patience_learning_rate_scheduler: 20
   patience_early_stopping: 50
   min_delta_early_stopping: 1.0e-3
-  seed: 40
 
 # Evaluation parameters
 evaluate:
@@ -46,9 +45,6 @@ evaluate:
   n_bins: 10
   class_names:
   - low
-  - medium-low
-  - medium
-  - medium-high
   - high
   calibration_method: dirichlet
   n_epochs: 1000

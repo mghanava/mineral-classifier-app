@@ -5,12 +5,12 @@ stages:
     deps:
     - path: src/stages/generate_synthetic_data.py
       hash: md5
-      md5: 882311df1dadc3c1bc2c6bc27b4e81c3
-      size: 2526
-    - path: src/utilities/utils.py
+      md5: 7e8b16c85439e39b6eb02ac568bc61d5
+      size: 2675
+    - path: src/utilities/data_utils.py
       hash: md5
-      md5: 2c4371654f79fc1d4f73f7e771a31611
-      size: 98255
+      md5: 5b1e733e252b73c0c260479dfa7965e7
+      size: 25990
     params:
       params.yaml:
         data:
@@ -18,7 +18,7 @@ stages:
           spacing: 50
           depth: -500
           n_features: 7
-          n_classes: 5
+          n_classes: 2
           threshold_binary: 0.5
           min_samples_per_class: 20
           connection_radius: 150
@@ -29,16 +29,16 @@ stages:
     outs:
     - path: results/data
       hash: md5
-      md5: e3af67aaddd35b4c8a3e1b00461c0b01.dir
-      size: 29470482
+      md5: 65e9d7159a72c72d6644f5fc7f677c4d.dir
+      size: 29420875
       nfiles: 8
   train:
     cmd: python src/stages/train.py --model gcn
     deps:
     - path: results/data
       hash: md5
-      md5: e3af67aaddd35b4c8a3e1b00461c0b01.dir
-      size: 29470482
+      md5: 65e9d7159a72c72d6644f5fc7f677c4d.dir
+      size: 29420875
       nfiles: 8
     - path: src/models/
       hash: md5
@@ -47,12 +47,16 @@ stages:
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: 6ef819cd1d2833cf310bbe5ce4d80e8c
-      size: 12278
-    - path: src/utilities/utils.py
+      md5: f710d8b68f714e2439b58b676e06496f
+      size: 3310
+    - path: src/utilities/logging_utils.py
       hash: md5
-      md5: 2c4371654f79fc1d4f73f7e771a31611
-      size: 98255
+      md5: 608e90f581f5c92d5b0396e6ae19b813
+      size: 1081
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: e16cf2f5a466a15fcaf0ce32bd2d6fa5
+      size: 11175
     params:
       params.yaml:
         model: gcn
@@ -70,29 +74,37 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
-          seed: 40
     outs:
     - path: results/trained
       hash: md5
-      md5: f1eb3f8679741d19a403fc46f5ab9c4d.dir
-      size: 1473456
+      md5: 93f069923e43e5728953fe21cd9722f5.dir
+      size: 1265784
       nfiles: 3
   evaluate:
     cmd: python src/stages/evaluate.py --model gcn
     deps:
     - path: results/trained
       hash: md5
-      md5: f1eb3f8679741d19a403fc46f5ab9c4d.dir
-      size: 1473456
+      md5: 93f069923e43e5728953fe21cd9722f5.dir
+      size: 1265784
       nfiles: 3
+    - path: src/models/
+      hash: md5
+      md5: 94dea62ac7af3b278224b13966558cbe.dir
+      size: 23815
+      nfiles: 10
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 0a38cf4571d41156435f39112ba28d3b
-      size: 11508
-    - path: src/utilities/utils.py
+      md5: ed52fabd29d627143cdec52364fbd3ed
+      size: 3548
+    - path: src/utilities/eval_utils.py
       hash: md5
-      md5: 2c4371654f79fc1d4f73f7e771a31611
-      size: 98255
+      md5: 71ecf9af504817dbebcc7d63c00f111e
+      size: 14556
+    - path: src/utilities/logging_utils.py
+      hash: md5
+      md5: 608e90f581f5c92d5b0396e6ae19b813
+      size: 1081
     params:
       params.yaml:
         evaluate:
@@ -100,9 +112,6 @@ stages:
           n_bins: 10
           class_names:
           - low
-          - medium-low
-          - medium
-          - medium-high
           - high
           calibration_method: dirichlet
           n_epochs: 1000
@@ -120,6 +129,6 @@ stages:
     outs:
     - path: results/evaluation
       hash: md5
-      md5: 9318284799fc731b2390b3c20808362f.dir
-      size: 437657
+      md5: 407248ae52acea078dfa3b0652d357c6.dir
+      size: 403126
       nfiles: 6
