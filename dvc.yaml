@@ -45,3 +45,15 @@ stages:
         - src/utilities/pred_utils.py
         - results/data
         - results/evaluation
+  analyze_drift:
+    cmd: python src/stages/analyze_drift.py
+    deps:
+      - src/stages/analyze_drift.py
+      - src/models/
+      - src/utilities/logging_utils.py
+      - src/utilities/drift_detection_utils.py
+      - results/data
+    params:
+      - analyze_drift
+    outs:
+      - results/drift_analysis

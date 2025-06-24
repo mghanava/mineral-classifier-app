@@ -60,5 +60,6 @@ evaluate:
   seed: 40
 
 # Prediction parameters
-predict:
+analyze_drift:
   n_permutations: 5000
+  bandwidth: null

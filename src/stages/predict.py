@@ -29,25 +29,19 @@ def main():
     model.load_state_dict(
         torch.load(f"{model_trained_path}/{args.model}.pkl", weights_only=True)
     )
-    N_PERMUTATIONS = params["predict"]["n_permutations"]
 
     pred_data = torch.load(
         os.path.join(dataset_path, "pred_data.pt"), weights_only=False
     )
-    base_data = torch.load(
-        os.path.join(dataset_path, "base_data.pt"), weights_only=False
-    )
     calibrator_path = os.path.join(evaluation_path, "calibrator.pt")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\nUsing device: {device} for prediction\n")
-    with LogTime(task_name="\nEvaluation"):
+    with LogTime(task_name="\nPrediction"):
         print("Assessing prediction dataset ...\n")
         prediction(
-            base_data,
             pred_data,
             model,
             calibrator_path,
-            n_permutations=N_PERMUTATIONS,
             save_path=prediction_path,
             device=device,
         )
