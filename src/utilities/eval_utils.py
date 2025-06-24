@@ -240,10 +240,10 @@ def evaluate_with_calibration(
 
 
 def plot_confusion_matrix(
-    y_true,
-    y_pred,
-    sample_weights,
-    classes: list,
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    sample_weights: np.ndarray | None = None,
+    classes: list | None = None,
     title: str = "Confusion Matrix",
     save_path: str | None = None,
 ):
@@ -258,9 +258,16 @@ def plot_confusion_matrix(
         save_path (str | None): Path to save the plot. If None, plot is not saved.
 
     """
+    sample_weights = (
+        sample_weights
+        if sample_weights is not None
+        else np.ones_like(y_true, dtype=float)
+    )
     cm = confusion_matrix(y_true, y_pred, sample_weight=sample_weights)
     cm = np.round(cm).astype(int)
     pyplot.figure(figsize=(10, 8))
+    if classes is None:
+        classes = [str(i) for i in range(cm.shape[0])]
     sns.heatmap(
         cm, annot=True, fmt="d", cmap="Blues", xticklabels=classes, yticklabels=classes
     )

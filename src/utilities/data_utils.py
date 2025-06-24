@@ -10,6 +10,7 @@ This module provides functions for:
 import numpy as np
 import plotly.graph_objects as go
 import torch
+import torch.nn.functional as F
 from matplotlib import pyplot
 from scipy.spatial import distance_matrix
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -124,6 +125,8 @@ def generate_mineral_data(
     n_classes: int = 5,
     threshold_binary: float = 0.3,
     min_samples_per_class: int | None = 15,
+    x_range: tuple[float, float] | None = None,
+    y_range: tuple[float, float] | None = None,
     seed: int = 42,
 ):
     """Generate synthetic mineral exploration data with realistic features.
@@ -146,6 +149,10 @@ def generate_mineral_data(
         Threshold for binary classification
     min_samples_per_class : int, optional
         Minimum number of samples required for each class. If None, no minimum is enforced.
+    x_range: tuple[float, float], optional
+        Range for x coordinates (Easting). If None, defaults to (0, area_size)
+    y_range: tuple[float, float], optional
+        Range for y coordinates (Northing). If None, defaults to (0, area_size)
     seed : int
         Random seed for reproducibility
 
@@ -166,8 +173,22 @@ def generate_mineral_data(
     area_size = grid_size * spacing
 
     # Define x_range and y_range based on spacing and n_samples
-    x_range = (0, area_size)
-    y_range = (0, area_size)
+    x_range = (
+        (0, area_size)
+        if x_range is None
+        else (
+            x_range[0] + area_size,
+            x_range[1] + area_size,
+        )  # to avoid overlap with existing data
+    )
+    y_range = (
+        (0, area_size)
+        if y_range is None
+        else (
+            y_range[0] + area_size,
+            y_range[1] + area_size,
+        )  # to avoid overlap with existing data
+    )
 
     # 1. Generate spatial coordinates with appropriate spacing
     # First create a grid
@@ -464,40 +485,156 @@ def scale_data(data: np.ndarray, scaler: ScalerType) -> np.ndarray:
 
 
 def construct_graph(
-    coordinates,
-    features,
-    labels,
+    coordinates: np.ndarray,
+    features: np.ndarray,
+    labels: np.ndarray,
     connection_radius: float,
     n_splits: int,
     test_size: float,
-    calib_size: int,
+    calib_size: float,
     seed: int,
-):
+    scaler: ScalerType = StandardScaler(),
+    should_split: bool = True,
+) -> Data | tuple[Data, list[Data], Data]:
     """Create graphs from geospatial data using distance matrix with a held-out test set.
 
     Args:
-    coordinates (array-like): Coordinate points for constructing the graph
-    features (array-like): Node features
-    labels (array-like): Node labels for stratification
-    n_splits (int): Number of folds for cross-validation
-    test_size (float): Proportion of data to use as test set (e.g., 0.2 for 20%)
-    calib_size (float): Proportion of data to use as calibration set
-        (e.g., 0.5 for 50%)
-    connection_radius (float): Distance threshold to consider interconnected nodes
-    seed (int): Random seed for reproducibility
+        coordinates (array-like): Coordinate points for constructing the graph
+        features (array-like): Node features
+        labels (array-like): Node labels for stratification
+        connection_radius (float): Distance threshold to consider interconnected nodes
+        n_splits (int): Number of folds for cross-validation
+        test_size (float): Proportion of data to use as test set (e.g., 0.2 for 20%)
+        calib_size (float): Proportion of data to use as calibration set (e.g., 0.5 for 50%)
+        seed (int): Random seed for reproducibility
+        scaler (ScalerType): Scaler to use for feature scaling (default: StandardScaler)
+        should_split (bool): Whether to perform train/val/test split (default: True, if False, only returns the base graph without splits)
 
     Returns:
-    tuple containing:
-        - list of Data: PyG Data objects for each fold (train/val splits)
-        - Data: Single PyG Data object for test (and an optional calibration) set
+        If should_split is True:
+            tuple: (base_data, fold_data, test_data)
+                - base_data (Data): PyG Data object with all nodes/features/edges
+                - fold_data (list[Data]): List of PyG Data objects for each fold (train/val splits)
+                - test_data (Data): PyG Data object for test (and optionally calibration) set
+        If should_split is False:
+            Data: PyG Data object with all nodes/features/edges
 
     """
     # Convert features and labels to torch tensors
-    x = torch.tensor(features, dtype=torch.float32)
+    scaled_features = scale_data(data=features, scaler=scaler)
+    x = torch.tensor(scaled_features, dtype=torch.float32)
     y = torch.tensor(labels, dtype=torch.long)
 
     edge_index, edge_attr = prepare_edge_data(coordinates, connection_radius)
 
+    base_data = Data(
+        x=x,
+        y=y,
+        edge_index=edge_index,
+        edge_attr=edge_attr,
+        coordinates=torch.tensor(coordinates, dtype=torch.float32),
+        unscaled_features=torch.tensor(
+            features, dtype=torch.float32
+        ),  # store for data drift detection
+    )
+
+    if should_split:
+        fold_data, test_data = _split_graph(
+            x, y, edge_index, edge_attr, n_splits, test_size, calib_size, seed
+        )
+        return base_data, fold_data, test_data
+    return base_data
+
+    # n_nodes = len(labels)
+    # # First split into train+val and test
+    # train_val_idx, temp_idx = train_test_split(
+    #     np.arange(n_nodes),
+    #     test_size=test_size,
+    #     stratify=labels,
+    #     random_state=seed,
+    # )
+    # # Initialize stratified k-fold on the train+val data
+    # skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+
+    # # Create a list to store Data objects for each fold
+    # fold_data = []
+
+    # # Generate folds from the train+val data
+    # for fold_idx, (train_idx, val_idx) in enumerate(
+    #     skf.split(features[train_val_idx], labels[train_val_idx])
+    # ):
+    #     # Map the fold indices back to original indices
+    #     train_idx = train_val_idx[train_idx]
+    #     val_idx = train_val_idx[val_idx]
+
+    #     # Create boolean masks for this fold
+    #     train_mask = torch.zeros(n_nodes, dtype=torch.bool)
+    #     val_mask = torch.zeros(n_nodes, dtype=torch.bool)
+
+    #     train_mask[train_idx] = True
+    #     val_mask[val_idx] = True
+
+    #     # Create PyG Data object for this fold (train/val only)
+    #     data = Data(
+    #         x=x,
+    #         y=y,
+    #         edge_index=edge_index,
+    #         edge_attr=edge_attr,
+    #         train_mask=train_mask,
+    #         val_mask=val_mask,
+    #         fold=fold_idx,
+    #     )
+
+    #     fold_data.append(data)
+
+    # if calib_size is None:
+    #     test_idx = temp_idx
+    #     # Create separate test Data object
+    #     test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+    #     test_mask[test_idx] = True
+    #     test_data = Data(
+    #         x=x,
+    #         y=y,
+    #         edge_index=edge_index,
+    #         edge_attr=edge_attr,
+    #         test_mask=test_mask,
+    #     )
+    # else:
+    #     test_idx, calib_idx = train_test_split(
+    #         temp_idx,
+    #         train_size=calib_size,
+    #         stratify=labels[temp_idx],
+    #         random_state=seed,
+    #     )
+    #     # Create separate test Data object
+    #     test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+    #     test_mask[test_idx] = True
+    #     # Create separate calibration Data object
+    #     calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
+    #     calib_mask[calib_idx] = True
+    #     test_data = Data(
+    #         x=x,
+    #         y=y,
+    #         edge_index=edge_index,
+    #         edge_attr=edge_attr,
+    #         test_mask=test_mask,
+    #         calib_mask=calib_mask,
+    #     )
+    # return base_data, fold_data, test_data
+
+
+def _split_graph(
+    x: torch.Tensor,
+    y: torch.Tensor,
+    edge_index: torch.Tensor,
+    edge_attr: torch.Tensor,
+    n_splits: int,
+    test_size: float,
+    calib_size: float,
+    seed: int,
+):
+    features = x.numpy()
+    labels = y.numpy()
     n_nodes = len(labels)
     # First split into train+val and test
     train_val_idx, temp_idx = train_test_split(
@@ -720,3 +857,78 @@ def export_all_graphs_to_html(
         labels_map=labels_map,
         dataset_tag="calib",
     )
+
+
+def connect_graphs_preserve_weights(
+    data1, data2, threshold=0.5, k=None, similarity_metric="cosine"
+):
+    """Connect two graphs while preserving their original edge weights.
+
+    Cross-graph edges are weighted by feature similarity.
+
+    Args:
+        data1: PyG Data object (with edge_attr if weighted)
+        data2: PyG Data object (with edge_attr if weighted)
+        threshold: Min similarity for cross-graph edges (ignored if k is given)
+        k: Top-k most similar nodes to connect per node (optional)
+        similarity_metric: "cosine" (default), "euclidean", or "dot"
+
+    Returns:
+        Combined Data object with edge weights preserved.
+
+    """
+    # Check if original graphs have edge weights
+    orig_weights1 = (
+        data1.edge_attr
+        if hasattr(data1, "edge_attr")
+        else torch.ones(data1.edge_index.size(1))
+    )
+    orig_weights2 = (
+        data2.edge_attr
+        if hasattr(data2, "edge_attr")
+        else torch.ones(data2.edge_index.size(1))
+    )
+
+    # Compute similarity for cross-graph connections
+    if similarity_metric == "cosine":
+        sim_matrix = F.cosine_similarity(
+            data1.x.unsqueeze(1), data2.x.unsqueeze(0), dim=-1
+        )
+    elif similarity_metric == "euclidean":
+        sim_matrix = -torch.cdist(
+            data1.x, data2.x
+        )  # Negative distance (higher = more similar)
+    elif similarity_metric == "dot":
+        sim_matrix = data1.x @ data2.x.T
+    else:
+        raise ValueError(f"Unknown metric: {similarity_metric}")
+
+    # Get cross-graph connections (src, dst) and weights
+    if k is not None:
+        topk_sim, topk_idx = torch.topk(sim_matrix, k=k, dim=1)
+        src = torch.arange(data1.num_nodes).repeat_interleave(k)
+        dst = topk_idx.flatten()
+        cross_weights = topk_sim.flatten()
+    else:
+        mask = sim_matrix > threshold
+        src, dst = torch.where(mask)
+        cross_weights = sim_matrix[mask]
+
+    # Offset node indices for data2
+    offset = data1.num_nodes
+    dst += offset
+
+    # Combine node features
+    x = torch.cat([data1.x, data2.x], dim=0)
+    y = torch.cat([data1.y, data2.y], dim=0)
+
+    # Combine edge indices
+    edge_index = torch.cat(
+        [data1.edge_index, data2.edge_index + offset, torch.stack([src, dst], dim=0)],
+        dim=1,
+    )
+
+    # Combine edge weights
+    edge_attr = torch.cat([orig_weights1, orig_weights2, cross_weights])
+
+    return Data(x=x, y=y, edge_index=edge_index, edge_attr=edge_attr)

@@ -586,8 +586,8 @@ class IsotonicRegressionCalibration:
             torch.Tensor: Calibrated probabilities
 
         """
-        X_thresholds = calibrator["X_thresholds"]
-        y_thresholds = calibrator["y_thresholds"]
+        X_thresholds = calibrator["X_thresholds"].to(self.device)
+        y_thresholds = calibrator["y_thresholds"].to(self.device)
 
         # Prepare output array
         calibrated = torch.zeros_like(logits, device=self.device)
@@ -1224,7 +1224,9 @@ class CalibratedModel:
         self.use_binary_calibration = self.n_classes <= 2 and (
             logits.dim() == 1 or logits.shape[1] == 1
         )
-
+        print(
+            f"Using {'binary' if self.use_binary_calibration else 'multi-class'} calibration"
+        )
         if self.method == "dirichlet" and self.use_binary_calibration:
             raise ValueError(
                 "Dirichlet calibration requires multi-class logits "
@@ -1450,7 +1452,7 @@ class CalibratedModel:
         # Restore isotonic calibrators
         instance.iso_calibrators = state.get("iso_calibrators")
 
-        print(f"Calibrated model loaded from: {filepath}")
+        print(f"Calibrated model loaded from {filepath}")
         return instance
 
     def predict_proba(self, logits: torch.Tensor) -> torch.Tensor:
@@ -1493,7 +1495,7 @@ class CalibratedModel:
             base_model: The trained base model that outputs logits
 
         """
-        self.base_model = base_model
+        self.base_model = base_model.to(self.device)
         if hasattr(base_model, "eval"):
             base_model.eval()
 
@@ -1581,7 +1583,6 @@ class CalibrationPipeline:
             raise RuntimeError(
                 "Pipeline must be calibrated or loaded before prediction"
             )
-
         return self.calibrated_model.predict_with_base_model(X)
 
     def predict_from_logits(self, logits: torch.Tensor) -> torch.Tensor:

@@ -5,41 +5,42 @@ stages:
     deps:
     - path: src/stages/generate_synthetic_data.py
       hash: md5
-      md5: 7e8b16c85439e39b6eb02ac568bc61d5
-      size: 2675
+      md5: 38249108cd0cf2513ea6a765c141243b
+      size: 4155
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 5b1e733e252b73c0c260479dfa7965e7
-      size: 25990
+      md5: 7c5d940864e460f559903b7b4615ac82
+      size: 33278
     params:
       params.yaml:
         data:
           n_samples: 1000
+          n_pred_samples: 100
           spacing: 50
           depth: -500
           n_features: 7
-          n_classes: 2
+          n_classes: 5
           threshold_binary: 0.5
           min_samples_per_class: 20
           connection_radius: 150
           n_splits: 2
           test_size: 0.3
           calib_size: 0.5
-          seed: 10
+          seed: 1321
     outs:
     - path: results/data
       hash: md5
-      md5: 65e9d7159a72c72d6644f5fc7f677c4d.dir
-      size: 29420875
-      nfiles: 8
+      md5: 46e4504b78126f41422599d7fa03f872.dir
+      size: 29950822
+      nfiles: 10
   train:
     cmd: python src/stages/train.py --model gcn
     deps:
     - path: results/data
       hash: md5
-      md5: 65e9d7159a72c72d6644f5fc7f677c4d.dir
-      size: 29420875
-      nfiles: 8
+      md5: 46e4504b78126f41422599d7fa03f872.dir
+      size: 29950822
+      nfiles: 10
     - path: src/models/
       hash: md5
       md5: 94dea62ac7af3b278224b13966558cbe.dir
@@ -77,16 +78,16 @@ stages:
     outs:
     - path: results/trained
       hash: md5
-      md5: 93f069923e43e5728953fe21cd9722f5.dir
-      size: 1265784
+      md5: 8b33438fae7e7dc9a6209c1ff2b380d1.dir
+      size: 1306714
       nfiles: 3
   evaluate:
     cmd: python src/stages/evaluate.py --model gcn
     deps:
     - path: results/trained
       hash: md5
-      md5: 93f069923e43e5728953fe21cd9722f5.dir
-      size: 1265784
+      md5: 8b33438fae7e7dc9a6209c1ff2b380d1.dir
+      size: 1306714
       nfiles: 3
     - path: src/models/
       hash: md5
@@ -97,10 +98,14 @@ stages:
       hash: md5
       md5: ed52fabd29d627143cdec52364fbd3ed
       size: 3548
+    - path: src/utilities/calibration_utils.py
+      hash: md5
+      md5: dbf6b5f39da243e06e73694dc0f2de71
+      size: 62546
     - path: src/utilities/eval_utils.py
       hash: md5
-      md5: 71ecf9af504817dbebcc7d63c00f111e
-      size: 14556
+      md5: ba8512c6c14070459b3ab7b53e9fbbef
+      size: 14836
     - path: src/utilities/logging_utils.py
       hash: md5
       md5: 608e90f581f5c92d5b0396e6ae19b813
@@ -108,12 +113,10 @@ stages:
     params:
       params.yaml:
         evaluate:
-          initial_temperature: 1.1
+          initial_temperature: 1.2
           n_bins: 10
           class_names:
-          - low
-          - high
-          calibration_method: dirichlet
+          calibration_method: beta
           n_epochs: 1000
           lr: 0.001
           weight_decay_adam_optimizer: 0.0005
@@ -129,6 +132,40 @@ stages:
     outs:
     - path: results/evaluation
       hash: md5
-      md5: 407248ae52acea078dfa3b0652d357c6.dir
-      size: 403126
+      md5: f97c193c94073cdcf1f46736ddae098d.dir
+      size: 431787
       nfiles: 6
+  predict:
+    cmd: python src/stages/predict.py --model gcn
+    deps:
+    - path: results/data
+      hash: md5
+      md5: 46e4504b78126f41422599d7fa03f872.dir
+      size: 29950822
+      nfiles: 10
+    - path: results/evaluation
+      hash: md5
+      md5: f97c193c94073cdcf1f46736ddae098d.dir
+      size: 431787
+      nfiles: 6
+    - path: src/models/
+      hash: md5
+      md5: 94dea62ac7af3b278224b13966558cbe.dir
+      size: 23815
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: c224dfbe7cb56aa5aede486ed22b4dda
+      size: 1780
+    - path: src/utilities/calibration_utils.py
+      hash: md5
+      md5: dbf6b5f39da243e06e73694dc0f2de71
+      size: 62546
+    - path: src/utilities/logging_utils.py
+      hash: md5
+      md5: 608e90f581f5c92d5b0396e6ae19b813
+      size: 1081
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 8a925fda4605a0d863839be49515cf7e
+      size: 7276

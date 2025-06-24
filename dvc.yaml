@@ -28,9 +28,20 @@ stages:
       - src/stages/evaluate.py
       - src/models/
       - src/utilities/logging_utils.py
+      - src/utilities/calibration_utils.py
       - src/utilities/eval_utils.py
       - results/trained
     params:
       - evaluate
     outs:
       - results/evaluation
+  predict:
+      cmd: python src/stages/predict.py --model ${model}
+      deps:
+        - src/stages/predict.py
+        - src/models/
+        - src/utilities/logging_utils.py
+        - src/utilities/calibration_utils.py
+        - src/utilities/pred_utils.py
+        - results/data
+        - results/evaluation
