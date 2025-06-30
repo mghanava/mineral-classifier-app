@@ -61,5 +61,5 @@ evaluate:
 
 # Prediction parameters
 analyze_drift:
-  n_permutations: 5000
+  n_permutations: 1000
   bandwidth: null

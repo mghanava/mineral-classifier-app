@@ -184,12 +184,12 @@ stages:
       nfiles: 10
     - path: src/stages/analyze_drift.py
       hash: md5
-      md5: 7b2a42c0ac547e96551cb359a9a2159d
-      size: 2240
+      md5: 38a2f1af213c47c312d373a191bfeb5a
+      size: 3555
     - path: src/utilities/drift_detection_utils.py
       hash: md5
-      md5: eca0558d2c7744425c441f20fd559170
-      size: 6960
+      md5: dd8e5168245fb2f5054998946e94d0b7
+      size: 29495
     - path: src/utilities/logging_utils.py
       hash: md5
       md5: 608e90f581f5c92d5b0396e6ae19b813
@@ -197,11 +197,11 @@ stages:
     params:
       params.yaml:
         analyze_drift:
-          n_permutations: 5000
+          n_permutations: 1000
           bandwidth:
     outs:
     - path: results/drift_analysis
       hash: md5
-      md5: e9f7dc6b622078ae939e4062f2d93e67.dir
-      size: 220
-      nfiles: 1
+      md5: 751470590e9cbafe366c7ac73f550f25.dir
+      size: 231355
+      nfiles: 2
