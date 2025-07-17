@@ -1,20 +1,21 @@
 data:
-  n_samples: 1000
-  n_pred_samples: 100
+  n_samples: 1500
+  n_pred_samples: 300
   spacing: 50
   depth: -500
-  n_features: 7
+  n_features: 5
   n_classes: 5
   threshold_binary: 0.5
   min_samples_per_class: 20
   connection_radius: 150
-  n_splits: 2
+  n_splits: 3
   test_size: 0.3
   calib_size: 0.50
-  seed: 1321
+  n_hotspots: 10
+  seed: 110
 
 # Default model selection
-model: gcn
+model: gat
 # Model parameters
 models:
   gat:

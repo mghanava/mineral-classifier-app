@@ -4,15 +4,19 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 from matplotlib import pyplot
+from sklearn.metrics import matthews_corrcoef
+from sklearn.utils.class_weight import compute_sample_weight
 from torch_geometric.data import Data
 
 from src.utilities.calibration_utils import CalibrationPipeline
+from src.utilities.eval_utils import plot_confusion_matrix
 
 
 def prediction(
     pred_data: Data,
     model: torch.nn.Module,
     calibrator_path: str,
+    class_names: list,
     save_path: str | None = None,
     device: torch.device = torch.device("cpu"),
 ):
@@ -48,11 +52,14 @@ def prediction(
         uncalibrated_probs * torch.log(uncalibrated_probs + 1e-8), dim=1
     )
     # Create a DataFrame with the results
+    true_label = hidden_labels.cpu().numpy()
+    cal_pred_labels = calib_prob_array.argmax(axis=1)
+
     result_df = pd.DataFrame(
         {
             **prob_columns,
-            "predicted_label": calib_prob_array.argmax(axis=1),
-            "true_label": hidden_labels.cpu().numpy()
+            "predicted_label": cal_pred_labels,
+            "true_label": true_label
             if isinstance(hidden_labels, torch.Tensor)
             else int(hidden_labels)
             if hidden_labels is not None
@@ -66,5 +73,19 @@ def prediction(
         result_df.to_csv(os.path.join(save_path, "predictions.csv"), index=False)
         pyplot.savefig(os.path.join(save_path, "histograms.png"))
     pyplot.close()
+    sample_weights = (
+        compute_sample_weight("balanced", true_label)
+        if true_label is not None
+        else None
+    )
+    mcc = matthews_corrcoef(true_label, cal_pred_labels, sample_weight=sample_weights)
+    if save_path is not None:
+        plot_confusion_matrix(
+            true_label,
+            cal_pred_labels,
+            class_names,
+            title=f"Matthews correlation coefficient {mcc:.3f}",
+            save_path=os.path.join(save_path, "confussion_matrix.png"),
+        )
 
     return fig

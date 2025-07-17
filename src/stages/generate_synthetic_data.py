@@ -41,6 +41,7 @@ def main():
     N_SPLITS = params["data"]["n_splits"]
     TEST_SIZE = params["data"]["test_size"]
     CALIB_SIZE = params["data"]["calib_size"]
+    N_HOTSPOTS = params["data"]["n_hotspots"]
     SEED = params["data"]["seed"]
 
     if CLASS_NAMES is None:
@@ -56,6 +57,7 @@ def main():
         n_classes=N_CLASSES,
         threshold_binary=THRESHOLD_BINARY,
         min_samples_per_class=MIN_SAMPLES_PER_ClASS,
+        n_hotsots=N_HOTSPOTS,
         seed=SEED,
     )
     all_data = construct_graph(

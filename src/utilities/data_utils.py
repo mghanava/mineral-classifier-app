@@ -127,6 +127,7 @@ def generate_mineral_data(
     min_samples_per_class: int | None = 15,
     x_range: tuple[float, float] | None = None,
     y_range: tuple[float, float] | None = None,
+    n_hotsots: int | None = None,
     seed: int = 42,
 ):
     """Generate synthetic mineral exploration data with realistic features.
@@ -223,7 +224,7 @@ def generate_mineral_data(
     # gold values above the baseline (before applying distance decay). Values below 1.0 represent "lower-grade" hotspots
     # that will produce somewhat weaker signals. The range isn't centered at 1.0 (it's 0.7-1.2) to create a slight
     # positive skew, which is common in real mineral deposits
-    n_hotspots = rng.integers(1, 5)
+    n_hotspots = n_hotsots if n_hotsots is not None else rng.integers(1, 5)
     hotspot_strengths = rng.uniform(0.7, 1.2, n_hotspots)
     hotspots = np.zeros((n_hotspots, 3))
     hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
@@ -385,7 +386,8 @@ def visualize_graph(
 
     """
     # Create color map for different classes
-    unique_classes = len(np.unique(labels))
+    classes = np.unique(labels)
+    unique_classes = len(classes)
     cmap = pyplot.get_cmap("rainbow")
     colors = cmap(np.linspace(0, 1, unique_classes))
     color_map = {
@@ -447,7 +449,20 @@ def visualize_graph(
     )
     fig.update_layout(width=1000, height=600)
     # Add legend entries for classes
+    class_count = [np.sum(labels == i) for i in classes]
     for label, color in color_map.items():
+        count = class_count[label]
+        fig.add_trace(
+            go.Scatter3d(
+                x=[None],
+                y=[None],
+                z=[None],
+                mode="markers",
+                marker={"size": 10, "color": color},
+                name=f"{labels_map[label]} ({count})",
+                showlegend=True,
+            )
+        )
         fig.add_trace(
             go.Scatter3d(
                 x=[None],
@@ -493,7 +508,7 @@ def construct_graph(
     test_size: float,
     calib_size: float,
     seed: int,
-    scaler: ScalerType = StandardScaler(),
+    scaler: ScalerType = RobustScaler(),
     should_split: bool = True,
 ) -> Data | tuple[Data, list[Data], Data]:
     """Create graphs from geospatial data using distance matrix with a held-out test set.
@@ -507,7 +522,7 @@ def construct_graph(
         test_size (float): Proportion of data to use as test set (e.g., 0.2 for 20%)
         calib_size (float): Proportion of data to use as calibration set (e.g., 0.5 for 50%)
         seed (int): Random seed for reproducibility
-        scaler (ScalerType): Scaler to use for feature scaling (default: StandardScaler)
+        scaler (ScalerType): Scaler to use for feature scaling (default: RobustScaler)
         should_split (bool): Whether to perform train/val/test split (default: True, if False, only returns the base graph without splits)
 
     Returns:
@@ -544,83 +559,6 @@ def construct_graph(
         )
         return base_data, fold_data, test_data
     return base_data
-
-    # n_nodes = len(labels)
-    # # First split into train+val and test
-    # train_val_idx, temp_idx = train_test_split(
-    #     np.arange(n_nodes),
-    #     test_size=test_size,
-    #     stratify=labels,
-    #     random_state=seed,
-    # )
-    # # Initialize stratified k-fold on the train+val data
-    # skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-
-    # # Create a list to store Data objects for each fold
-    # fold_data = []
-
-    # # Generate folds from the train+val data
-    # for fold_idx, (train_idx, val_idx) in enumerate(
-    #     skf.split(features[train_val_idx], labels[train_val_idx])
-    # ):
-    #     # Map the fold indices back to original indices
-    #     train_idx = train_val_idx[train_idx]
-    #     val_idx = train_val_idx[val_idx]
-
-    #     # Create boolean masks for this fold
-    #     train_mask = torch.zeros(n_nodes, dtype=torch.bool)
-    #     val_mask = torch.zeros(n_nodes, dtype=torch.bool)
-
-    #     train_mask[train_idx] = True
-    #     val_mask[val_idx] = True
-
-    #     # Create PyG Data object for this fold (train/val only)
-    #     data = Data(
-    #         x=x,
-    #         y=y,
-    #         edge_index=edge_index,
-    #         edge_attr=edge_attr,
-    #         train_mask=train_mask,
-    #         val_mask=val_mask,
-    #         fold=fold_idx,
-    #     )
-
-    #     fold_data.append(data)
-
-    # if calib_size is None:
-    #     test_idx = temp_idx
-    #     # Create separate test Data object
-    #     test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-    #     test_mask[test_idx] = True
-    #     test_data = Data(
-    #         x=x,
-    #         y=y,
-    #         edge_index=edge_index,
-    #         edge_attr=edge_attr,
-    #         test_mask=test_mask,
-    #     )
-    # else:
-    #     test_idx, calib_idx = train_test_split(
-    #         temp_idx,
-    #         train_size=calib_size,
-    #         stratify=labels[temp_idx],
-    #         random_state=seed,
-    #     )
-    #     # Create separate test Data object
-    #     test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-    #     test_mask[test_idx] = True
-    #     # Create separate calibration Data object
-    #     calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
-    #     calib_mask[calib_idx] = True
-    #     test_data = Data(
-    #         x=x,
-    #         y=y,
-    #         edge_index=edge_index,
-    #         edge_attr=edge_attr,
-    #         test_mask=test_mask,
-    #         calib_mask=calib_mask,
-    #     )
-    # return base_data, fold_data, test_data
 
 
 def _split_graph(

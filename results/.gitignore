@@ -1,4 +1,5 @@
+/data
 /trained
 /evaluation
-/data
+/prediction
 /drift_analysis

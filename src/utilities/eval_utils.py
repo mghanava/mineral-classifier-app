@@ -187,7 +187,11 @@ def evaluate_with_calibration(
     cal_metrics_calibrated = cal_metrics.calculate_metrics(
         cal_probs, y_true_test, sample_weights_test, verbose=False
     )
-
+    cal_mcc = matthews_corrcoef(
+        y_true_test.cpu().numpy(),
+        cal_pred.cpu().numpy(),
+        sample_weight=sample_weights_test.cpu().numpy(),
+    )
     cal_metrics = {
         "acc": accuracy_score(
             y_true_test.cpu().numpy(),
@@ -201,11 +205,7 @@ def evaluate_with_calibration(
             beta=0.5,
             average="macro",
         ),
-        "mcc": matthews_corrcoef(
-            y_true_test.cpu().numpy(),
-            cal_pred.cpu().numpy(),
-            sample_weight=sample_weights_test.cpu().numpy(),
-        ),
+        "mcc": cal_mcc,
         "ece": cal_metrics_calibrated.ece,
         "mce": cal_metrics_calibrated.mce,
     }
@@ -225,8 +225,8 @@ def evaluate_with_calibration(
     plot_confusion_matrix(
         y_true_test.cpu().numpy(),
         cal_pred.cpu().numpy(),
-        sample_weights_test.cpu().numpy(),
         class_names,
+        title=f"Matthews correlation coefficient {cal_mcc:.3f}",
         save_path=confusion_path,
     )
     # Save metrics as JSON file
@@ -242,7 +242,6 @@ def evaluate_with_calibration(
 def plot_confusion_matrix(
     y_true: np.ndarray,
     y_pred: np.ndarray,
-    sample_weights: np.ndarray | None = None,
     classes: list | None = None,
     title: str = "Confusion Matrix",
     save_path: str | None = None,
@@ -252,18 +251,12 @@ def plot_confusion_matrix(
     Args:
         y_true (numpy.ndarray): True labels
         y_pred (numpy.ndarray): Predicted labels
-        sample_weights (numpy.ndarray): Sample weights for each observation
         classes (list): Class names
         title (str): Title for the confusion matrix plot
         save_path (str | None): Path to save the plot. If None, plot is not saved.
 
     """
-    sample_weights = (
-        sample_weights
-        if sample_weights is not None
-        else np.ones_like(y_true, dtype=float)
-    )
-    cm = confusion_matrix(y_true, y_pred, sample_weight=sample_weights)
+    cm = confusion_matrix(y_true, y_pred)
     cm = np.round(cm).astype(int)
     pyplot.figure(figsize=(10, 8))
     if classes is None:

@@ -18,7 +18,7 @@ def main():
 
     with open("params.yaml") as f:
         params = yaml.safe_load(f)
-
+    CLASS_NAMES = params["evaluate"]["class_names"]
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
     args = parser.parse_args()
@@ -42,6 +42,7 @@ def main():
             pred_data,
             model,
             calibrator_path,
+            CLASS_NAMES,
             save_path=prediction_path,
             device=device,
         )
