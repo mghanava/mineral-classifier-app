@@ -18,6 +18,132 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 from torch_geometric.data import Data
 
 
+def _generate_coordinates(
+    n_samples: int,
+    spacing: float,
+    depth: float,
+    x_range: tuple[float, float] | None = None,
+    y_range: tuple[float, float] | None = None,
+    rng: np.random.Generator = np.random.default_rng(42),
+) -> tuple[np.ndarray, tuple[float, float], tuple[float, float]]:
+    # Calculate the grid size based on n_samples and spacing
+    grid_size = int(np.sqrt(n_samples)) + 1
+    area_size = grid_size * spacing
+
+    # Define x_range and y_range based on spacing and n_samples
+    x_range = (
+        (0, area_size)
+        if x_range is None
+        else (
+            x_range[0] + area_size,
+            x_range[1] + area_size,
+        )  # to avoid overlap with existing data
+    )
+    y_range = (
+        (0, area_size)
+        if y_range is None
+        else (
+            y_range[0] + area_size,
+            y_range[1] + area_size,
+        )  # to avoid overlap with existing data
+    )
+
+    # First create a grid
+    x_grid = np.linspace(x_range[0], x_range[1], grid_size)
+    y_grid = np.linspace(y_range[0], y_range[1], grid_size)
+
+    # Create all possible grid points
+    xx, yy = np.meshgrid(x_grid, y_grid)
+    grid_points = np.column_stack((xx.ravel(), yy.ravel()))
+
+    # Add some random jitter to make it more realistic (not exactly on grid)
+    jitter = rng.uniform(0.3, 0.6, 1) * spacing  # % of spacing for natural randomness
+    grid_points[:, 0] += rng.uniform(-jitter, jitter, len(grid_points))
+    grid_points[:, 1] += rng.uniform(-jitter, jitter, len(grid_points))
+
+    # Select n_samples points from the grid
+    indices = rng.choice(
+        len(grid_points), min(n_samples, len(grid_points)), replace=False
+    )
+    xy_coordinates = grid_points[indices]
+
+    # Generate z coordinates (depth)
+    z_coordinates = rng.uniform(depth, 0, n_samples)
+
+    # Combine to form complete coordinates
+    coordinates = np.column_stack((xy_coordinates, z_coordinates))
+
+    return coordinates, x_range, y_range
+
+
+def _create_hotspots(
+    depth: float,
+    x_range: tuple[float, float],
+    y_range: tuple[float, float],
+    n_hotspots: int = 10,
+    n_hotspots_random: bool = True,
+    rng: np.random.Generator = np.random.default_rng(42),
+) -> tuple[np.ndarray, np.ndarray]:
+    # In a mineral exploration context, hotspot strengths represent the maximum concentration or intensity of gold at each "source" location in the simulated area. Not all gold deposits are created equal - some have higher  mineral content than others. Values greater than 1.0 represent "high-grade" hotspots that can potentially yield gold values above the baseline (before applying distance decay). Values below 1.0 represent "lower-grade" hotspots that will produce somewhat weaker signals. The range isn't centered at 1.0 (it's 0.7-1.2) to create a slight positive skew, which is common in real mineral deposits
+    if n_hotspots is not None and n_hotspots_random:
+        n_hotspots = rng.integers(1, n_hotspots)
+    hotspot_strengths = rng.uniform(0.7, 1.2, n_hotspots)
+    hotspots = np.zeros((n_hotspots, 3))
+    hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
+    hotspots[:, 1] = rng.uniform(y_range[0], y_range[1], n_hotspots)
+    hotspots[:, 2] = rng.uniform(depth, 0, n_hotspots)
+    print(f"{n_hotspots} hotspots with respective strengths {hotspot_strengths}")
+    return hotspots, hotspot_strengths
+
+
+def _calculate_gold_values(
+    n_samples: int,
+    coordinates: np.ndarray,
+    hotspots: np.ndarray,
+    hotspot_strengths: np.ndarray,
+    exp_decay_factor: float = 0.005,
+    noise_level: float = 0.05,
+    rng: np.random.Generator = np.random.default_rng(42),
+) -> np.ndarray:
+    # Reshape for broadcasting: coordinates (n_samples, 3), hotspots (n_hotspots, 3)
+    # Result: distances will be (n_samples, n_hotspots)
+    distances = np.sqrt(
+        np.sum(
+            (coordinates[:, np.newaxis, :] - hotspots[np.newaxis, :, :]) ** 2,
+            axis=2,
+        )
+    )
+
+    # Find closest hotspot for each sample
+    min_indices = np.argmin(distances, axis=1)
+    min_distances = np.min(distances, axis=1)
+
+    # Get the strength of each sample's closest hotspot
+    closest_strengths = hotspot_strengths[min_indices]
+
+    # Calculate gold values using exponential decay with distance
+    noise_level = rng.uniform(0.01, 0.1)
+    exp_decay_factor = rng.uniform(0.001, 0.01)
+    gold_values = closest_strengths * np.exp(-min_distances * exp_decay_factor)
+    gold_values += rng.normal(0, noise_level, size=n_samples)
+
+    # Clip values to 0-1 range
+    gold_values = np.clip(a=gold_values, a_min=0, a_max=1)
+    return gold_values
+
+
+def _assign_labels(
+    gold_values: np.ndarray, n_classes: int, threshold_binary: float
+) -> np.ndarray:
+    """Convert gold values to categorical labels based on the number of classes."""
+    if n_classes == 2:  # Binary classification: gold/no gold
+        return (gold_values >= threshold_binary).astype(int)
+    else:  # Multi-class classification
+        # Create bins for digitizing
+        bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]  # n_classes-1 bin edges
+        return np.digitize(gold_values, bins)  # 0 to n_classes-1
+
+
 def _change_label_distribution(
     labels: np.ndarray,
     min_samples_per_class: int,
@@ -31,9 +157,8 @@ def _change_label_distribution(
     gold_values: np.ndarray,
     exp_decay_factor: float,
     noise_level: float,
-    seed: int,
+    rng: np.random.Generator = np.random.default_rng(42),
 ):
-    rng = np.random.default_rng(seed)
     n_hotspots = hotspots.shape[0]
 
     # Calculate class counts and needed samples
@@ -117,175 +242,12 @@ def _change_label_distribution(
     return labels, coordinates, gold_values
 
 
-def generate_mineral_data(
-    n_samples: int = 500,
-    spacing: float = 50,
-    depth: float = -500.0,
-    n_features: int = 10,
-    n_classes: int = 5,
-    threshold_binary: float = 0.3,
-    min_samples_per_class: int | None = 15,
-    x_range: tuple[float, float] | None = None,
-    y_range: tuple[float, float] | None = None,
-    n_hotsots: int | None = None,
-    seed: int = 42,
+def _generate_features(
+    n_total_samples: int,
+    gold_values,
+    n_features,
+    rng: np.random.Generator = np.random.default_rng(42),
 ):
-    """Generate synthetic mineral exploration data with realistic features.
-
-    Parameters
-    ----------
-    n_samples : int
-        Number of drill core samples to generate
-    spacing : float
-        Average distance between samples in meters
-    depth : float
-        Max ranges for depth coordinates (usually negative)
-    n_features : int
-        Number of features to generate
-    n_classes : int
-        Number of classes for gold concentration.
-        Use 2 for binary classification (gold/no gold),
-        or higher values for finer-grained concentration levels
-    threshold_binary: float
-        Threshold for binary classification
-    min_samples_per_class : int, optional
-        Minimum number of samples required for each class. If None, no minimum is enforced.
-    x_range: tuple[float, float], optional
-        Range for x coordinates (Easting). If None, defaults to (0, area_size)
-    y_range: tuple[float, float], optional
-        Range for y coordinates (Northing). If None, defaults to (0, area_size)
-    seed : int
-        Random seed for reproducibility
-
-    Returns
-    -------
-    coordinates : ndarray
-        Array of shape (n_samples, 3) containing x, y, z coordinates
-    features : ndarray
-        Scaled array of shape (n_samples, n_features) containing mineral features
-    labels : ndarray
-        Array of shape (n_samples,) containing gold concentration labels (0-n_classes)
-
-    """
-    rng = np.random.default_rng(seed)  # Set random seed for reproducibility
-
-    # Calculate the grid size based on n_samples and spacing
-    grid_size = int(np.sqrt(n_samples)) + 1
-    area_size = grid_size * spacing
-
-    # Define x_range and y_range based on spacing and n_samples
-    x_range = (
-        (0, area_size)
-        if x_range is None
-        else (
-            x_range[0] + area_size,
-            x_range[1] + area_size,
-        )  # to avoid overlap with existing data
-    )
-    y_range = (
-        (0, area_size)
-        if y_range is None
-        else (
-            y_range[0] + area_size,
-            y_range[1] + area_size,
-        )  # to avoid overlap with existing data
-    )
-
-    # 1. Generate spatial coordinates with appropriate spacing
-    # First create a grid
-    x_grid = np.linspace(x_range[0], x_range[1], grid_size)
-    y_grid = np.linspace(y_range[0], y_range[1], grid_size)
-
-    # Create all possible grid points
-    xx, yy = np.meshgrid(x_grid, y_grid)
-    grid_points = np.column_stack((xx.ravel(), yy.ravel()))
-
-    # Add some random jitter to make it more realistic (not exactly on grid)
-    jitter = rng.uniform(0.3, 0.6, 1) * spacing  # % of spacing for natural randomness
-    grid_points[:, 0] += rng.uniform(-jitter, jitter, len(grid_points))
-    grid_points[:, 1] += rng.uniform(-jitter, jitter, len(grid_points))
-
-    # Select n_samples points from the grid
-    indices = rng.choice(
-        len(grid_points), min(n_samples, len(grid_points)), replace=False
-    )
-    xy_coordinates = grid_points[indices]
-
-    # Generate z coordinates (depth)
-    z_coordinates = rng.uniform(depth, 0, n_samples)
-
-    # Combine to form complete coordinates
-    coordinates = np.column_stack((xy_coordinates, z_coordinates))
-
-    # 2. Create mineralization hotspots (mineralization centers)
-    # In a mineral exploration context, hotspot strengths represent the maximum concentration or intensity of gold
-    # at each "source" location in the simulated area. Not all gold deposits are created equal - some have higher
-    # mineral content than others. Values greater than 1.0 represent "high-grade" hotspots that can potentially yield
-    # gold values above the baseline (before applying distance decay). Values below 1.0 represent "lower-grade" hotspots
-    # that will produce somewhat weaker signals. The range isn't centered at 1.0 (it's 0.7-1.2) to create a slight
-    # positive skew, which is common in real mineral deposits
-    n_hotspots = n_hotsots if n_hotsots is not None else rng.integers(1, 5)
-    hotspot_strengths = rng.uniform(0.7, 1.2, n_hotspots)
-    hotspots = np.zeros((n_hotspots, 3))
-    hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
-    hotspots[:, 1] = rng.uniform(y_range[0], y_range[1], n_hotspots)
-    hotspots[:, 2] = rng.uniform(depth, 0, n_hotspots)
-
-    # 3. Calculate gold values based on distance to nearest hotspot
-    # Reshape for broadcasting: coordinates (n_samples, 3), hotspots (n_hotspots, 3)
-    # Result: distances will be (n_samples, n_hotspots)
-    distances = np.sqrt(
-        np.sum(
-            (coordinates[:, np.newaxis, :] - hotspots[np.newaxis, :, :]) ** 2,
-            axis=2,
-        )
-    )
-
-    # Find closest hotspot for each sample
-    min_indices = np.argmin(distances, axis=1)
-    min_distances = np.min(distances, axis=1)
-
-    # Get the strength of each sample's closest hotspot
-    closest_strengths = hotspot_strengths[min_indices]
-
-    # Calculate gold values using exponential decay with distance
-    noise_level = rng.uniform(0.01, 0.1)
-    exp_decay_factor = rng.uniform(0.001, 0.01)
-    gold_values = closest_strengths * np.exp(
-        -min_distances * exp_decay_factor
-    ) + rng.normal(0, noise_level, size=n_samples)
-
-    # Clip values to 0-1 range
-    gold_values = np.clip(a=gold_values, a_min=0, a_max=1)
-
-    # 4. Convert to categorical labels
-    if n_classes == 2:  # Binary classification: gold/no gold
-        labels = (gold_values >= threshold_binary).astype(int)
-    else:  # Multi-class classification
-        # Create bins for digitizing
-        bins = np.linspace(0, 1, n_classes, endpoint=False)[1:]  # n_classes-1 bin edges
-        labels = np.digitize(gold_values, bins)  # 0 to n_classes-1
-
-    # (Optional) 5. Check if we have the minimum number of samples per class
-    if min_samples_per_class is not None:
-        labels, coordinates, gold_values = _change_label_distribution(
-            labels,
-            min_samples_per_class,
-            n_classes,
-            depth,
-            x_range,
-            y_range,
-            coordinates,
-            hotspots,
-            hotspot_strengths,
-            gold_values,
-            exp_decay_factor,
-            noise_level,
-            seed,
-        )
-
-    # 6. Generate features for all samples
-    n_total_samples = len(coordinates)
     features = np.zeros((n_total_samples, n_features))
 
     # Define possible features based on priority/importance
@@ -352,12 +314,109 @@ def generate_mineral_data(
 
     # Print summary
     print(f"Generated {n_total_samples} samples with {actual_n_features} features.")
-    print(f"{n_hotspots} hotspots with respective strengths {hotspot_strengths}")
+
+    return features
+
+
+def generate_mineral_data(
+    n_samples: int = 500,
+    spacing: float = 50,
+    depth: float = -500.0,
+    n_features: int = 10,
+    n_classes: int = 5,
+    threshold_binary: float = 0.3,
+    min_samples_per_class: int | None = 15,
+    x_range: tuple[float, float] | None = None,
+    y_range: tuple[float, float] | None = None,
+    n_hotspots: int = 10,
+    n_hotspots_random: bool = True,
+    seed: int = 42,
+):
+    """Generate synthetic mineral exploration data with realistic features.
+
+    Parameters
+    ----------
+    n_samples : int
+        Number of drill core samples to generate
+    spacing : float
+        Average distance between samples in meters
+    depth : float
+        Max ranges for depth coordinates (usually negative)
+    n_features : int
+        Number of features to generate
+    n_classes : int
+        Number of classes for gold concentration.
+        Use 2 for binary classification (gold/no gold),
+        or higher values for finer-grained concentration levels
+    threshold_binary: float
+        Threshold for binary classification
+    min_samples_per_class : int, optional
+        Minimum number of samples required for each class. If None, no minimum is enforced.
+    x_range: tuple[float, float], optional
+        Range for x coordinates (Easting). If None, defaults to (0, area_size)
+    y_range: tuple[float, float], optional
+        Range for y coordinates (Northing). If None, defaults to (0, area_size)
+    seed : int
+        Random seed for reproducibility
+
+    Returns
+    -------
+    coordinates : ndarray
+        Array of shape (n_samples, 3) containing x, y, z coordinates
+    features : ndarray
+        Scaled array of shape (n_samples, n_features) containing mineral features
+    labels : ndarray
+        Array of shape (n_samples,) containing gold concentration labels (0-n_classes)
+
+    """
+    rng = np.random.default_rng(seed)  # Set random seed for reproducibility
+    # 1. Generate spatial coordinates with appropriate spacing
+    coordinates, x_range, y_range = _generate_coordinates(
+        n_samples, spacing, depth, x_range, y_range, rng
+    )
+    # 2. Create mineralization hotspots and their strengths (mineralization centers)
+    hotspots, hotspot_strengths = _create_hotspots(
+        depth, x_range, y_range, n_hotspots, n_hotspots_random, rng
+    )
+    # 3. Calculate gold values based on distance to nearest hotspot
+    noise_level = rng.uniform(0.01, 0.1)
+    exp_decay_factor = rng.uniform(0.001, 0.01)
+    gold_values = _calculate_gold_values(
+        n_samples,
+        coordinates,
+        hotspots,
+        hotspot_strengths,
+        exp_decay_factor=exp_decay_factor,
+        noise_level=noise_level,
+        rng=rng,
+    )
+    # 4. Convert to categorical labels
+    labels = _assign_labels(gold_values, n_classes, threshold_binary)
+    # (Optional) 5. Check if we have the minimum number of samples per class and redistribute if needed
+    if min_samples_per_class is not None:
+        labels, coordinates, gold_values = _change_label_distribution(
+            labels,
+            min_samples_per_class,
+            n_classes,
+            depth,
+            x_range,
+            y_range,
+            coordinates,
+            hotspots,
+            hotspot_strengths,
+            gold_values,
+            exp_decay_factor,
+            noise_level,
+            rng,
+        )
+    # 6. Generate features for all samples
+    n_total_samples = len(coordinates)
+    features = _generate_features(n_total_samples, gold_values, n_features, rng)
+    # Print summary of generated data
     print("\nLabel distribution:")
     for i in range(n_classes):
         count = np.sum(labels == i)
         print(f"Class {i}: {count} points ({count / n_total_samples * 100:.2f}%)")
-
     return coordinates, features, labels
 
 

@@ -12,7 +12,8 @@ data:
   test_size: 0.3
   calib_size: 0.50
   n_hotspots: 10
-  seed: 110
+  n_hotspots_random: true
+  seed: 234
 
 # Default model selection
 model: gat

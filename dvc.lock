@@ -5,12 +5,12 @@ stages:
     deps:
     - path: src/stages/generate_synthetic_data.py
       hash: md5
-      md5: a186515c9000957a16e9da9a1e39511d
-      size: 4231
+      md5: be74f36a502dcc26d336059182e15b70
+      size: 4413
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: aa201cefcec0e86474503d9e0990a56f
-      size: 31241
+      md5: 6d635093052d38aa693e91a8419a1e01
+      size: 33380
     params:
       params.yaml:
         data:
@@ -27,20 +27,21 @@ stages:
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 10
-          seed: 110
+          n_hotspots_random: true
+          seed: 234
     outs:
     - path: results/data
       hash: md5
-      md5: dcaa5d98c598b96487f631a43d97e0fb.dir
-      size: 41330007
+      md5: 0a8af9f78da0ed0d6e824e46e5675319.dir
+      size: 41549632
       nfiles: 12
   train:
     cmd: python src/stages/train.py --model gat
     deps:
     - path: results/data
       hash: md5
-      md5: dcaa5d98c598b96487f631a43d97e0fb.dir
-      size: 41330007
+      md5: efe6bd2ddfe14ccca2faf62b59852d88.dir
+      size: 41440189
       nfiles: 12
     - path: src/models/
       hash: md5
@@ -80,16 +81,16 @@ stages:
     outs:
     - path: results/trained
       hash: md5
-      md5: 0555841ef5cdd0ba2d4f73b8d9beb8ea.dir
-      size: 2618240
+      md5: c17c2bd83807e818f2ecf894013f6e8f.dir
+      size: 2723375
       nfiles: 4
   evaluate:
     cmd: python src/stages/evaluate.py --model gat
     deps:
     - path: results/trained
       hash: md5
-      md5: 0555841ef5cdd0ba2d4f73b8d9beb8ea.dir
-      size: 2618240
+      md5: c17c2bd83807e818f2ecf894013f6e8f.dir
+      size: 2723375
       nfiles: 4
     - path: src/models/
       hash: md5
@@ -134,21 +135,21 @@ stages:
     outs:
     - path: results/evaluation
       hash: md5
-      md5: 15c265f2fa49ac0ccb73bffdcaf35343.dir
-      size: 453430
+      md5: eb632bf35570a1ec337eee63c9f60b71.dir
+      size: 442474
       nfiles: 6
   predict:
     cmd: python src/stages/predict.py --model gat
     deps:
     - path: results/data
       hash: md5
-      md5: dcaa5d98c598b96487f631a43d97e0fb.dir
-      size: 41330007
+      md5: efe6bd2ddfe14ccca2faf62b59852d88.dir
+      size: 41440189
       nfiles: 12
     - path: results/evaluation
       hash: md5
-      md5: 15c265f2fa49ac0ccb73bffdcaf35343.dir
-      size: 453430
+      md5: eb632bf35570a1ec337eee63c9f60b71.dir
+      size: 442474
       nfiles: 6
     - path: src/models/
       hash: md5
@@ -176,8 +177,8 @@ stages:
     deps:
     - path: results/data
       hash: md5
-      md5: dcaa5d98c598b96487f631a43d97e0fb.dir
-      size: 41330007
+      md5: efe6bd2ddfe14ccca2faf62b59852d88.dir
+      size: 41440189
       nfiles: 12
     - path: src/models/
       hash: md5
@@ -204,6 +205,6 @@ stages:
     outs:
     - path: results/drift_analysis
       hash: md5
-      md5: 3e59ea53e17bba180598575fcd4bc6e8.dir
-      size: 3942819
+      md5: f7abd3dd32e146ccd3095a745d28bb1a.dir
+      size: 4745884
       nfiles: 5
