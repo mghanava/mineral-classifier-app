@@ -191,8 +191,8 @@ stages:
       size: 1425
     - path: src/utilities/drift_detection_utils.py
       hash: md5
-      md5: bffef2b8030654909630eef8af55e942
-      size: 28106
+      md5: 863658e09baae4978e202450a96faa9c
+      size: 26781
     - path: src/utilities/logging_utils.py
       hash: md5
       md5: 608e90f581f5c92d5b0396e6ae19b813
@@ -205,6 +205,6 @@ stages:
     outs:
     - path: results/drift_analysis
       hash: md5
-      md5: b1563b26fc5953ecbe25f7d617105605.dir
-      size: 3266732
+      md5: 15a918fcbb486b5bcd8af6c6f5585b90.dir
+      size: 3240952
       nfiles: 5

@@ -581,121 +581,80 @@ class AnalyzeDrift:
         fig, axes = pyplot.subplots(3, 3, figsize=(18, 15))
 
         # --- Row 1: PCA scatter plots ---
-        # PC1 vs PC2
-        axes[0, 0].scatter(
-            X_pca[:, 0], X_pca[:, 1], alpha=0.5, label="X", color="blue", marker="o"
-        )
-        axes[0, 0].scatter(
-            Y_pca[:, 0], Y_pca[:, 1], alpha=0.5, label="Y", color="red", marker="o"
-        )
-        axes[0, 0].set_xlabel("PC1")
-        axes[0, 0].set_ylabel("PC2")
-        axes[0, 0].set_title("PCA: PC1 vs PC2")
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-
-        # PC1 vs PC3
-        axes[0, 1].scatter(
-            X_pca[:, 0], X_pca[:, 2], alpha=0.5, label="X", color="blue", marker="o"
-        )
-        axes[0, 1].scatter(
-            Y_pca[:, 0], Y_pca[:, 2], alpha=0.5, label="Y", color="red", marker="o"
-        )
-        axes[0, 1].set_xlabel("PC1")
-        axes[0, 1].set_ylabel("PC3")
-        axes[0, 1].set_title("PCA: PC1 vs PC3")
-        axes[0, 1].legend()
-        axes[0, 1].grid(True, alpha=0.3)
-
-        # PC2 vs PC3
-        axes[0, 2].scatter(
-            X_pca[:, 1], X_pca[:, 2], alpha=0.5, label="X", color="blue", marker="o"
-        )
-        axes[0, 2].scatter(
-            Y_pca[:, 1], Y_pca[:, 2], alpha=0.5, label="Y", color="red", marker="o"
-        )
-        axes[0, 2].set_xlabel("PC2")
-        axes[0, 2].set_ylabel("PC3")
-        axes[0, 2].set_title("PCA: PC2 vs PC3")
-        axes[0, 2].legend()
-        axes[0, 2].grid(True, alpha=0.3)
+        pca_pairs = [(0, 1), (0, 2), (1, 2)]
+        pca_labels = [("PC1", "PC2"), ("PC1", "PC3"), ("PC2", "PC3")]
+        for idx, (i, j) in enumerate(pca_pairs):
+            axes[0, idx].scatter(
+                X_pca[:, i], X_pca[:, j], alpha=0.5, label="X", color="blue", marker="o"
+            )
+            axes[0, idx].scatter(
+                Y_pca[:, i], Y_pca[:, j], alpha=0.5, label="Y", color="red", marker="o"
+            )
+            axes[0, idx].set_xlabel(pca_labels[idx][0])
+            axes[0, idx].set_ylabel(pca_labels[idx][1])
+            axes[0, idx].set_title(f"PCA: {pca_labels[idx][0]} vs {pca_labels[idx][1]}")
+            axes[0, idx].legend()
+            axes[0, idx].grid(True, alpha=0.3)
 
         # --- Row 2: KernelPCA scatter plots ---
-        # KPCA1 vs KPCA2
-        axes[1, 0].scatter(
-            X_kpca[:, 0], X_kpca[:, 1], alpha=0.5, label="X", color="blue", marker="^"
-        )
-        axes[1, 0].scatter(
-            Y_kpca[:, 0], Y_kpca[:, 1], alpha=0.5, label="Y", color="red", marker="^"
-        )
-        axes[1, 0].set_xlabel("KPCA1")
-        axes[1, 0].set_ylabel("KPCA2")
-        axes[1, 0].set_title("KernelPCA: KPCA1 vs KPCA2")
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
-
-        # KPCA1 vs KPCA3
-        axes[1, 1].scatter(
-            X_kpca[:, 0], X_kpca[:, 2], alpha=0.5, label="X", color="blue", marker="^"
-        )
-        axes[1, 1].scatter(
-            Y_kpca[:, 0], Y_kpca[:, 2], alpha=0.5, label="Y", color="red", marker="^"
-        )
-        axes[1, 1].set_xlabel("KPCA1")
-        axes[1, 1].set_ylabel("KPCA3")
-        axes[1, 1].set_title("KernelPCA: KPCA1 vs KPCA3")
-        axes[1, 1].legend()
-        axes[1, 1].grid(True, alpha=0.3)
-
-        # KPCA2 vs KPCA3
-        axes[1, 2].scatter(
-            X_kpca[:, 1], X_kpca[:, 2], alpha=0.5, label="X", color="blue", marker="^"
-        )
-        axes[1, 2].scatter(
-            Y_kpca[:, 1], Y_kpca[:, 2], alpha=0.5, label="Y", color="red", marker="^"
-        )
-        axes[1, 2].set_xlabel("KPCA2")
-        axes[1, 2].set_ylabel("KPCA3")
-        axes[1, 2].set_title("KernelPCA: KPCA2 vs KPCA3")
-        axes[1, 2].legend()
-        axes[1, 2].grid(True, alpha=0.3)
-
-        # --- Row 3: Histograms ---
-        # PCA explained variance
+        kpca_pairs = [(0, 1), (0, 2), (1, 2)]
+        kpca_labels = [("KPCA1", "KPCA2"), ("KPCA1", "KPCA3"), ("KPCA2", "KPCA3")]
+        for idx, (i, j) in enumerate(kpca_pairs):
+            axes[1, idx].scatter(
+                X_kpca[:, i],
+                X_kpca[:, j],
+                alpha=0.5,
+                label="X",
+                color="blue",
+                marker="^",
+            )
+            axes[1, idx].scatter(
+                Y_kpca[:, i],
+                Y_kpca[:, j],
+                alpha=0.5,
+                label="Y",
+                color="red",
+                marker="^",
+            )
+            axes[1, idx].set_xlabel(kpca_labels[idx][0])
+            axes[1, idx].set_ylabel(kpca_labels[idx][1])
+            axes[1, idx].set_title(
+                f"KernelPCA: {kpca_labels[idx][0]} vs {kpca_labels[idx][1]}"
+            )
+            axes[1, idx].legend()
+            axes[1, idx].grid(True, alpha=0.3)
+        # --- Row 3: PCA/KPCA variance histograms and info ---
         axes[2, 0].bar(
             range(1, len(pca.explained_variance_ratio_) + 1),
             pca.explained_variance_ratio_,
             alpha=0.7,
             color="blue",
         )
-        axes[2, 0].set_xlabel("Principal Component")
-        axes[2, 0].set_ylabel("Explained Variance Ratio")
         axes[2, 0].set_title("PCA Explained Variance")
+        axes[2, 0].set_xlabel("PC")
+        axes[2, 0].set_ylabel("Variance Ratio")
         axes[2, 0].grid(True, alpha=0.3)
 
-        # KPCA eigenvalues (lambdas)
-        lambdas = kpca.eigenvalues_
         axes[2, 1].bar(
-            range(1, len(lambdas) + 1),
-            lambdas,
+            range(1, len(kpca.eigenvalues_) + 1),
+            kpca.eigenvalues_,
             alpha=0.7,
             color="blue",
         )
-        axes[2, 1].set_xlabel("Kernel Principal Component")
+        axes[2, 1].set_title("KernelPCA Variance")
+        axes[2, 1].set_xlabel("KPC")
         axes[2, 1].set_ylabel("Variance")
-        axes[2, 1].set_title("KernelPCA Component Variances")
         axes[2, 1].grid(True, alpha=0.3)
 
-        # Empty or combined legend/info
         axes[2, 2].axis("off")
         axes[2, 2].text(
             0.5,
             0.5,
-            "Top: PCA\nMiddle: KernelPCA\nBottom: Variance Histograms",
+            "Top: PCA\nMiddle: KernelPCA\nBottom: Variance",
             ha="center",
             va="center",
-            fontsize=14,
-            bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.8},
+            fontsize=12,
+            bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.7},
         )
 
         pyplot.tight_layout()
