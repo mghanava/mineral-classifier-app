@@ -1,6 +1,6 @@
 data:
-  n_samples: 1500
-  n_pred_samples: 300
+  n_samples: 1000
+  n_pred_samples: 100
   spacing: 50
   depth: -500
   n_features: 5
@@ -11,9 +11,9 @@ data:
   n_splits: 3
   test_size: 0.3
   calib_size: 0.50
-  n_hotspots: 10
-  n_hotspots_random: true
-  seed: 234
+  n_hotspots: 5
+  n_hotspots_random: False
+  seed: 464
 
 # Default model selection
 model: gat
@@ -64,4 +64,4 @@ evaluate:
 # Prediction parameters
 analyze_drift:
   n_permutations: 1000
-  bandwidth: null
+  gamma: null

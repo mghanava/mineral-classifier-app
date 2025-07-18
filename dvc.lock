@@ -9,13 +9,13 @@ stages:
       size: 4413
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 6d635093052d38aa693e91a8419a1e01
-      size: 33380
+      md5: debc0fbd5c434dc6b0591cd6cb9af0fe
+      size: 29617
     params:
       params.yaml:
         data:
-          n_samples: 1500
-          n_pred_samples: 300
+          n_samples: 1000
+          n_pred_samples: 100
           spacing: 50
           depth: -500
           n_features: 5
@@ -26,22 +26,22 @@ stages:
           n_splits: 3
           test_size: 0.3
           calib_size: 0.5
-          n_hotspots: 10
-          n_hotspots_random: true
-          seed: 234
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 464
     outs:
     - path: results/data
       hash: md5
-      md5: 0a8af9f78da0ed0d6e824e46e5675319.dir
-      size: 41549632
+      md5: b106cebc2dcae6db70f7761b2cea3d03.dir
+      size: 39849062
       nfiles: 12
   train:
     cmd: python src/stages/train.py --model gat
     deps:
     - path: results/data
       hash: md5
-      md5: efe6bd2ddfe14ccca2faf62b59852d88.dir
-      size: 41440189
+      md5: b106cebc2dcae6db70f7761b2cea3d03.dir
+      size: 39849062
       nfiles: 12
     - path: src/models/
       hash: md5
@@ -81,16 +81,16 @@ stages:
     outs:
     - path: results/trained
       hash: md5
-      md5: c17c2bd83807e818f2ecf894013f6e8f.dir
-      size: 2723375
+      md5: d983e46cfde1ff0e0b8356da996ca52f.dir
+      size: 2497420
       nfiles: 4
   evaluate:
     cmd: python src/stages/evaluate.py --model gat
     deps:
     - path: results/trained
       hash: md5
-      md5: c17c2bd83807e818f2ecf894013f6e8f.dir
-      size: 2723375
+      md5: d983e46cfde1ff0e0b8356da996ca52f.dir
+      size: 2497420
       nfiles: 4
     - path: src/models/
       hash: md5
@@ -135,21 +135,21 @@ stages:
     outs:
     - path: results/evaluation
       hash: md5
-      md5: eb632bf35570a1ec337eee63c9f60b71.dir
-      size: 442474
+      md5: 6c0dbe0dc466ac4d1546f5f5f24cddf4.dir
+      size: 450881
       nfiles: 6
   predict:
     cmd: python src/stages/predict.py --model gat
     deps:
     - path: results/data
       hash: md5
-      md5: efe6bd2ddfe14ccca2faf62b59852d88.dir
-      size: 41440189
+      md5: b106cebc2dcae6db70f7761b2cea3d03.dir
+      size: 39849062
       nfiles: 12
     - path: results/evaluation
       hash: md5
-      md5: eb632bf35570a1ec337eee63c9f60b71.dir
-      size: 442474
+      md5: 6c0dbe0dc466ac4d1546f5f5f24cddf4.dir
+      size: 450881
       nfiles: 6
     - path: src/models/
       hash: md5
@@ -177,8 +177,8 @@ stages:
     deps:
     - path: results/data
       hash: md5
-      md5: efe6bd2ddfe14ccca2faf62b59852d88.dir
-      size: 41440189
+      md5: b106cebc2dcae6db70f7761b2cea3d03.dir
+      size: 39849062
       nfiles: 12
     - path: src/models/
       hash: md5
@@ -187,12 +187,12 @@ stages:
       nfiles: 10
     - path: src/stages/analyze_drift.py
       hash: md5
-      md5: d62536cc9f98a11b983ca4b0e6c4045f
-      size: 1340
+      md5: ee9580c5924f4ebd5334b0b0ac4a0495
+      size: 1425
     - path: src/utilities/drift_detection_utils.py
       hash: md5
-      md5: f4c59c172fda253cdb78ab5a46173353
-      size: 26322
+      md5: bffef2b8030654909630eef8af55e942
+      size: 28106
     - path: src/utilities/logging_utils.py
       hash: md5
       md5: 608e90f581f5c92d5b0396e6ae19b813
@@ -201,10 +201,10 @@ stages:
       params.yaml:
         analyze_drift:
           n_permutations: 1000
-          bandwidth:
+          gamma:
     outs:
     - path: results/drift_analysis
       hash: md5
-      md5: f7abd3dd32e146ccd3095a745d28bb1a.dir
-      size: 4745884
+      md5: b1563b26fc5953ecbe25f7d617105605.dir
+      size: 3266732
       nfiles: 5

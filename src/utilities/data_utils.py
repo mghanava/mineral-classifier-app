@@ -101,8 +101,6 @@ def _calculate_gold_values(
     coordinates: np.ndarray,
     hotspots: np.ndarray,
     hotspot_strengths: np.ndarray,
-    exp_decay_factor: float = 0.005,
-    noise_level: float = 0.05,
     rng: np.random.Generator = np.random.default_rng(42),
 ) -> np.ndarray:
     # Reshape for broadcasting: coordinates (n_samples, 3), hotspots (n_hotspots, 3)
@@ -127,8 +125,12 @@ def _calculate_gold_values(
     gold_values = closest_strengths * np.exp(-min_distances * exp_decay_factor)
     gold_values += rng.normal(0, noise_level, size=n_samples)
 
-    # Clip values to 0-1 range
-    gold_values = np.clip(a=gold_values, a_min=0, a_max=1)
+    # scale values to 0-1 probability range to keep the distribution shape
+    gold_values = (gold_values - gold_values.min()) / (
+        gold_values.max() - gold_values.min()
+    )
+    # ensure strict [0, 1] bounds (in case of numerical instability)
+    gold_values = np.clip(gold_values, 0, 1)
     return gold_values
 
 
@@ -152,86 +154,33 @@ def _change_label_distribution(
     x_range: tuple,
     y_range: tuple,
     coordinates: np.ndarray,
-    hotspots: np.ndarray,
-    hotspot_strengths: np.ndarray,
     gold_values: np.ndarray,
-    exp_decay_factor: float,
-    noise_level: float,
     rng: np.random.Generator = np.random.default_rng(42),
 ):
-    n_hotspots = hotspots.shape[0]
-
     # Calculate class counts and needed samples
     class_counts = np.bincount(labels, minlength=n_classes)
     samples_needed = np.maximum(0, min_samples_per_class - class_counts)
-
-    # If no samples needed, return early
-    if not np.any(samples_needed > 0):
-        return labels, coordinates, gold_values
-
-    # Pre-calculate distance ranges for each class
-    if n_classes == 2:
-        # Binary case: class 0 (far), class 1 (near)
-        class_dist_ranges = [(300, 600), (0, 200)]
-    else:
-        # Multi-class: evenly spaced distance ranges
-        max_distance = 600
-        class_ranges = np.linspace(0, max_distance, n_classes + 1)
-        class_dist_ranges = [
-            (class_ranges[i], class_ranges[i + 1]) for i in range(n_classes)
-        ]
-
+    bins = np.linspace(0, 1, n_classes + 1)
     # Generate new samples for each class that needs them
     new_coordinates = []
     new_gold_values = []
     new_labels = []
 
-    for class_idx in range(n_classes):
-        if samples_needed[class_idx] <= 0:
+    for class_idx, n_needed in enumerate(samples_needed):
+        if n_needed <= 0:
             continue
-
-        print(
-            f"\nAdding {samples_needed[class_idx]} more samples for class {class_idx}"
-        )
-        min_dist, max_dist = class_dist_ranges[class_idx]
-
-        # Generate all needed samples at once
-        hotspot_indices = rng.integers(0, n_hotspots, size=samples_needed[class_idx])
-        angles = rng.uniform(0, 2 * np.pi, size=samples_needed[class_idx])
-        distances = rng.uniform(min_dist, max_dist, size=samples_needed[class_idx])
-
-        # Convert to Cartesian coordinates
-        dx = distances * np.cos(angles)
-        dy = distances * np.sin(angles)
-        dz = np.zeros_like(distances)  # Assuming 2D movement for simplicity
-
-        # Calculate new positions
-        new_x = hotspots[hotspot_indices, 0] + dx
-        new_y = hotspots[hotspot_indices, 1] + dy
-        new_z = hotspots[hotspot_indices, 2] + dz
-
-        # Clip to bounds
-        new_x = np.clip(new_x, x_range[0], x_range[1])
-        new_y = np.clip(new_y, y_range[0], y_range[1])
-        new_z = np.clip(new_z, depth, 0)
-
-        # Calculate gold values
-        pts = np.column_stack([new_x, new_y, new_z])
-        distances = np.min(
-            np.sqrt(np.sum((pts[:, np.newaxis] - hotspots) ** 2, axis=2)), axis=1
-        )
-        nearest_idx = np.argmin(
-            np.sqrt(np.sum((pts[:, np.newaxis] - hotspots) ** 2, axis=2)), axis=1
-        )
-        strengths = hotspot_strengths[nearest_idx]
-
-        gold_vals = strengths * np.exp(-distances * exp_decay_factor)
-        gold_vals += rng.normal(0, noise_level, size=len(gold_vals))
-        gold_vals = np.clip(gold_vals, 0, 1)
-
-        new_coordinates.append(pts)
-        new_gold_values.append(gold_vals)
-        new_labels.append(np.full(samples_needed[class_idx], class_idx))
+        print(f"Adding {n_needed} more samples for class {class_idx}")
+        # Sample gold values within the bin for this class
+        gold_bin_min, gold_bin_max = bins[class_idx], bins[class_idx + 1]
+        sampled_gold = rng.uniform(gold_bin_min, gold_bin_max, n_needed)
+        new_gold_values.append(sampled_gold)
+        # Sample coordinates within the spatial bounds
+        sampled_x = rng.uniform(x_range[0], x_range[1], n_needed)
+        sampled_y = rng.uniform(y_range[0], y_range[1], n_needed)
+        sampled_z = rng.uniform(depth, 0, n_needed)
+        sampled_coords = np.column_stack([sampled_x, sampled_y, sampled_z])
+        new_coordinates.append(sampled_coords)
+        new_labels.append(np.full(n_needed, class_idx))
 
     # Combine new samples with existing data
     if new_coordinates:
@@ -248,73 +197,17 @@ def _generate_features(
     n_features,
     rng: np.random.Generator = np.random.default_rng(42),
 ):
-    features = np.zeros((n_total_samples, n_features))
-
-    # Define possible features based on priority/importance
-    feature_generators = [
-        # Pathfinder elements - strongly correlated with gold
-        lambda gold_value: gold_value * 800 + rng.normal(0, 30),  # Arsenic
-        lambda gold_value: gold_value * 400 + rng.normal(0, 15),  # Silver
-        lambda gold_value: gold_value * 200 + rng.normal(0, 20),  # Copper
-        # Somewhat correlated elements
-        lambda gold_value: gold_value * 100 + rng.normal(0, 30),  # Lead
-        lambda gold_value: gold_value * 50 + rng.normal(0, 20),  # Zinc
-        # Geological features
-        lambda gold_value: 60 + rng.normal(0, 10) - gold_value * 10,  # Silica
-        lambda gold_value: gold_value * 8 + rng.normal(0, 1),  # Sulfides
-        lambda gold_value: gold_value * 5 + rng.normal(0, 0.5),  # Alteration
-        lambda gold_value: gold_value * 6 + rng.normal(0, 0.7),  # Vein density
-        # Less correlated feature
-        lambda gold_value: rng.normal(5, 1),  # Rock competency
-        # Additional features if needed
-        lambda gold_value: gold_value * 3 + rng.normal(0, 0.8),  # Bismuth
-        lambda gold_value: gold_value * 50 + rng.normal(0, 15),  # Antimony
-        lambda gold_value: rng.normal(3, 1.5),  # Iron
-        lambda gold_value: gold_value * 10 + rng.normal(0, 2),  # Tellurium
-        lambda gold_value: 20 - gold_value * 5 + rng.normal(0, 3),  # Carbonate
-    ]
-
-    # Feature names for reference
-    feature_names = [
-        "Arsenic",
-        "Silver",
-        "Copper",
-        "Lead",
-        "Zinc",
-        "Silica",
-        "Sulfides",
-        "Alteration",
-        "Vein_density",
-        "Rock_competency",
-        "Bismuth",
-        "Antimony",
-        "Iron",
-        "Tellurium",
-        "Carbonate",
-    ]
-
-    # Ensure we don't try to generate more features than we have generators for
-    actual_n_features = min(n_features, len(feature_names))
-    if actual_n_features < n_features:
-        print(
-            f"Warning: Requested {n_features} features but only {actual_n_features} are defined."
-            f"Generating {actual_n_features} features."
-        )
-
-    # Create correlations between gold and features
-    for i in range(n_total_samples):
-        gold_value = gold_values[i]
-
-        # Generate each feature based on the number requested
-        for j in range(actual_n_features):
-            features[i, j] = feature_generators[j](gold_value)
-
-    # Ensure all features are positive (where it makes sense)
-    features = np.maximum(features, 0)
-
-    # Print summary
-    print(f"Generated {n_total_samples} samples with {actual_n_features} features.")
-
+    # Random weights for each feature
+    weights = rng.uniform(0.5, 5.0, size=(n_features,))
+    # Broadcast gold_values to shape (n_total_samples, n_features)
+    gold_matrix = np.tile(gold_values.reshape(-1, 1), (1, n_features))
+    # Add random noise
+    noise_level = rng.uniform(0.5, 1.5)
+    noise = rng.normal(0, noise_level, size=(n_total_samples, n_features))
+    # generate features as random linear combinations of gold values plus noise,
+    features = gold_matrix * weights + noise
+    # Optionally scale features to positive values
+    # features = np.maximum(features, 0)
     return features
 
 
@@ -356,6 +249,10 @@ def generate_mineral_data(
         Range for x coordinates (Easting). If None, defaults to (0, area_size)
     y_range: tuple[float, float], optional
         Range for y coordinates (Northing). If None, defaults to (0, area_size)
+    n_hotspots : int
+        Number of mineralization hotspots to generate in the area.
+    n_hotspots_random : bool
+        If True, randomly select the number of hotspots up to n_hotspots.
     seed : int
         Random seed for reproducibility
 
@@ -379,16 +276,8 @@ def generate_mineral_data(
         depth, x_range, y_range, n_hotspots, n_hotspots_random, rng
     )
     # 3. Calculate gold values based on distance to nearest hotspot
-    noise_level = rng.uniform(0.01, 0.1)
-    exp_decay_factor = rng.uniform(0.001, 0.01)
     gold_values = _calculate_gold_values(
-        n_samples,
-        coordinates,
-        hotspots,
-        hotspot_strengths,
-        exp_decay_factor=exp_decay_factor,
-        noise_level=noise_level,
-        rng=rng,
+        n_samples, coordinates, hotspots, hotspot_strengths, rng=rng
     )
     # 4. Convert to categorical labels
     labels = _assign_labels(gold_values, n_classes, threshold_binary)
@@ -402,11 +291,7 @@ def generate_mineral_data(
             x_range,
             y_range,
             coordinates,
-            hotspots,
-            hotspot_strengths,
             gold_values,
-            exp_decay_factor,
-            noise_level,
             rng,
         )
     # 6. Generate features for all samples

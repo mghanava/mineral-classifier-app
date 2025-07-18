@@ -1,5 +1,18 @@
+"""Utilities for detecting and analyzing distribution drift between datasets.
+
+This module provides the AnalyzeDrift class which implements various statistical methods
+for detecting and visualizing distribution shifts between two datasets, including:
+- Maximum Mean Discrepancy (MMD)
+- Energy Distance
+- Wasserstein Distance
+- PCA and Kernel PCA visualizations
+- Mutual Information analysis
+- Marginal distribution comparisons
+"""
+
 import os
 import warnings
+from typing import Literal
 
 import numpy as np
 import ot
@@ -16,13 +29,34 @@ warnings.filterwarnings("ignore")
 
 
 class AnalyzeDrift:
+    """A class for analyzing distribution drift between datasets.
+
+    This class implements various statistical methods to detect and visualize
+    distribution shifts between base and prediction datasets, including MMD,
+    Energy Distance, Wasserstein Distance, and visualization techniques.
+    """
+
     def __init__(
         self,
         base_data: Data,
         pred_data: Data,
         feature_names: list | None = None,
+        gamma: float | None = None,
+        n_permutations: int = 1000,
         save_path: str | None = None,
     ):
+        """Initialize the AnalyzeDrift class with two datasets to compare.
+
+        Args:
+            base_data: Base dataset containing features to analyze.
+            pred_data: Prediction dataset to compare against base data.
+            feature_names: List of feature names. If None, default names are generated.
+            gamma: Parameter for RBF kernel. If None, median heuristic is used.
+            n_permutations: Number of permutations for statistical tests.
+            save_path: Directory path to save analysis results. If None, results aren't saved.
+
+        """
+        self.n_permutations = n_permutations
         X1 = base_data.unscaled_features
         X2 = pred_data.unscaled_features
         # Ensure tensors are on same device
@@ -32,48 +66,44 @@ class AnalyzeDrift:
         self.X2 = X2.to(self.device)
         self.X1_scaled = base_data.x
         self.X2_scaled = pred_data.x
-
+        if gamma is None:
+            if self.X1_scaled is not None and self.X2_scaled is not None:
+                self.gamma = self._median_heuristic_gamma(
+                    self.X1_scaled, self.X2_scaled
+                )
+                print(f"median heuristic gamma {self.gamma} used in rbf kernel!\n")
+            else:
+                raise ValueError(
+                    "self.X1_scaled and self.X2_scaled must not be None when gamma is None."
+                )
+        else:
+            self.gamma = gamma
         if feature_names is None:
             self.feature_names = [f"Feature_{i}" for i in range(self.n_features)]
         self.save_path = save_path
 
-    def _mmd_unbiased(
-        self, X1: torch.Tensor, X2: torch.Tensor, gamma: float | None = None
-    ) -> float:
+    def _mmd_unbiased(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
         """Compute unbiased MMD² estimate.
 
         Args:
-            X: tensor of shape (n1, d)
-            Y: tensor of shape (n2, d)
-            bandwidth: kernel bandwidth
+            X1: First sample, tensor of shape (n1, d)
+            X2: Second sample, tensor of shape (n2, d)
 
         Returns:
             Unbiased MMD² estimate
 
         """
         # K_XX
-        if gamma is None:
-            gamma_XX = self._median_heuristic_gamma(X1, X1)
-            print(f"gamma_XX {gamma_XX}")
-            gamma = gamma_XX
-        K_XX = self._rbf_kernel(X1, X1, gamma)
+        K_XX = self._rbf_kernel(X1, X1, self.gamma)
         # Remove diagonal for unbiased estimate
         K_XX.fill_diagonal_(0)
         term1 = K_XX.sum() / (self.n1 * (self.n1 - 1))
         # K_YY
-        if gamma is None:
-            gamma_YY = self._median_heuristic_gamma(X2, X2)
-            print(f"gamma_YY {gamma_YY}")
-            gamma = gamma_YY
-        K_YY = self._rbf_kernel(X2, X2, gamma)
+        K_YY = self._rbf_kernel(X2, X2, self.gamma)
         K_YY.fill_diagonal_(0)
         term2 = K_YY.sum() / (self.n2 * (self.n2 - 1))
         # K_XY
-        if gamma is None:
-            gamma_XY = self._median_heuristic_gamma(X1, X2)
-            print(f"gamma_XY {gamma_XY}")
-            gamma = gamma_XY
-        K_XY = self._rbf_kernel(X1, X2, gamma)
+        K_XY = self._rbf_kernel(X1, X2, self.gamma)
         term3 = K_XY.sum() / (self.n1 * self.n2)
 
         mmd_sq = term1 + term2 - 2 * term3
@@ -86,8 +116,8 @@ class AnalyzeDrift:
         where X, X' are independent copies from first sample and Y, Y' from second.
 
         Args:
-            X: First sample, tensor of shape (n1, d)
-            Y: Second sample, tensor of shape (n2, d)
+            X1: First sample, tensor of shape (n1, d)
+            X2: Second sample, tensor of shape (n2, d)
 
         Returns:
             Energy statistic value
@@ -114,8 +144,8 @@ class AnalyzeDrift:
         """Compute the Wasserstein distance (Earth Mover's Distance) between two samples.
 
         Args:
-            X: First sample, tensor of shape (n1, d)
-            Y: Second sample, tensor of shape (n2, d)
+            X1: First sample, tensor of shape (n1, d)
+            X2: Second sample, tensor of shape (n2, d)
 
         Returns:
             Wasserstein distance as a float.
@@ -127,21 +157,12 @@ class AnalyzeDrift:
         return ot.emd2(a, b, M).item()  # type: ignore
 
     def _perform_permutation_test(
-        self,
-        method: str = "mmd",
-        n_permutations: int = 1000,
-        gamma: float | None = None,
+        self, method: Literal["mmd", "energy", "wasserstein"]
     ) -> tuple[float, float]:
         """Perform energy two-sample test with permutation testing.
 
         Args:
-            X: First sample, tensor of shape (n1, d)
-            Y: Second sample, tensor of shape (n2, d)
-            n_permutations: Number of permutations for p-value estimation
-            method: Which test statistic to use, either "mmd" or "energy"
-            bandwidth: Kernel bandwidth for MMD test; if None, uses median heuristic
-            reg: Regularization parameter (if None, uses automatic selection)
-            max_iter: Maximum Sinkhorn iterations
+            method: Which test statistic to use; "mmd", "energy" or "wasserstein".
 
         Returns:
             Tuple of (observed_statistic, p_value)
@@ -152,12 +173,7 @@ class AnalyzeDrift:
             raise ValueError("self.X1_scaled and self.X2_scaled must not be None.")
         Z = torch.cat([self.X1_scaled, self.X2_scaled], dim=0)
         if method == "mmd":
-            # Compute bandwidth if not provided
-            if gamma is None:
-                gamma = self._median_heuristic_gamma(self.X1_scaled, self.X2_scaled)
-            observed_statistic = self._mmd_unbiased(
-                self.X1_scaled, self.X2_scaled, gamma
-            )
+            observed_statistic = self._mmd_unbiased(self.X1_scaled, self.X2_scaled)
         elif method == "energy":
             observed_statistic = self._energy_statistic(self.X1_scaled, self.X2_scaled)
         else:
@@ -167,7 +183,7 @@ class AnalyzeDrift:
 
         # Permutation test
         null = []
-        for i in range(n_permutations):
+        for i in range(self.n_permutations):
             # Random permutation
             perm_idx = torch.randperm(self.n1 + self.n2, device=self.device)
 
@@ -176,15 +192,15 @@ class AnalyzeDrift:
             Y_perm = Z[perm_idx[self.n1 :]]
 
             # Compute statistic for permuted data
-            if method == "mmd" and gamma is not None:
-                perm = self._mmd_unbiased(X_perm, Y_perm, gamma)
+            if method == "mmd":
+                perm = self._mmd_unbiased(X_perm, Y_perm)
             elif method == "energy":
                 perm = self._energy_statistic(X_perm, Y_perm)
             else:
                 perm = self._wasserstein_distance(X_perm, Y_perm)
             null.append(perm)
             if (i + 1) % 100 == 0:
-                print(f"Permutation {i + 1}/{n_permutations}")
+                print(f"Permutation {i + 1}/{self.n_permutations}")
 
         # Compute p-value; under the null hypothesis, both samples come from the same distribution, so the distance should be small. The p-value represents the probability of observing a distance as large or larger than what is actually observed, assuming the null hypothesis is true.
         p_value = (np.array(null, dtype=np.float32) >= observed_statistic).mean()
@@ -196,9 +212,9 @@ class AnalyzeDrift:
         """Compute RBF (Gaussian) kernel matrix between samples X and Y.
 
         Args:
-            X: tensor of shape (n1, d)
-            Y: tensor of shape (n2, d)
-            bandwidth: kernel bandwidth parameter
+            X1: tensor of shape (n1, d), first set of samples.
+            X2: tensor of shape (n2, d), second set of samples.
+            gamma: kernel gamma parameter.
 
         Returns:
             Kernel matrix of shape (n1, n2)
@@ -210,11 +226,11 @@ class AnalyzeDrift:
         return torch.exp(-gamma * dist_sq)
 
     def _median_heuristic_gamma(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
-        """Compute median heuristic for bandwidth selection.
+        """Compute median heuristic for gamma selection.
 
         Args:
-            X: tensor of shape (n1, d)
-            Y: tensor of shape (n2, d)
+            X1: First sample, tensor of shape (n1, d)
+            X2: Second sample, tensor of shape (n2, d)
 
         Returns:
             Gamma parameter for RBF kernel (1 / (2 * median_dist^2))
@@ -346,7 +362,10 @@ class AnalyzeDrift:
             arg1, arg2 = (
                 (X1_scaled, X2_scaled) if method in ["pairwise", "pca"] else (X1, X2)
             )
-            available_methods[method](arg1, arg2)
+            if arg1 is not None and arg2 is not None:
+                available_methods[method](arg1, arg2)
+            else:
+                print(f"Cannot perform {method} analysis: input data is None")
 
     def _plot_distance_distributions(self, X1: np.ndarray, X2: np.ndarray):
         """Compare distance distributions."""
@@ -413,15 +432,15 @@ class AnalyzeDrift:
                 bbox_inches="tight",
                 dpi=300,
             )
+        return fig
 
     def _plot_marginal_distributions(self, X1: np.ndarray, X2: np.ndarray):
         """Compare marginal (per-feature) distributions."""
         # Create subplots - arrange in grid
         cols = min(3, self.n_features)
         rows = (self.n_features + cols - 1) // cols
-        print(f"X1 and X2 shapes are {X1.shape} and {X2.shape}")
 
-        _, axes = pyplot.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
+        fig, axes = pyplot.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
         if self.n_features == 1:
             axes = [axes]
         elif rows == 1:
@@ -487,6 +506,7 @@ class AnalyzeDrift:
                 bbox_inches="tight",
                 dpi=300,
             )
+        return fig
 
     def _plot_pairwise_relationships(self, X1: np.ndarray, X2: np.ndarray):
         X_mi = self._normalized_mutual_info_matrix(X1)
@@ -551,9 +571,7 @@ class AnalyzeDrift:
         X_pca = pca.transform(X1)
         Y_pca = pca.transform(X2)
 
-        gamma = self._median_heuristic_gamma(torch.tensor(X1), torch.tensor(X2))
-        print(f"gamma used {gamma}")
-        kpca = KernelPCA(n_components=7, kernel="rbf", gamma=gamma)
+        kpca = KernelPCA(n_components=self.n_features, kernel="rbf", gamma=self.gamma)
         kpca.fit(X_combined_scaled)
 
         # Transform both datasets
@@ -663,8 +681,6 @@ class AnalyzeDrift:
             alpha=0.7,
             color="blue",
         )
-        # axes[2, 1].set_xlim(0.5, len(lambdas) + 0.5)  # Optional: makes bars centered
-        # axes[2, 1].set_xticks(range(1, len(lambdas) + 1))
         axes[2, 1].set_xlabel("Kernel Principal Component")
         axes[2, 1].set_ylabel("Variance")
         axes[2, 1].set_title("KernelPCA Component Variances")
@@ -690,9 +706,23 @@ class AnalyzeDrift:
                 bbox_inches="tight",
                 dpi=300,
             )
+        return fig
 
     def export_drift_analysis_to_file(self):
-        methods = ["mmd", "energy", "wasserstein"]
+        """Export drift analysis results to a text file.
+
+        Performs permutation tests using MMD, energy, and Wasserstein distances
+        and writes the results to a text file in the save_path directory.
+        Includes the test statistics, p-values, and interpretation of whether
+        significant domain shift was detected.
+
+        The results are only exported if save_path was specified during initialization.
+        """
+        methods: list[Literal["mmd", "energy", "wasserstein"]] = [
+            "mmd",
+            "energy",
+            "wasserstein",
+        ]
         if self.save_path is not None:
             results = []
             for method in methods:
@@ -716,4 +746,14 @@ class AnalyzeDrift:
                 f.write("\n")
 
     def export_drift_analysis_plots(self):
+        """Generate and display visualizations comparing the base and prediction datasets.
+
+        Creates multiple plots to analyze distribution differences including:
+        - Distance distributions between samples
+        - Marginal distributions of individual features
+        - Pairwise feature relationships
+        - PCA and Kernel PCA comparisons
+
+        If save_path was specified during initialization, all plots are saved as PNG files.
+        """
         self._compare_multidimensional_distributions()

@@ -21,7 +21,7 @@ def main():
         params = yaml.safe_load(f)
 
     N_PERMUTATIONS = params["analyze_drift"]["n_permutations"]
-    BANDWIDTH = params["analyze_drift"]["bandwidth"]
+    GAMMA = params["analyze_drift"]["gamma"]
 
     pred_data = torch.load(
         os.path.join(dataset_path, "pred_data.pt"), weights_only=False
@@ -34,7 +34,11 @@ def main():
         print("Assessing domain shift between datasets ...\n")
         # Check your data characteristics first
         analyze_drift = AnalyzeDrift(
-            base_data=base_data, pred_data=pred_data, save_path=analyze_drift_path
+            base_data=base_data,
+            pred_data=pred_data,
+            save_path=analyze_drift_path,
+            gamma=GAMMA,
+            n_permutations=N_PERMUTATIONS,
         )
         analyze_drift.export_drift_analysis_to_file()
         analyze_drift.export_drift_analysis_plots()
