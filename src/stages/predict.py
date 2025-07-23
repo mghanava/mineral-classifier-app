@@ -1,3 +1,8 @@
+"""Prediction stage script for running inference using trained models.
+
+This module loads a trained model, prepares prediction data, and saves predictions.
+"""
+
 import argparse
 import os
 
@@ -10,6 +15,7 @@ from src.utilities.pred_utils import prediction
 
 
 def main():
+    """Run the prediction stage: load model, prepare data, and save predictions."""
     dataset_path = "results/data"
     model_trained_path = "results/trained"
     evaluation_path = "results/evaluation"

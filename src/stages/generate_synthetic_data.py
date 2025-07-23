@@ -98,7 +98,7 @@ def main():
         n_features=N_FEATURES,
         n_classes=N_CLASSES,
         threshold_binary=THRESHOLD_BINARY,
-        min_samples_per_class=None,
+        min_samples_per_class=None,  # No minimum samples for prediction stage
         x_range=x_range,
         y_range=y_range,
         n_hotspots=N_HOTSPOTS,
@@ -110,10 +110,6 @@ def main():
         features,
         labels,
         connection_radius=CONNECTION_RADIUS,
-        n_splits=N_SPLITS,
-        test_size=TEST_SIZE,
-        calib_size=CALIB_SIZE,
-        seed=SEED,
         should_split=False,
     )
     torch.save(base_data, os.path.join(dataset_path, "base_data.pt"))
