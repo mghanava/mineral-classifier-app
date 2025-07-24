@@ -7,6 +7,7 @@ This module provides functions for:
 - Managing data splits for machine learning tasks
 """
 
+import os
 from typing import Literal
 
 import numpy as np
@@ -225,8 +226,8 @@ def generate_mineral_data(
     y_range: tuple[float, float] | None = None,
     n_hotspots: int = 10,
     n_hotspots_random: bool = True,
-    seed: int = 42,
-):
+    seed: int | None = None,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate synthetic mineral exploration data with realistic features.
 
     Parameters
@@ -660,6 +661,7 @@ def export_graph_to_html(
     labels_map: dict[int, str],
     dataset_idx: int | None = None,
     dataset_tag: str = "train",
+    cycle_num: int = 1,
     filename="graph.html",
 ):
     """Export the graph to an interactive HTML file using Plotly."""
@@ -673,9 +675,11 @@ def export_graph_to_html(
         labels_map=labels_map,
     )
     if dataset_idx is not None:
-        filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}.html"
+        filename = (
+            f"{save_path}/{dataset_tag}_graph_{dataset_idx}_cycle_{cycle_num}.html"
+        )
     else:
-        filename = f"{save_path}/{dataset_tag}_graph.html"
+        filename = f"{save_path}/{dataset_tag}_graph_cycle_{cycle_num}.html"
     fig.write_html(filename)
     print(f"Graph exported to {filename}")
 
@@ -686,6 +690,7 @@ def export_all_graphs_to_html(
     coordinates: np.ndarray,
     connection_radius: float,
     labels_map: dict[int, str],
+    cycle_num: int,
     save_path: str,
 ):
     """Export all train, validation, test, and calibration graphs to interactive HTML files.
@@ -713,6 +718,7 @@ def export_all_graphs_to_html(
             labels_map=labels_map,
             dataset_idx=i + 1,
             dataset_tag="train",
+            cycle_num=cycle_num,
         )
         node_indices = graph.val_mask
         export_graph_to_html(
@@ -724,6 +730,7 @@ def export_all_graphs_to_html(
             labels_map=labels_map,
             dataset_idx=i + 1,
             dataset_tag="val",
+            cycle_num=cycle_num,
         )
     node_indices = test_data.test_mask
     export_graph_to_html(
@@ -734,6 +741,7 @@ def export_all_graphs_to_html(
         save_path=save_path,
         labels_map=labels_map,
         dataset_tag="test",
+        cycle_num=cycle_num,
     )
     node_indices = test_data.calib_mask
     export_graph_to_html(
@@ -744,6 +752,7 @@ def export_all_graphs_to_html(
         save_path=save_path,
         labels_map=labels_map,
         dataset_tag="calib",
+        cycle_num=cycle_num,
     )
 
 
@@ -804,7 +813,7 @@ def connect_graphs_preserve_weights(
         topk_sim, topk_idx = torch.topk(sim_matrix, k=k, dim=1)
         src = torch.arange(data1.num_nodes).repeat_interleave(k)
         dst = topk_idx.flatten()
-        cross_weights = topk_sim.flatten()
+        cross_weights = topk_sim.flatten().unsqueeze(1)
 
     # Offset node indices for data2
     offset = data1.num_nodes
@@ -823,4 +832,47 @@ def connect_graphs_preserve_weights(
     # Combine edge weights
     edge_attr = torch.cat([orig_weights1, orig_weights2, cross_weights])
 
-    return Data(x=x, y=y, edge_index=edge_index, edge_attr=edge_attr)
+    # Combine corrdinates
+    coords = torch.cat([data1.coordinates, data2.coordinates], dim=0)
+
+    return Data(
+        x=x, y=y, edge_index=edge_index, edge_attr=edge_attr, coordinates=coords
+    )
+
+
+def get_existing_data_bounds(
+    cycle_num: int, dataset_path: str, combined_data_path: str
+):
+    """Get coordinate bounds from existing training data to avoid overlap."""
+    base_data_file = os.path.join(dataset_path, f"base_data_cycle_{cycle_num}.pt")
+    if cycle_num == 1 and os.path.exists(base_data_file):
+        # First cycle: use base_data bounds
+        existing_data = torch.load(base_data_file, weights_only=False)
+    else:
+        # Subsequent cycles: use combined training data from previous cycle
+        prev_training_file = os.path.join(
+            combined_data_path, f"training_data_cycle_{cycle_num - 1}.pt"
+        )
+
+        if os.path.exists(prev_training_file):
+            existing_data = torch.load(prev_training_file, weights_only=False)
+        else:
+            # Fallback to base_data if combined data doesn't exist yet
+            existing_data = torch.load(base_data_file, weights_only=False)
+
+    # Extract coordinates
+    coords = existing_data.coordinates
+    x_coords, y_coords = coords[:, 0], coords[:, 1]
+    x_range = (x_coords.min(), x_coords.max())
+    y_range = (y_coords.min(), y_coords.max())
+
+    return x_range, y_range, existing_data
+
+
+def no_coordinate_overlap(coords1: torch.Tensor, coords2: torch.Tensor):
+    # Compare all pairs using broadcasting
+    matches = torch.all(
+        coords1[:, None] == coords2, dim=2
+    )  # dim=2 ensures comparing each element of coords1 with elements of coords2
+
+    return not torch.any(matches)

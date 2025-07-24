@@ -16,23 +16,29 @@ from src.utilities.eval_utils import evaluate_with_calibration
 from src.utilities.logging_utils import LogTime
 
 
+def load_params():
+    """Load parameters from params.yaml."""
+    with open("params.yaml") as f:
+        return yaml.safe_load(f)
+
+
 def main():
     """Run evaluation script.
 
     This function parses command-line arguments, loads the model and evaluation data,
     performs model evaluation with calibration, saves evaluation results, and prints progress.
     """
-    dataset_path = "results/data"
+    base_data_path = "results/data/base"
     model_trained_path = "results/trained"
     evaluation_path = "results/evaluation"
     os.makedirs(evaluation_path, exist_ok=True)
+    params = load_params()
+    CYCLE_NUM = params["cycle"]
 
     test_data = torch.load(
-        os.path.join(dataset_path, "test_data.pt"), weights_only=False
+        os.path.join(base_data_path, f"test_data_cycle_{CYCLE_NUM}.pt"),
+        weights_only=False,
     )
-
-    with open("params.yaml") as f:
-        params = yaml.safe_load(f)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
@@ -42,7 +48,10 @@ def main():
     # Initialize a new model instance
     model = get_model(args.model, model_params)
     model.load_state_dict(
-        torch.load(f"{model_trained_path}/{args.model}.pkl", weights_only=True)
+        torch.load(
+            f"{model_trained_path}/{args.model}_cycle_{CYCLE_NUM}.pkl",
+            weights_only=True,
+        )
     )
 
     INITIAL_TEMPERATURE = params["evaluate"]["initial_temperature"]

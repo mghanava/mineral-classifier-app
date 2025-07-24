@@ -11,23 +11,33 @@ from src.utilities.drift_detection_utils import (
 from src.utilities.logging_utils import LogTime
 
 
+def load_params():
+    """Load parameters from params.yaml."""
+    with open("params.yaml") as f:
+        return yaml.safe_load(f)
+
+
 def main():
     """Analyze drift between base and prediction datasets using permutation tests (MMD and energy)."""
-    dataset_path = "results/data"
+    base_data_path = "results/data/base"
+    pred_data_path = "results/data/prediction"
     analyze_drift_path = "results/drift_analysis"
     os.makedirs(analyze_drift_path, exist_ok=True)
 
-    with open("params.yaml") as f:
-        params = yaml.safe_load(f)
+    params = load_params()
+
+    CYCLE_NUM = params["cycle"]
 
     N_PERMUTATIONS = params["analyze_drift"]["n_permutations"]
     GAMMA = params["analyze_drift"]["gamma"]
 
     pred_data = torch.load(
-        os.path.join(dataset_path, "pred_data.pt"), weights_only=False
+        os.path.join(pred_data_path, f"pred_data_cycle_{CYCLE_NUM}.pt"),
+        weights_only=False,
     )
     base_data = torch.load(
-        os.path.join(dataset_path, "base_data.pt"), weights_only=False
+        os.path.join(base_data_path, f"base_data_cycle_{CYCLE_NUM}.pt"),
+        weights_only=False,
     )
 
     with LogTime(task_name="\nAnalyzing drift"):

@@ -43,6 +43,7 @@ class AnalyzeDrift:
         feature_names: list | None = None,
         gamma: float | None = None,
         n_permutations: int = 1000,
+        cycle_num: int = 1,
         save_path: str | None = None,
     ):
         """Initialize the AnalyzeDrift class with two datasets to compare.
@@ -80,6 +81,7 @@ class AnalyzeDrift:
             self.gamma = gamma
         if feature_names is None:
             self.feature_names = [f"Feature_{i}" for i in range(self.n_features)]
+        self.cycle_num = cycle_num
         self.save_path = save_path
 
     def _mmd_unbiased(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
@@ -428,7 +430,9 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             pyplot.savefig(
-                os.path.join(self.save_path, "distance_distributions.png"),
+                os.path.join(
+                    self.save_path, f"distance_distributions_cycle_{self.cycle_num}.png"
+                ),
                 bbox_inches="tight",
                 dpi=300,
             )
@@ -502,7 +506,9 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             pyplot.savefig(
-                os.path.join(self.save_path, "marginal_distributions.png"),
+                os.path.join(
+                    self.save_path, f"marginal_distributions_cycle_{self.cycle_num}.png"
+                ),
                 bbox_inches="tight",
                 dpi=300,
             )
@@ -552,7 +558,9 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             pyplot.savefig(
-                os.path.join(self.save_path, "mutual_information.png"),
+                os.path.join(
+                    self.save_path, f"mutual_information_cycle_{self.cycle_num}.png"
+                ),
                 bbox_inches="tight",
                 dpi=300,
             )
@@ -661,7 +669,9 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             fig.savefig(
-                os.path.join(self.save_path, "pca_kpca_grid.png"),
+                os.path.join(
+                    self.save_path, f"pca_kpca_grid_cycle_{self.cycle_num}.png"
+                ),
                 bbox_inches="tight",
                 dpi=300,
             )
@@ -690,7 +700,12 @@ class AnalyzeDrift:
                     method=method
                 )
                 results.append((method, observed_statistic, p_value))
-            with open(os.path.join(self.save_path, "drift_results.txt"), "w") as f:
+            with open(
+                os.path.join(
+                    self.save_path, f"drift_results_cycle_{self.cycle_num}.txt"
+                ),
+                "w",
+            ) as f:
                 for method, observed_statistic, p_value in results:
                     f.write(f"{method} Statistic: {observed_statistic}\n")
                     f.write(f"p-value: {p_value}\n")

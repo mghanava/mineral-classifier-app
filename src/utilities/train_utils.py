@@ -30,6 +30,7 @@ def train(
     patience_early_stopping: int,
     min_delta_early_stopping: float,
     dataset_idx: int,
+    cycle_num: int,
     save_path: str,
 ):
     """Train a Graph Neural Network model with early stopping and learning rate scheduling.
@@ -215,7 +216,7 @@ def train(
         validation_mce.append(mce)
 
     training_plots_path = os.path.join(
-        save_path, f"training_plots_dataset_{dataset_idx}.png"
+        save_path, f"training_plots_dataset_{dataset_idx}_cycle_{cycle_num}.png"
     )
     print(f"Saving training plots for dataset {dataset_idx} to {training_plots_path}!")
     plot_training(

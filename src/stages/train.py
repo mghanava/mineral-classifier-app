@@ -20,24 +20,30 @@ from src.utilities.logging_utils import (
 from src.utilities.train_utils import train
 
 
+def load_params():
+    """Load parameters from params.yaml."""
+    with open("params.yaml") as f:
+        return yaml.safe_load(f)
+
+
 def main():
     """Execute the main training pipeline for the GNN model.
 
     This function loads the dataset, initializes the model with specified parameters,
     trains the model across multiple folds, and saves the best performing model.
     """
-    dataset_path = "results/data"
+    base_data_path = "results/data/base"
     model_trained_path = "results/trained"
     os.makedirs(model_trained_path, exist_ok=True)
-
+    params = load_params()
+    CYCLE_NUM = params["cycle"]
     fold_data = torch.load(
-        os.path.join(dataset_path, "fold_data.pt"), weights_only=False
+        os.path.join(base_data_path, f"fold_data_cycle_{CYCLE_NUM}.pt"),
+        weights_only=False,
     )
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
     args = parser.parse_args()
-    with open("params.yaml") as f:
-        params = yaml.safe_load(f)
     # Get model-specific parameters
     model_params = params["models"][args.model]
     # Initialize the model
@@ -74,6 +80,7 @@ def main():
                 min_delta_early_stopping=MIN_DELTA_EARLY_STOPPING,
                 save_path=model_trained_path,
                 dataset_idx=dataset_idx + 1,
+                cycle_num=CYCLE_NUM,
             )
             fold_results.append((model_trained, best_loss_val))
             dataset_idx += 1
@@ -81,10 +88,9 @@ def main():
     # Select the best trained model and save it
     sorted_models = sorted(fold_results, key=lambda x: x[1], reverse=True)
     model_trained_best = sorted_models[0][0]
-    torch.save(
-        model_trained_best.state_dict(), f"{model_trained_path}/{args.model}.pkl"
-    )
-    print(f"Model saved to {model_trained_path}/{args.model}.pkl\n")
+    model_traind_path = f"{model_trained_path}/{args.model}_cycle_{CYCLE_NUM}.pkl"
+    torch.save(model_trained_best.state_dict(), model_traind_path)
+    print(f"Model saved to {model_traind_path}\n")
 
 
 if __name__ == "__main__":

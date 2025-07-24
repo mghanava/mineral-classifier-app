@@ -1,13 +1,34 @@
 stages:
-  generate_data:
-    cmd: python src/stages/generate_synthetic_data.py
+  generate_base_data:
+    cmd: python src/stages/generate_base_data.py
     deps:
-      - src/stages/generate_synthetic_data.py
+      - src/stages/generate_base_data.py
       - src/utilities/data_utils.py
     params:
       - data
     outs:
-      - results/data
+      - results/data/base
+  generate_pred_data:
+    cmd: python src/stages/generate_pred_data.py
+    deps:
+      - src/stages/generate_pred_data.py
+      - src/utilities/data_utils.py
+      - results/data/base
+    params:
+      - data
+    outs:
+      - results/data/prediction
+  combine_data:
+    cmd: python src/stages/combine_data.py
+    deps:
+      - src/stages/combine_data.py
+      - src/utilities/data_utils.py
+      - results/data/base
+      - results/data/prediction
+    params:
+      - data
+    outs:
+      - results/data/combined
   train:
     cmd: python src/stages/train.py --model ${model}
     deps:
@@ -15,7 +36,7 @@ stages:
       - src/models/
       - src/utilities/logging_utils.py
       - src/utilities/train_utils.py
-      - results/data
+      - results/data/base
     params:
       - model
       - models.${model}
@@ -43,7 +64,7 @@ stages:
         - src/utilities/logging_utils.py
         - src/utilities/calibration_utils.py
         - src/utilities/pred_utils.py
-        - results/data
+        - results/data/prediction
         - results/evaluation
   analyze_drift:
     cmd: python src/stages/analyze_drift.py
@@ -52,7 +73,8 @@ stages:
       - src/models/
       - src/utilities/logging_utils.py
       - src/utilities/drift_detection_utils.py
-      - results/data
+      - results/data/base
+      - results/data/prediction
     params:
       - analyze_drift
     outs:

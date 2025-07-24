@@ -9,9 +9,9 @@ def get_model(model_name: str, model_params):
         params = yaml.safe_load(f)
     # dynamic data depending on data structure
     data_info = {
-            "n_classes": params["data"]["n_classes"],
-            "in_channels": params["data"]["n_features"],
-        }
+        "n_classes": params["data"]["base"]["n_classes"],
+        "in_channels": params["data"]["base"]["n_features"],
+    }
     """Factory function to create a model instance based on type."""
     if model_name == "gcn":
         return MineralDepositGCN(**model_params, **data_info)
