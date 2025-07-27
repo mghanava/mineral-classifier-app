@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# DVC
+.dvc/
+.dvcignore
+/dvc_pipelines/
+
+# Data and Models (optional - depending on your DVC setup)
+data/
+models/
+*.pkl
+*.h5

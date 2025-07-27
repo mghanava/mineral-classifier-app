@@ -1,0 +1,58 @@
+{
+  "name": "Mineral Classifier",
+  "dockerComposeFile": "../docker-compose.yaml",
+  "service": "mineral_classifier",
+  "workspaceFolder": "/app",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/opt/conda/bin/python",
+        "python.analysis.extraPaths": [
+          "/app/src"
+        ],
+        // Python formatting with Ruff
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit",
+            "source.fixAll.ruff": "explicit"
+          }
+        },
+        // Jupyter notebook formatting
+        "[jupyter]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true
+        },
+        // General editor settings
+        "editor.rulers": [
+          88
+        ],
+        "editor.wordWrap": "wordWrapColumn",
+        "editor.wordWrapColumn": 80,
+        "ruff.lint.enable": true,
+        "ruff.format.enable": true,
+        "python.formatting.provider": "none"
+      },
+      // Ruff-specific settings
+      "ruff.configuration": "/app/pyproject.toml",
+      "ruff.lint.enable": true,
+      "ruff.format.enable": true,
+      "ruff.showNotifications": "onError",
+      // Disable other Python formatters
+      "python.formatting.provider": "none",
+      "python.linting.enabled": false,
+      "python.linting.pylintEnabled": false,
+      "python.linting.flake8Enabled": false,
+      // Auto-save settings
+      "files.autoSave": "afterDelay",
+      "files.autoSaveDelay": 1000,
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "ms-python.vscode-pylance",
+        "tamasfe.even-better-toml"
+      ]
+    }
+  }
+}

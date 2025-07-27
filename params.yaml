@@ -1,0 +1,89 @@
+# Training cycle configuration
+cycle: 2
+
+# Data generation parameters
+data:
+  base:
+    n_samples: 1000
+    spacing: 50
+    depth: -500
+    n_features: 5
+    n_classes: 5
+    threshold_binary: 0.5
+    min_samples_per_class: 20
+    connection_radius: 150
+    n_splits: 2
+    test_size: 0.3
+    calib_size: 0.50
+    n_hotspots: 5
+    n_hotspots_random: false
+    seed: 2321
+  pred:
+    n_samples: 100
+    spacing: 50
+    depth: -500
+    n_features: 5
+    n_classes: 5
+    threshold_binary: 0.5
+    min_samples_per_class:
+    connection_radius: 150
+    n_hotspots: 5
+    n_hotspots_random: false
+    seed:
+
+# Default model selection
+model: gat
+# Model parameters
+models:
+  gat:
+    hidden_channels: 64
+    n_layers: 3
+    n_heads: 5
+    dropout: 0.3
+    batch_norm: true
+  gcn:
+    hidden_channels: 64
+    n_layers: 3
+    dropout: 0.3
+    batch_norm: true
+
+# Training parameters
+train:
+  n_epochs: 1000
+  lr: 0.001
+  max_grad_norm: 1.0
+  weight_decay_adam_optimizer: 5.0e-4
+  factor_learning_rate_scheduler: 0.5
+  patience_learning_rate_scheduler: 20
+  patience_early_stopping: 50
+  min_delta_early_stopping: 1.0e-3
+
+# Evaluation parameters
+evaluate:
+  initial_temperature: 1.2
+  n_bins: 10
+  class_names:
+  calibration_method: beta
+  n_epochs: 1000
+  lr: 1.0e-3
+  weight_decay_adam_optimizer: 5.0e-4
+  verbose: true
+  factor_learning_rate_scheduler: 0.4
+  patience_learning_rate_scheduler: 20
+  patience_early_stopping: 50
+  min_delta_early_stopping: 1.0e-3
+  reg_lambda: 1.0e-2
+  reg_mu: 1.0e-2
+  eps: 1.0e-8
+  seed: 40
+
+# Drift detection parameters
+analyze_drift:
+  n_permutations: 1000
+  gamma:
+
+# Merge data parameters
+combine_data:
+  similarity_metric: cosine
+  top_k: 10
+  similarity_threshold:
