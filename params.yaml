@@ -1,5 +1,5 @@
 # Training cycle configuration
-cycle: 2
+cycle: 5
 
 # Data generation parameters
 data:

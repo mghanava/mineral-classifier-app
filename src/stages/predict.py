@@ -32,9 +32,9 @@ def main():
     params = load_params()
     CLASS_NAMES = params["evaluate"]["class_names"]
 
-    dataset_path = f"results/data/prediction/cycle_{cycle_num}"
     model_trained_path = f"results/trained/cycle_{cycle_num}"
     evaluation_path = f"results/evaluation/cycle_{cycle_num}"
+    prediction_data_path = f"results/data/prediction/cycle_{cycle_num}"
     prediction_path = f"results/prediction/cycle_{cycle_num}"
     os.makedirs(prediction_path, exist_ok=True)
 
@@ -48,7 +48,7 @@ def main():
     )
 
     pred_data = torch.load(
-        os.path.join(dataset_path, "pred_data.pt"),
+        os.path.join(prediction_data_path, "pred_data.pt"),
         weights_only=False,
     )
     calibrator_path = os.path.join(evaluation_path, "calibrator.pt")

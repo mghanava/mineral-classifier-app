@@ -2,86 +2,98 @@ stages:
   generate_base_data:
     cmd: python src/stages/generate_base_data.py --cycle ${cycle}
     deps:
-      - src/stages/generate_base_data.py
-      - src/utilities/data_utils.py
+    - src/stages/generate_base_data.py
+    - src/utilities/data_utils.py
     params:
-      - data
-      - cycle
+    - data
+    - cycle
     outs:
-      - results/data/base/cycle_${cycle}
+    - results/data/base/cycle_${cycle}:
+        cache: false
   generate_pred_data:
     cmd: python src/stages/generate_pred_data.py --cycle ${cycle}
     deps:
-      - src/stages/generate_pred_data.py
-      - src/utilities/data_utils.py
-      - results/data/base/cycle_${cycle}
+    - src/stages/generate_pred_data.py
+    - src/utilities/data_utils.py
+    - results/data/base/cycle_${cycle}
     params:
-      - data
-      - cycle
+    - data
+    - cycle
     outs:
-      - results/data/prediction/cycle_${cycle}
+    - results/data/prediction/cycle_${cycle}:
+        cache: false
   combine_data:
     cmd: python src/stages/combine_data.py --cycle ${cycle}
     deps:
-      - src/stages/combine_data.py
-      - src/utilities/data_utils.py
-      - results/data/base/cycle_${cycle}
-      - results/data/prediction/cycle_${cycle}
+    - src/stages/combine_data.py
+    - src/utilities/data_utils.py
+    - results/data/base/cycle_${cycle}
+    - results/data/prediction/cycle_${cycle}
     params:
-      - data
-      - cycle
+    - data
+    - cycle
     outs:
-      - results/data/combined/cycle_${cycle}
+    - results/data/combined/cycle_${cycle}:
+        cache: false
   train:
     cmd: python src/stages/train.py --model ${model} --cycle ${cycle}
     deps:
-      - src/stages/train.py
-      - src/models/
-      - src/utilities/logging_utils.py
-      - src/utilities/train_utils.py
-      - results/data/base/cycle_${cycle}
+    - src/stages/train.py
+    - src/models/
+    - src/utilities/logging_utils.py
+    - src/utilities/train_utils.py
+    - results/data/base/cycle_${cycle}
     params:
-      - model
-      - models.${model}
-      - train
-      - cycle
+    - model
+    - models.${model}
+    - train
+    - cycle
     outs:
-      - results/trained/cycle_${cycle}
+    - results/trained/cycle_${cycle}:
+        cache: false
   evaluate:
     cmd: python src/stages/evaluate.py --model ${model} --cycle ${cycle}
     deps:
-      - src/stages/evaluate.py
-      - src/models/
-      - src/utilities/logging_utils.py
-      - src/utilities/calibration_utils.py
-      - src/utilities/eval_utils.py
-      - results/trained/cycle_${cycle}
+    - src/stages/evaluate.py
+    - src/models/
+    - src/utilities/logging_utils.py
+    - src/utilities/calibration_utils.py
+    - src/utilities/eval_utils.py
+    - results/trained/cycle_${cycle}
     params:
-      - evaluate
-      - cycle
+    - evaluate
+    - cycle
     outs:
-      - results/evaluation/cycle_${cycle}
+    - results/evaluation/cycle_${cycle}:
+        cache: false
   predict:
-      cmd: python src/stages/predict.py --model ${model} --cycle ${cycle}
-      deps:
-        - src/stages/predict.py
-        - src/models/
-        - src/utilities/logging_utils.py
-        - src/utilities/calibration_utils.py
-        - src/utilities/pred_utils.py
-        - results/data/prediction/cycle_${cycle}
-        - results/evaluation/cycle_${cycle}
+    cmd: python src/stages/predict.py --model ${model} --cycle ${cycle}
+    deps:
+    - src/stages/predict.py
+    - src/models/
+    - src/utilities/logging_utils.py
+    - src/utilities/calibration_utils.py
+    - src/utilities/pred_utils.py
+    - results/data/prediction/cycle_${cycle}
+    - results/trained/cycle_${cycle}
+    - results/evaluation/cycle_${cycle}
+    params:
+    - cycle
+    outs:
+    - results/prediction/cycle_${cycle}:
+        cache: false
   analyze_drift:
     cmd: python src/stages/analyze_drift.py --cycle ${cycle}
     deps:
-      - src/stages/analyze_drift.py
-      - src/models/
-      - src/utilities/logging_utils.py
-      - src/utilities/drift_detection_utils.py
-      - results/data/base/cycle_${cycle}
-      - results/data/prediction/cycle_${cycle}
+    - src/stages/analyze_drift.py
+    - src/models/
+    - src/utilities/logging_utils.py
+    - src/utilities/drift_detection_utils.py
+    - results/data/base/cycle_${cycle}
+    - results/data/prediction/cycle_${cycle}
     params:
-      - analyze_drift
-      - cycle
+    - analyze_drift
+    - cycle
     outs:
-      - results/drift_analysis/cycle_${cycle}
+    - results/drift_analysis/cycle_${cycle}:
+        cache: false

@@ -112,10 +112,16 @@ def _prepare_base_data(
     )
 
     # Save the generated data with generic names in the cycle-specific directory
-    print(f"Saving generated data to: {base_output_path}")
-    torch.save(base_data, os.path.join(base_output_path, "base_data.pt"))
-    torch.save(fold_data, os.path.join(base_output_path, "fold_data.pt"))
-    torch.save(test_data, os.path.join(base_output_path, "test_data.pt"))
+    print(f"Saving generated data to {base_output_path}!")
+    try:
+        torch.save(base_data, os.path.join(base_output_path, "base_data.pt"))
+        torch.save(fold_data, os.path.join(base_output_path, "fold_data.pt"))
+        torch.save(test_data, os.path.join(base_output_path, "test_data.pt"))
+        print("All files saved successfully")
+    except Exception as e:
+        print(f"Error saving files: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def main():
