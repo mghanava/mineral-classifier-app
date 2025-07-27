@@ -55,7 +55,6 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\nUsing device: {device} for training")
-
     fold_results = []
     dataset_idx = 0
     with LogTime(task_name="\nTraining"):
