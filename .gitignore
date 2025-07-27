@@ -15,6 +15,5 @@ __pycache__/
 
 # Data and Models (optional - depending on your DVC setup)
 data/
-models/
 *.pkl
 *.h5
