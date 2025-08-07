@@ -95,7 +95,6 @@ def _create_hotspots(
     hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
     hotspots[:, 1] = rng.uniform(y_range[0], y_range[1], n_hotspots)
     hotspots[:, 2] = rng.uniform(depth, 0, n_hotspots)
-    print(f"{n_hotspots} hotspots with respective strengths {hotspot_strengths}")
     return hotspots, hotspot_strengths
 
 
@@ -550,7 +549,7 @@ def construct_graph(
     seed: int | None = None,
     scaler: ScalerType = RobustScaler(),
     should_split: bool = True,
-) -> Data | tuple[Data, list[Data], Data]:
+) -> tuple[Data, list[Data], Data] | Data:
     """Create graphs from geospatial data using distance matrix with a held-out test set.
 
     Args:
@@ -629,7 +628,7 @@ def prepare_edge_data(coordinates: np.ndarray, connection_radius: float = 150):
     # # or alternatively, include self-nodes assuming current node features are also
     # # important for prediction (node own features along with its neighbors)
     # src, dst = np.where(dist_matrix < connection_radius)
-    print(f"\nNumber of edges found (directed): {len(src)}")
+
     # Make the graph undirected by adding reciprocal edges; for each edge A→B,
     # add the reverse edge B→A to assure same information passage both ways
     # between connected points (we can get node properties of A from B or B
@@ -683,7 +682,7 @@ def export_graph_to_html(
         # filename = f"{save_path}/{dataset_tag}_graph_cycle_{cycle_num}.html"
         filename = f"{save_path}/{dataset_tag}_graph.html"
     fig.write_html(filename)
-    print(f"Graph exported to {filename}")
+    print(f"Graph exported to {filename}\n")
 
 
 def export_all_graphs_to_html(
@@ -843,23 +842,24 @@ def connect_graphs_preserve_weights(
 
 
 def get_existing_data_bounds(
-    cycle_num: int, dataset_path: str, combined_data_path: str
+    cycle_num: int, base_path: str, combined_data_path: str | None
 ):
     """Get coordinate bounds from existing training data to avoid overlap."""
-    base_data_file = os.path.join(dataset_path, "base_data.pt")
+    base_data_file = os.path.join(base_path, "base_data.pt")
+    existing_data = None
     if cycle_num == 1 and os.path.exists(base_data_file):
         # First cycle: use base_data bounds
         existing_data = torch.load(base_data_file, weights_only=False)
-    else:
+    elif combined_data_path is not None:
         # Subsequent cycles: use combined training data from previous cycle
-        prev_training_file = os.path.join(combined_data_path, "training_data.pt")
-
-        if os.path.exists(prev_training_file):
-            existing_data = torch.load(prev_training_file, weights_only=False)
+        prev_combined_file = os.path.join(combined_data_path, "combined_data.pt")
+        if os.path.exists(prev_combined_file):
+            existing_data = torch.load(prev_combined_file, weights_only=False)
         else:
             # Fallback to base_data if combined data doesn't exist yet
             existing_data = torch.load(base_data_file, weights_only=False)
-
+    if existing_data is None:
+        raise ValueError("No existing data is available!")
     # Extract coordinates
     coords = existing_data.coordinates
     x_coords, y_coords = coords[:, 0], coords[:, 1]

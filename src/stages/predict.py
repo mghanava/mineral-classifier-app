@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 
 import torch
 import yaml
@@ -15,8 +16,24 @@ def load_params():
         return yaml.safe_load(f)
 
 
+def ensure_directory_exists(path):
+    """Ensure directory exists, create if it doesn't."""
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_cycle_paths(cycle_num):
+    """Generate all paths for a specific cycle."""
+    return {
+        "model": f"results/trained/cycle_{cycle_num}",
+        "evaluation": f"results/evaluation/cycle_{cycle_num}",
+        "prediction_data": f"results/data/prediction/cycle_{cycle_num}",
+        "prediction_results": f"results/prediction/cycle_{cycle_num}",
+    }
+
+
 def main():
-    """Run the prediction stage: load model, prepare data, and save predictions."""
+    """Run the prediction stage for a specific cycle."""
     parser = argparse.ArgumentParser(description="Run prediction for a given cycle.")
     parser.add_argument(
         "--model",
@@ -29,42 +46,54 @@ def main():
     cycle_num = args.cycle
     model_name = args.model
 
+    # Validate cycle number
+    if cycle_num < 1:
+        raise ValueError("Cycle number must be ≥ 1")
+
+    # Get cycle-specific paths and ensure directories exist
+    paths = get_cycle_paths(cycle_num)
+    prediction_path = ensure_directory_exists(paths["prediction_results"])
+
+    # Load parameters
     params = load_params()
-    CLASS_NAMES = params["evaluate"]["class_names"]
-
-    model_trained_path = f"results/trained/cycle_{cycle_num}"
-    evaluation_path = f"results/evaluation/cycle_{cycle_num}"
-    prediction_data_path = f"results/data/prediction/cycle_{cycle_num}"
-    prediction_path = f"results/prediction/cycle_{cycle_num}"
-    os.makedirs(prediction_path, exist_ok=True)
-
+    class_names = params["evaluate"]["class_names"]
     model_params = params["models"][model_name]
-    model = get_model(model_name, model_params)
-    model.load_state_dict(
-        torch.load(
-            f"{model_trained_path}/{model_name}.pkl",
-            weights_only=True,
-        )
-    )
 
-    pred_data = torch.load(
-        os.path.join(prediction_data_path, "pred_data.pt"),
-        weights_only=False,
-    )
-    calibrator_path = os.path.join(evaluation_path, "calibrator.pt")
+    # Load trained model
+    model_path = os.path.join(paths["model"], f"{model_name}_cycle_{cycle_num}.pt")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model not found at {model_path}")
+
+    model = get_model(model_name, model_params)
+    model.load_state_dict(torch.load(model_path, weights_only=True))
+
+    # Load prediction data
+    pred_data_path = os.path.join(paths["prediction_data"], "pred_data.pt")
+    if not os.path.exists(pred_data_path):
+        raise FileNotFoundError(f"Prediction data not found at {pred_data_path}")
+    pred_data = torch.load(pred_data_path, weights_only=False)
+
+    # Load calibrator from evaluation
+    calibrator_path = os.path.join(paths["evaluation"], "calibrator.pt")
+    if not os.path.exists(calibrator_path):
+        print(f"Warning: Calibrator not found at {calibrator_path}")
+        calibrator_path = None
+
+    # Run prediction
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nUsing device: {device} for prediction\n")
-    with LogTime(task_name="\nPrediction"):
-        print("Assessing prediction dataset ...\n")
+    print(f"\nRunning predictions for cycle {cycle_num} on device: {device}")
+
+    with LogTime(task_name=f"\nPrediction cycle {cycle_num}"):
         prediction(
-            pred_data,
-            model,
-            calibrator_path,
-            CLASS_NAMES,
-            # cycle_num=cycle_num,
+            pred_data=pred_data,
+            model=model,
+            calibrator_path=calibrator_path,
+            class_names=class_names,
             save_path=prediction_path,
             device=device,
         )
+
+    print(f"\n✓ Predictions saved to {prediction_path}")
 
 
 if __name__ == "__main__":

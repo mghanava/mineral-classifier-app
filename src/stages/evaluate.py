@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import Path
 
 import torch
 import yaml
@@ -15,6 +16,21 @@ def load_params():
         return yaml.safe_load(f)
 
 
+def ensure_directory_exists(path):
+    """Ensure directory exists, create if it doesn't."""
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_cycle_paths(cycle_num):
+    """Generate all paths for a specific cycle."""
+    return {
+        "base_data": f"results/data/base/cycle_{cycle_num - 1}",  # Previous cycle's data
+        "model": f"results/trained/cycle_{cycle_num}",
+        "evaluation": f"results/evaluation/cycle_{cycle_num}",
+    }
+
+
 def main():
     """Run evaluation script."""
     parser = argparse.ArgumentParser(
@@ -23,79 +39,71 @@ def main():
     parser.add_argument(
         "--model", type=str, required=True, help="Name of the model to evaluate"
     )
-    parser.add_argument(
-        "--cycle", type=int, required=True, help="Current cycle number"
-    )
+    parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
     args = parser.parse_args()
     cycle_num = args.cycle
     model_name = args.model
 
+    # Validate cycle number
+    if cycle_num < 1:
+        raise ValueError("Cycle number must be ≥ 1")
+
+    # Get cycle-specific paths and ensure directories exist
+    paths = get_cycle_paths(cycle_num)
+    evaluation_path = ensure_directory_exists(paths["evaluation"])
+
+    # Load parameters
     params = load_params()
-
-    base_data_path = f"results/data/base/cycle_{cycle_num}"
-    model_trained_path = f"results/trained/cycle_{cycle_num}"
-    evaluation_path = f"results/evaluation/cycle_{cycle_num}"
-    os.makedirs(evaluation_path, exist_ok=True)
-
-    test_data = torch.load(
-        os.path.join(base_data_path, "test_data.pt"),
-        weights_only=False,
-    )
-
+    eval_params = params["evaluate"]
     model_params = params["models"][model_name]
+
+    # Load test data from previous cycle
+    test_data_path = os.path.join(paths["base_data"], "test_data.pt")
+    if not os.path.exists(test_data_path):
+        raise FileNotFoundError(f"Test data not found at {test_data_path}")
+    test_data = torch.load(test_data_path, weights_only=False)
+
+    # Load trained model
+    model_path = os.path.join(paths["model"], f"{model_name}_cycle_{cycle_num}.pt")
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model not found at {model_path}")
+
     model = get_model(model_name, model_params)
-    model.load_state_dict(
-        torch.load(
-            f"{model_trained_path}/{model_name}.pkl",
-            weights_only=True,
-        )
-    )
+    model.load_state_dict(torch.load(model_path, weights_only=True))
 
-    INITIAL_TEMPERATURE = params["evaluate"]["initial_temperature"]
-    CALIBRATION_METHOD = params["evaluate"]["calibration_method"]
-    N_BINS = params["evaluate"]["n_bins"]
-    CLASS_NAMES = params["evaluate"]["class_names"]
-    N_EPOCHS = params["evaluate"]["n_epochs"]
-    LEARNING_RATE = params["evaluate"]["lr"]
-    WEIGHT_DEACY = params["evaluate"]["weight_decay_adam_optimizer"]
-    FACTOR = params["evaluate"]["factor_learning_rate_scheduler"]
-    PATIENCE_LEARNING_RATE_SCHEDULER = params["evaluate"][
-        "patience_learning_rate_scheduler"
-    ]
-    PATIENCE_EARLY_STOPPING = params["evaluate"]["patience_early_stopping"]
-    MIN_DELTA_EARLY_STOPPING = params["evaluate"]["min_delta_early_stopping"]
-    VERBOSE = params["evaluate"]["verbose"]
-    SEED = params["evaluate"]["seed"]
-    REG_LAMBDA = params["evaluate"]["reg_lambda"]
-    REG_MU = params["evaluate"]["reg_mu"]
-    EPS = params["evaluate"]["eps"]
-
+    # Run evaluation
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nUsing device: {device} for evaluation\n")
-    with LogTime(task_name="\nEvaluation"):
-        print("Assessing test dataset ...\n")
+    print(f"\nEvaluating cycle {cycle_num} on device: {device}")
+
+    with LogTime(task_name=f"\nEvaluation cycle {cycle_num}"):
         evaluate_with_calibration(
             data=test_data.to(device),
             model=model.to(device),
-            calibration_method=CALIBRATION_METHOD,
-            initial_temperature=INITIAL_TEMPERATURE,
-            n_bins=N_BINS,
-            class_names=CLASS_NAMES,
-            lr=LEARNING_RATE,
-            n_epochs=N_EPOCHS,
-            weight_decay_adam_optimizer=WEIGHT_DEACY,
-            factor_learning_rate_scheduler=FACTOR,
-            patience_learning_rate_scheduler=PATIENCE_LEARNING_RATE_SCHEDULER,
-            patience_early_stopping=PATIENCE_EARLY_STOPPING,
-            min_delta_early_stopping=MIN_DELTA_EARLY_STOPPING,
+            calibration_method=eval_params["calibration_method"],
+            initial_temperature=eval_params["initial_temperature"],
+            n_bins=eval_params["n_bins"],
+            class_names=eval_params["class_names"],
+            lr=eval_params["lr"],
+            n_epochs=eval_params["n_epochs"],
+            weight_decay_adam_optimizer=eval_params["weight_decay_adam_optimizer"],
+            factor_learning_rate_scheduler=eval_params[
+                "factor_learning_rate_scheduler"
+            ],
+            patience_learning_rate_scheduler=eval_params[
+                "patience_learning_rate_scheduler"
+            ],
+            patience_early_stopping=eval_params["patience_early_stopping"],
+            min_delta_early_stopping=eval_params["min_delta_early_stopping"],
             save_path=evaluation_path,
-            verbose=VERBOSE,
+            verbose=eval_params["verbose"],
             device=device,
-            eps=EPS,
-            reg_lambda=REG_LAMBDA,
-            reg_mu=REG_MU,
-            seed=SEED,
+            eps=eval_params["eps"],
+            reg_lambda=eval_params["reg_lambda"],
+            reg_mu=eval_params["reg_mu"],
+            seed=eval_params["seed"],
         )
+
+    print(f"\n✓ Evaluation results saved to {evaluation_path}")
 
 
 if __name__ == "__main__":
