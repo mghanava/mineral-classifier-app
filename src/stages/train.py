@@ -28,7 +28,8 @@ def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle."""
     return {
         "base_data": f"results/data/base/cycle_{cycle_num - 1}",  # Previous cycle's data
-        "model": f"results/trained/cycle_{cycle_num}",
+        "previous_model": f"results/trained/cycle_{cycle_num - 1}",
+        "output": f"results/trained/cycle_{cycle_num}",
     }
 
 
@@ -49,7 +50,7 @@ def main():
 
     # Get cycle-specific paths and ensure directories exist
     paths = get_cycle_paths(cycle_num)
-    model_trained_path = ensure_directory_exists(paths["model"])
+    model_trained_path = ensure_directory_exists(paths["output"])
 
     # Load parameters
     params = load_params()
@@ -65,6 +66,19 @@ def main():
 
     # Initialize model
     model = get_model(model_name, model_params)
+    if train_params["strategy"] == "incremental" and cycle_num > 1:
+        prev_model_path = os.path.join(
+            paths["previous_model"], f"{model_name}_cycle_{cycle_num - 1}.pt"
+        )
+        if os.path.exists(prev_model_path):
+            print(
+                f"Loading previous trained model from {prev_model_path} for incremenetal learning!"
+            )
+            model.load_state_dict(torch.load(prev_model_path, weights_only=True))
+        else:
+            print(
+                f"Warning: Previous model not found at {prev_model_path}, training from scratch"
+            )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"\nUsing device: {device} for training cycle {cycle_num}")
 
@@ -91,6 +105,10 @@ def main():
                 min_delta_early_stopping=train_params["min_delta_early_stopping"],
                 save_path=model_trained_path,
                 dataset_idx=graph_idx,
+                # Incremental learning parameters
+                warmup_epochs=train_params.get("warmup_epochs", 0),
+                freeze_early_layers=train_params.get("freeze_early_layers", False),
+                cycle_num=cycle_num,
             )
             fold_results.append((trained_model, best_loss_val))
 

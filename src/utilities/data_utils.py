@@ -543,6 +543,7 @@ def construct_graph(
     features: np.ndarray,
     labels: np.ndarray,
     connection_radius: float,
+    add_self_loops: bool,
     n_splits: int | None = None,
     test_size: float | None = None,
     calib_size: float | None = None,
@@ -579,7 +580,9 @@ def construct_graph(
     x = torch.tensor(scaled_features, dtype=torch.float32)
     y = torch.tensor(labels, dtype=torch.long)
 
-    edge_index, edge_attr = prepare_edge_data(coordinates, connection_radius)
+    edge_index, edge_attr = prepare_edge_data(
+        coordinates, connection_radius, add_self_loops
+    )
 
     base_data = Data(
         x=x,
@@ -601,7 +604,11 @@ def construct_graph(
     return base_data
 
 
-def prepare_edge_data(coordinates: np.ndarray, connection_radius: float = 150):
+def prepare_edge_data(
+    coordinates: np.ndarray,
+    connection_radius: float = 150,
+    add_self_loops: bool = False,
+):
     """Prepare edge connectivity and attributes for a graph neural network from coordinate data. This function computes pairwise distances between points and creates edge connections based on a distance threshold, making the resulting graph undirected. It also generates edge attributes including both raw distances and inverse distances.
 
     Args:
@@ -624,10 +631,12 @@ def prepare_edge_data(coordinates: np.ndarray, connection_radius: float = 150):
     dist_matrix = distance_matrix(coordinates, coordinates)
     # Find edges based on distance threshold avoiding self-node thru distance > 0
     # to force the model to learn purely from neighboring nodes
-    src, dst = np.where((dist_matrix < connection_radius) & (dist_matrix > 0))
-    # # or alternatively, include self-nodes assuming current node features are also
-    # # important for prediction (node own features along with its neighbors)
-    # src, dst = np.where(dist_matrix < connection_radius)
+    if not add_self_loops:
+        # Exclude self-loops (nodes cannot connect to themselves)
+        src, dst = np.where((dist_matrix < connection_radius) & (dist_matrix > 0))
+    else:
+        # include self-nodes assuming current node features are also important for prediction (node own features along with its neighbors)
+        src, dst = np.where(dist_matrix < connection_radius)
 
     # Make the graph undirected by adding reciprocal edges; for each edge A→B,
     # add the reverse edge B→A to assure same information passage both ways
@@ -654,8 +663,9 @@ def prepare_edge_data(coordinates: np.ndarray, connection_radius: float = 150):
 def export_graph_to_html(
     graph,
     coordinates: np.ndarray,
-    node_indices: np.ndarray,
+    node_indices: np.ndarray | None,
     connection_radius: float,
+    add_self_loops: bool,
     save_path: str,
     labels_map: dict[int, str],
     dataset_idx: int | None = None,
@@ -664,11 +674,15 @@ def export_graph_to_html(
     filename="graph.html",
 ):
     """Export the graph to an interactive HTML file using Plotly."""
-    edge_index, _ = prepare_edge_data(coordinates[node_indices], connection_radius)
+    coordinates = coordinates[node_indices] if node_indices is not None else coordinates
+    labels = (
+        graph.y[node_indices].numpy() if node_indices is not None else graph.y.numpy()
+    )
+    edge_index, _ = prepare_edge_data(coordinates, connection_radius, add_self_loops)
     src, dst = edge_index
     fig = visualize_graph(
-        coordinates[node_indices],
-        graph.y[node_indices].numpy(),
+        coordinates,
+        labels,
         np.array(src),
         np.array(dst),
         labels_map=labels_map,
@@ -690,6 +704,7 @@ def export_all_graphs_to_html(
     test_data: Data,
     coordinates: np.ndarray,
     connection_radius: float,
+    add_self_loops: bool,
     labels_map: dict[int, str],
     save_path: str,
     # cycle_num: int | None = None,
@@ -715,6 +730,7 @@ def export_all_graphs_to_html(
             coordinates,
             node_indices,
             connection_radius=connection_radius,
+            add_self_loops=add_self_loops,
             save_path=save_path,
             labels_map=labels_map,
             dataset_idx=i + 1,
@@ -727,6 +743,7 @@ def export_all_graphs_to_html(
             coordinates,
             node_indices,
             connection_radius=connection_radius,
+            add_self_loops=add_self_loops,
             save_path=save_path,
             labels_map=labels_map,
             dataset_idx=i + 1,
@@ -739,6 +756,7 @@ def export_all_graphs_to_html(
         coordinates,
         node_indices,
         connection_radius=connection_radius,
+        add_self_loops=add_self_loops,
         save_path=save_path,
         labels_map=labels_map,
         dataset_tag="test",
@@ -750,6 +768,7 @@ def export_all_graphs_to_html(
         coordinates,
         node_indices,
         connection_radius=connection_radius,
+        add_self_loops=add_self_loops,
         save_path=save_path,
         labels_map=labels_map,
         dataset_tag="calib",
@@ -760,20 +779,22 @@ def export_all_graphs_to_html(
 def connect_graphs_preserve_weights(
     data1,
     data2,
-    similarity_metric: Literal["cosine", "euclidean", "dot"] = "cosine",
-    k: int = 5,
+    similarity_metric: Literal["cosine", "euclidean", "dot", "spatial"] = "spatial",
+    top_k: int = 5,
     similarity_threshold: float | None = None,
+    connection_radius: float = 150.0,
 ):
     """Connect two graphs while preserving their original edge weights.
 
-    Cross-graph edges are weighted by feature similarity.
+    Cross-graph edges are weighted by spatial proximity (default) or feature similarity.
 
     Args:
         data1: PyG Data object (with edge_attr if weighted)
         data2: PyG Data object (with edge_attr if weighted)
-        similarity_metric: "cosine" (default), "euclidean", or "dot"
-        k: Top-k most similar nodes to connect per node (ignored if similarity_threshold is given )
+        similarity_metric: "spatial" (default), "cosine", "euclidean", or "dot"
+        top_k: Top-k most similar nodes to connect per node (ignored if similarity_threshold is given )
         similarity_threshold: Min similarity for cross-graph edges (optional)
+        connection_radius: Spatial radius for connecting nodes (only for spatial metric)
 
     Returns:
         Combined Data object with edge weights preserved.
@@ -782,17 +803,77 @@ def connect_graphs_preserve_weights(
     # Check if original graphs have edge weights
     orig_weights1 = (
         data1.edge_attr
-        if hasattr(data1, "edge_attr")
-        else torch.ones(data1.edge_index.size(1))
+        if hasattr(data1, "edge_attr") and data1.edge_attr is not None
+        else torch.ones(data1.edge_index.size(1), 1)
     )
     orig_weights2 = (
         data2.edge_attr
-        if hasattr(data2, "edge_attr")
-        else torch.ones(data2.edge_index.size(1))
+        if hasattr(data2, "edge_attr") and data2.edge_attr is not None
+        else torch.ones(data2.edge_index.size(1), 1)
     )
 
-    # Compute similarity for cross-graph connections
-    if similarity_metric == "cosine":
+    # Combine node features first
+    x = torch.cat([data1.x, data2.x], dim=0)
+    y = torch.cat([data1.y, data2.y], dim=0)
+    coords = torch.cat([data1.coordinates, data2.coordinates], dim=0)
+
+    # Offset node indices for data2
+    offset = data1.num_nodes
+
+    # Compute similarity/proximity for cross-graph connections
+    if similarity_metric == "spatial":
+        # Use spatial distance for mineral exploration data
+        coords1 = data1.coordinates.cpu().numpy()
+        coords2 = data2.coordinates.cpu().numpy()
+
+        # Calculate spatial distance matrix
+        spatial_dist_matrix = distance_matrix(coords1, coords2)
+
+        # Find connections within spatial radius
+        src, dst = np.where(spatial_dist_matrix < connection_radius)
+
+        if len(src) > 0:
+            # Convert distances to weights (closer = higher weight)
+            distances = spatial_dist_matrix[src, dst]
+            cross_weights = torch.tensor(
+                1.0 / (distances + 1e-6) ** 2, dtype=torch.float32
+            ).unsqueeze(1)
+
+            # Limit to top_k connections per node if specified
+            if top_k is not None and len(src) > data1.num_nodes * top_k:
+                # Sort by weight (highest first) and keep top_k per source node
+                sorted_indices = np.argsort(-cross_weights.squeeze().numpy())
+
+                # Group by source node and keep top_k
+                kept_indices = []
+                src_counts = {}
+                for idx in sorted_indices:
+                    s = src[idx]
+                    if src_counts.get(s, 0) < top_k:
+                        kept_indices.append(idx)
+                        src_counts[s] = src_counts.get(s, 0) + 1
+
+                src = src[kept_indices]
+                dst = dst[kept_indices]
+                cross_weights = cross_weights[kept_indices]
+        else:
+            # No spatial connections found, create minimal connections
+            print(
+                "⚠️  No spatial connections found, creating minimal feature-based connections"
+            )
+            # Fallback to feature similarity with very few connections
+            sim_matrix = F.cosine_similarity(
+                data1.x.unsqueeze(1), data2.x.unsqueeze(0), dim=-1
+            )
+            topk_sim, topk_idx = torch.topk(sim_matrix, k=min(3, top_k), dim=1)
+            src = torch.arange(data1.num_nodes).repeat_interleave(min(3, top_k))
+            dst = topk_idx.flatten()
+            cross_weights = topk_sim.flatten().unsqueeze(1)
+
+            src = src.numpy()
+            dst = dst.numpy()
+
+    elif similarity_metric == "cosine":
         sim_matrix = F.cosine_similarity(
             data1.x.unsqueeze(1), data2.x.unsqueeze(0), dim=-1
         )
@@ -805,36 +886,39 @@ def connect_graphs_preserve_weights(
     else:
         raise ValueError(f"Unknown metric: {similarity_metric}")
 
-    # Get cross-graph connections (src, dst) and weights
-    if similarity_threshold is not None:
-        mask = sim_matrix > similarity_threshold
-        src, dst = torch.where(mask)
-        cross_weights = sim_matrix[mask]
-    else:
-        topk_sim, topk_idx = torch.topk(sim_matrix, k=k, dim=1)
-        src = torch.arange(data1.num_nodes).repeat_interleave(k)
-        dst = topk_idx.flatten()
-        cross_weights = topk_sim.flatten().unsqueeze(1)
+    # For non-spatial metrics, use the original logic
+    if similarity_metric != "spatial":
+        if similarity_threshold is not None:
+            mask = sim_matrix > similarity_threshold
+            src, dst = torch.where(mask)
+            cross_weights = sim_matrix[mask]
+        else:
+            topk_sim, topk_idx = torch.topk(sim_matrix, k=top_k, dim=1)
+            src = torch.arange(data1.num_nodes).repeat_interleave(top_k)
+            dst = topk_idx.flatten()
+            cross_weights = topk_sim.flatten().unsqueeze(1)
 
-    # Offset node indices for data2
-    offset = data1.num_nodes
-    dst += offset
+        src = src.numpy()
+        dst = dst.numpy()
 
-    # Combine node features
-    x = torch.cat([data1.x, data2.x], dim=0)
-    y = torch.cat([data1.y, data2.y], dim=0)
+    # Convert to tensors and add offset
+    src_tensor = torch.tensor(src, dtype=torch.long)
+    dst_tensor = torch.tensor(dst, dtype=torch.long) + offset
 
     # Combine edge indices
+    cross_edge_index = torch.stack([src_tensor, dst_tensor], dim=0)
     edge_index = torch.cat(
-        [data1.edge_index, data2.edge_index + offset, torch.stack([src, dst], dim=0)],
+        [data1.edge_index, data2.edge_index + offset, cross_edge_index],
         dim=1,
     )
 
     # Combine edge weights
     edge_attr = torch.cat([orig_weights1, orig_weights2, cross_weights])
 
-    # Combine corrdinates
-    coords = torch.cat([data1.coordinates, data2.coordinates], dim=0)
+    print(
+        f"   Cross-graph connections: {len(src)} edges using {similarity_metric} metric"
+    )
+    print(f"   Final graph: {x.shape[0]} nodes, {edge_index.shape[1]} edges")
 
     return Data(
         x=x, y=y, edge_index=edge_index, edge_attr=edge_attr, coordinates=coords

@@ -43,6 +43,8 @@ def generate_dvc_yaml():
                 "data",
                 "train",
                 "evaluate",
+                "analyze_drift",
+                "combine_data",
             ],
             "outs": [
                 f"results/data/base/cycle_{cycle}",

@@ -30,8 +30,11 @@ def train(
     patience_early_stopping: int,
     min_delta_early_stopping: float,
     dataset_idx: int,
-    # cycle_num: int,
     save_path: str,
+    # Incremental learning parameters
+    warmup_epochs: int = 0,
+    freeze_early_layers: bool = False,
+    cycle_num: int = 1,
 ):
     """Train a Graph Neural Network model with early stopping and learning rate scheduling.
 
@@ -97,12 +100,38 @@ def train(
 
     sample_weights_val = compute_sample_weight("balanced", y_true_val.cpu())
 
+    # Implement layer freezing for incremental learning
+    if freeze_early_layers and cycle_num > 1:
+        print(f"Freezing early layers for incremental learning (cycle {cycle_num})")
+        # Freeze first GAT layer parameters
+        if hasattr(model, "convs") and len(model.convs) > 0:
+            for param in model.convs[0].parameters():
+                param.requires_grad = False
+        # Freeze first batch norm layer if exists
+        if hasattr(model, "batch_norms") and len(model.batch_norms) > 0:
+            for param in model.batch_norms[0].parameters():
+                param.requires_grad = False
+
     best_model_state = None
     best_loss_val = float("inf")
     initial_lr = lr
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=initial_lr, weight_decay=weight_decay
-    )
+
+    # Implement warmup learning rate for incremental learning
+    if warmup_epochs > 0 and cycle_num > 1:
+        warmup_lr = initial_lr * 0.1  # Start with 10% of target LR
+        print(f"Using warmup learning rate: {warmup_lr:.6f} for {warmup_epochs} epochs")
+        optimizer = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=warmup_lr,
+            weight_decay=weight_decay,
+        )
+    else:
+        optimizer = torch.optim.Adam(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=initial_lr,
+            weight_decay=weight_decay,
+        )
+
     # Initialize learning rate scheduler
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer,
@@ -126,6 +155,21 @@ def train(
     )
 
     for epoch in range(n_epochs):
+        # Warmup learning rate schedule
+        if warmup_epochs > 0 and cycle_num > 1 and epoch < warmup_epochs:
+            # Gradually increase learning rate from warmup_lr to target_lr
+            warmup_factor = (epoch + 1) / warmup_epochs
+            current_warmup_lr = (initial_lr * 0.1) + (initial_lr * 0.9 * warmup_factor)
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = current_warmup_lr
+        elif warmup_epochs > 0 and cycle_num > 1 and epoch == warmup_epochs:
+            # Switch to target learning rate after warmup
+            print(
+                f"Warmup completed. Switching to target learning rate: {initial_lr:.6f}"
+            )
+            for param_group in optimizer.param_groups:
+                param_group["lr"] = initial_lr
+
         # Training phase
         model.train()
         optimizer.zero_grad()

@@ -9,6 +9,9 @@ class MineralDepositGCN(nn.Module):
         n_classes: int,
         in_channels: int,
         hidden_channels: int = 64,
+        improved: bool = False,
+        add_self_loops: bool = False,
+        normalize: bool = False,
         n_layers: int = 3,
         dropout: float = 0.3,
         batch_norm=True,
@@ -31,13 +34,23 @@ class MineralDepositGCN(nn.Module):
         self.convs = nn.ModuleList()
         # First layer
         self.convs.append(
-            GCNConv(in_channels, hidden_channels, normalize=False)
+            GCNConv(
+                in_channels,
+                hidden_channels,
+                improved=improved,
+                add_self_loops=add_self_loops,
+                normalize=normalize,
+            )
         )  # in_channels => hidden_channels
         # Additional conv layers (hidden to hidden)
         for _ in range(n_layers - 1):
             self.convs.append(
                 GCNConv(
-                    hidden_channels, hidden_channels, add_self_loops=False
+                    hidden_channels,
+                    hidden_channels,
+                    improved=improved,
+                    add_self_loops=add_self_loops,
+                    normalize=normalize,
                 )  # hidden_channels => hidden_channels* num_heads
             )
         # MLP head for classification: hidden_channels => n_classes

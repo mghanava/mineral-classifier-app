@@ -12,7 +12,6 @@ for detecting and visualizing distribution shifts between two datasets, includin
 
 import os
 import warnings
-from typing import Literal
 
 import numpy as np
 import ot
@@ -44,6 +43,11 @@ class AnalyzeDrift:
         gamma: float | None = None,
         n_permutations: int = 1000,
         # cycle_num: int = 1,
+        use_max_sliced_wasserstein: bool | None = None,
+        use_sinkhorn_wasserstein: bool | None = None,
+        n_projections: int = 1000,
+        sinkhorn_wasserstein_reg: float = 0.1,
+        early_stopping_config: dict | None = None,
         save_path: str | None = None,
     ):
         """Initialize the AnalyzeDrift class with two datasets to compare.
@@ -57,7 +61,18 @@ class AnalyzeDrift:
             save_path: Directory path to save analysis results. If None, results aren't saved.
 
         """
+        self.use_max_sliced_wasserstein = use_max_sliced_wasserstein
+        self.use_sinkhorn_wasserstein = use_sinkhorn_wasserstein
         self.n_permutations = n_permutations
+        self.n_projections = n_projections
+        self.sinkhorn_wasserstein_reg = sinkhorn_wasserstein_reg
+        # Early stopping configuration
+        self.early_stopping = early_stopping_config or {
+            "enabled": False,
+            "confidence_threshold": 0.01,
+            "min_permutations": 100,
+        }
+
         X1 = base_data.unscaled_features
         X2 = pred_data.unscaled_features
         # Ensure tensors are on same device
@@ -95,21 +110,16 @@ class AnalyzeDrift:
             Unbiased MMD² estimate
 
         """
-        # K_XX
-        K_XX = self._rbf_kernel(X1, X1, self.gamma)
-        # Remove diagonal for unbiased estimate
-        K_XX.fill_diagonal_(0)
-        term1 = K_XX.sum() / (self.n1 * (self.n1 - 1))
-        # K_YY
-        K_YY = self._rbf_kernel(X2, X2, self.gamma)
-        K_YY.fill_diagonal_(0)
-        term2 = K_YY.sum() / (self.n2 * (self.n2 - 1))
-        # K_XY
-        K_XY = self._rbf_kernel(X1, X2, self.gamma)
-        term3 = K_XY.sum() / (self.n1 * self.n2)
-
-        mmd_sq = term1 + term2 - 2 * term3
-        return mmd_sq.item()
+        K_XX = self._rbf_kernel(
+            X1, X1, self.gamma
+        ).mean()  # the average similarity within the first dataset
+        K_YY = self._rbf_kernel(
+            X2, X2, self.gamma
+        ).mean()  # the average similarity within the second dataset
+        K_XY = self._rbf_kernel(
+            X1, X2, self.gamma
+        ).mean()  # the cross-similarity between the two datasets
+        return (K_XX + K_YY - 2 * K_XY).item()
 
     def _energy_statistic(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
         """Compute the energy statistic between two samples.
@@ -125,22 +135,43 @@ class AnalyzeDrift:
             Energy statistic value
 
         """
-        # Term 1: 2 * E[||X - Y||]
-        dist_XY = torch.cdist(X1, X2, p=2)
-        term1 = 2 * dist_XY.mean()
-        # Term 2: E[||X - X'||] (exclude diagonal)
-        dist_XX = torch.cdist(X1, X1, p=2)
-        # Remove diagonal for unbiased estimate
-        dist_XX.fill_diagonal_(0)
-        term2 = dist_XX.sum() / (self.n1 * (self.n1 - 1))
 
-        # Term 3: E[||Y - Y'||] (exclude diagonal)
-        dist_YY = torch.cdist(X2, X2, p=2)
-        dist_YY.fill_diagonal_(0)
-        term3 = dist_YY.sum() / (self.n2 * (self.n2 - 1))
+        def compute_distances(X1: torch.Tensor, X2: torch.Tensor):
+            dist = torch.cdist(X1, X2, p=2)
+            if X1.numel() == X2.numel() and torch.equal(X1.flatten(), X2.flatten()):
+                # Remove diagonal for unbiased estimate
+                dist.fill_diagonal_(0)
+            return dist
 
-        energy_stat = term1 - term2 - term3
-        return energy_stat.item()
+        dXY = compute_distances(X1, X2).mean()
+        dXX = compute_distances(X1, X1).mean()
+        dYY = compute_distances(X2, X2).mean()
+        # 2 * E[||X - Y||] - E[||X - X||] - E[||Y - Y||]
+        return (2 * dXY - dXX - dYY).item()
+
+    def _wasserstein_1d(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
+        a = torch.ones(self.n1) / self.n1
+        b = torch.ones(self.n2) / self.n2
+        return ot.emd2_1d(X1, X2, a, b).item()  # type: ignore
+
+    def _max_sliced_wasserstein(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
+        if X1.shape[1] == 1:
+            # For 1D, just use regular Wasserstein
+            return self._wasserstein_1d(X1.squeeze(), X2.squeeze())
+        a = torch.ones(self.n1) / self.n1
+        b = torch.ones(self.n2) / self.n2
+        return ot.max_sliced_wasserstein_distance(
+            X1, X2, a, b, self.n_projections
+        ).item()  # type: ignore
+
+    def _sinkhorn_wasserstein(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
+        if X1.shape[1] == 1:
+            # For 1D, just use regular Wasserstein
+            return self._wasserstein_1d(X1.squeeze(), X2.squeeze())
+        a = torch.ones(self.n1) / self.n1
+        b = torch.ones(self.n2) / self.n2
+        M = ot.dist(X1, X2, metric="sqeuclidean")
+        return ot.sinkhorn2(a, b, M, self.sinkhorn_wasserstein_reg).item()  # type: ignore
 
     def _wasserstein_distance(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
         """Compute the Wasserstein distance (Earth Mover's Distance) between two samples.
@@ -153,60 +184,84 @@ class AnalyzeDrift:
             Wasserstein distance as a float.
 
         """
+        if X1.shape[1] == 1:
+            # For 1D, just use regular Wasserstein
+            return self._wasserstein_1d(X1.squeeze(), X2.squeeze())
         a = torch.ones(self.n1) / self.n1
         b = torch.ones(self.n2) / self.n2
         M = ot.dist(X1, X2, metric="sqeuclidean")
         return ot.emd2(a, b, M).item()  # type: ignore
 
-    def _perform_permutation_test(
-        self, method: Literal["mmd", "energy", "wasserstein"]
-    ) -> tuple[float, float]:
+    def _perform_permutation_test(self, method: str) -> tuple[float, float]:
         """Perform energy two-sample test with permutation testing.
 
         Args:
-            method: Which test statistic to use; "mmd", "energy" or "wasserstein".
+            method: Which test statistic to use; "mmd", "energy" or a form of "wasserstein".
 
         Returns:
-            Tuple of (observed_statistic, p_value)
+            Tuple of (observed_stat, p_value)
 
         """
         # Combine samples for permutation
         if self.X1_scaled is None or self.X2_scaled is None:
             raise ValueError("self.X1_scaled and self.X2_scaled must not be None.")
-        Z = torch.cat([self.X1_scaled, self.X2_scaled], dim=0)
         if method == "mmd":
-            observed_statistic = self._mmd_unbiased(self.X1_scaled, self.X2_scaled)
+            observed_stat = self._mmd_unbiased(self.X1_scaled, self.X2_scaled)
         elif method == "energy":
-            observed_statistic = self._energy_statistic(self.X1_scaled, self.X2_scaled)
+            observed_stat = self._energy_statistic(self.X1_scaled, self.X2_scaled)
+        elif method == "max_sliced_wasserstein":
+            observed_stat = self._max_sliced_wasserstein(self.X1_scaled, self.X2_scaled)
+        elif method == "sinkhorn_wasserstein":
+            observed_stat = self._sinkhorn_wasserstein(self.X1_scaled, self.X2_scaled)
         else:
-            observed_statistic = self._wasserstein_distance(
-                self.X1_scaled, self.X2_scaled
-            )
+            observed_stat = self._wasserstein_distance(self.X1_scaled, self.X2_scaled)
 
         # Permutation test
-        null = []
+        Z = torch.cat([self.X1_scaled, self.X2_scaled], dim=0)
+        null_stats = []
+        significant_count = 0
+
         for i in range(self.n_permutations):
             # Random permutation
             perm_idx = torch.randperm(self.n1 + self.n2, device=self.device)
-
             # Split permuted data
             X_perm = Z[perm_idx[: self.n1]]
             Y_perm = Z[perm_idx[self.n1 :]]
 
             # Compute statistic for permuted data
             if method == "mmd":
-                perm = self._mmd_unbiased(X_perm, Y_perm)
+                perm_stat = self._mmd_unbiased(X_perm, Y_perm)
             elif method == "energy":
-                perm = self._energy_statistic(X_perm, Y_perm)
+                perm_stat = self._energy_statistic(X_perm, Y_perm)
             else:
-                perm = self._wasserstein_distance(X_perm, Y_perm)
-            null.append(perm)
-            if (i + 1) % 100 == 0:
-                print(f"Permutation {i + 1}/{self.n_permutations}")
+                perm_stat = self._wasserstein_distance(X_perm, Y_perm)
 
-        # Compute p-value; under the null hypothesis, both samples come from the same distribution, so the distance should be small. The p-value represents the probability of observing a distance as large or larger than what is actually observed, assuming the null hypothesis is true.
-        p_value = (np.array(null, dtype=np.float32) >= observed_statistic).mean()
-        return observed_statistic, p_value
+            null_stats.append(perm_stat)
+            # Check if current permuted stat is >= observed
+            if perm_stat >= observed_stat:
+                significant_count += 1
+
+            # Early stopping check
+            if (
+                self.early_stopping["enabled"]
+                and i >= self.early_stopping["min_permutations"] - 1
+            ):
+                current_p_value = significant_count / (i + 1)
+                if current_p_value < self.early_stopping["confidence_threshold"]:
+                    print(
+                        f"Early stopping at permutation {i + 1}: p-value = {current_p_value:.4f}"
+                    )
+                    break
+
+            if (i + 1) % 50 == 0:
+                current_p = significant_count / (i + 1)
+                print(
+                    f"Permutation {i + 1}/{self.n_permutations}, current p-value: {current_p:.4f}"
+                )
+
+        # Compute final p-value; under the null hypothesis, both samples come from the same distribution, so the distance should be small. The p-value represents the probability of observing a distance as large or larger than what is actually observed, assuming the null hypothesis is true.
+        p_value = significant_count / len(null_stats)
+        return observed_stat, p_value
 
     def _rbf_kernel(
         self, X1: torch.Tensor, X2: torch.Tensor, gamma: float
@@ -225,7 +280,11 @@ class AnalyzeDrift:
         # Compute squared (**2) Euclidean distance (L2 norm)
         dist_sq = torch.cdist(X1, X2, p=2) ** 2
         # Apply RBF kernel
-        return torch.exp(-gamma * dist_sq)
+        kernel = torch.exp(-gamma * dist_sq)
+        # Remove diagonal (represent the similarity of each point with itself which artificially inflates the within-dataset similarity and introduces bias) for unbiased estimate (a point's similarity to itself is not informative about the distribution)
+        if X1.numel() == X2.numel() and torch.equal(X1.flatten(), X2.flatten()):
+            kernel.fill_diagonal_(0)
+        return kernel
 
     def _median_heuristic_gamma(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
         """Compute median heuristic for gamma selection.
@@ -359,8 +418,6 @@ class AnalyzeDrift:
         }
         methods = list(available_methods.keys())
         for method in methods:
-            print(f"\n{method.upper()} ANALYSIS:")
-            print("-" * 30)
             arg1, arg2 = (
                 (X1_scaled, X2_scaled) if method in ["pairwise", "pca"] else (X1, X2)
             )
@@ -691,19 +748,24 @@ class AnalyzeDrift:
 
         The results are only exported if save_path was specified during initialization.
         """
-        methods: list[Literal["mmd", "energy", "wasserstein"]] = [
-            "mmd",
-            "energy",
-            "wasserstein",
-        ]
+        methods = ["mmd", "energy"]
+        if self.use_max_sliced_wasserstein:
+            methods.append("max_sliced_wasserstein")
+        elif self.use_sinkhorn_wasserstein:
+            methods.append("sinkhorn_wasserstein")
+        else:
+            methods.append("wasserstein")
+        # methods: list[Literal["mmd", "energy", "wasserstein"]] = [
+        #     "mmd",
+        #     "energy",
+        #     "wasserstein",
+        # ]
         if self.save_path is not None:
             results = []
             for method in methods:
                 print(f"{method} permutation test ...")
-                observed_statistic, p_value = self._perform_permutation_test(
-                    method=method
-                )
-                results.append((method, observed_statistic, p_value))
+                observed_stat, p_value = self._perform_permutation_test(method=method)
+                results.append((method, observed_stat, p_value))
             with open(
                 # os.path.join(
                 #     self.save_path, f"drift_results_cycle_{self.cycle_num}.txt"
@@ -711,8 +773,8 @@ class AnalyzeDrift:
                 os.path.join(self.save_path, "drift_results.txt"),
                 "w",
             ) as f:
-                for method, observed_statistic, p_value in results:
-                    f.write(f"{method} Statistic: {observed_statistic}\n")
+                for method, observed_stat, p_value in results:
+                    f.write(f"{method} Statistic: {observed_stat}\n")
                     f.write(f"p-value: {p_value}\n")
                     if p_value < 0.05:
                         f.write(

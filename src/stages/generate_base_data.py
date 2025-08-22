@@ -17,6 +17,7 @@ import yaml
 from src.utilities.data_utils import (
     construct_graph,
     export_all_graphs_to_html,
+    export_graph_to_html,
     generate_mineral_data,
 )
 
@@ -73,6 +74,7 @@ def prepare_base_data(
         features,
         labels,
         connection_radius=base_params["connection_radius"],
+        add_self_loops=base_params["add_self_loops"],
         n_splits=base_params["n_splits"],
         test_size=base_params["test_size"],
         calib_size=base_params["calib_size"],
@@ -88,11 +90,22 @@ def prepare_base_data(
 
     # export the interactive 3D plots
     print("Exporting 3D interactive plots of graphs ...")
+    export_graph_to_html(
+        base_data,
+        coordinates,
+        None,
+        base_params["connection_radius"],
+        base_params["add_self_loops"],
+        output_path,
+        labels_map,
+        dataset_tag="base_data",
+    )
     export_all_graphs_to_html(
         fold_data,
         test_data,
         coordinates,
         base_params["connection_radius"],
+        base_params["add_self_loops"],
         labels_map,
         # cycle_num,
         output_path,  # Save plots in the cycle-specific output directory

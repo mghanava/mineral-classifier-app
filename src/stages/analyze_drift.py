@@ -72,6 +72,10 @@ def main():
             save_path=analysis_path,
             gamma=drift_params["gamma"],
             n_permutations=drift_params["n_permutations"],
+            n_projections=drift_params["n_projections"],
+            use_max_sliced_wasserstein=drift_params["use_max_sliced_wasserstein"],
+            use_sinkhorn_wasserstein=drift_params["use_sinkhorn_wasserstein"],
+            early_stopping_config=drift_params.get("early_stopping", {}),
         )
         analyzer.export_drift_analysis_to_file()
         analyzer.export_drift_analysis_plots()

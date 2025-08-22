@@ -76,8 +76,7 @@ def main():
     # Load calibrator from evaluation
     calibrator_path = os.path.join(paths["evaluation"], "calibrator.pt")
     if not os.path.exists(calibrator_path):
-        print(f"Warning: Calibrator not found at {calibrator_path}")
-        calibrator_path = None
+        raise FileNotFoundError(f"Calibrator not found at {calibrator_path}")
 
     # Run prediction
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

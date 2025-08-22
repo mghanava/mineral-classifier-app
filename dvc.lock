@@ -394,8 +394,8 @@ stages:
     deps:
     - path: src/stages/generate_base_data.py
       hash: md5
-      md5: b7926b6abbe1cd8e407c501461f90fae
-      size: 4584
+      md5: d8f9a1bb38ec845410ebf835ece7112b
+      size: 4944
     params:
       params.yaml:
         data.base:
@@ -407,7 +407,8 @@ stages:
           threshold_binary: 0.5
           min_samples_per_class: 20
           connection_radius: 150
-          n_splits: 2
+          add_self_loops: true
+          n_splits: 3
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 5
@@ -416,21 +417,21 @@ stages:
     outs:
     - path: results/data/base/cycle_0
       hash: md5
-      md5: cdc02f19eead5488aa0b6a144903668c.dir
-      size: 29742991
-      nfiles: 9
+      md5: 610998518e3b4fa97102b2e11284deb3.dir
+      size: 47243812
+      nfiles: 12
   cycle_1:
     cmd: python src/run_cycle.py --cycle 1 --model gat
     deps:
     - path: results/data/base/cycle_0
       hash: md5
-      md5: cdc02f19eead5488aa0b6a144903668c.dir
-      size: 29742991
-      nfiles: 9
+      md5: 610998518e3b4fa97102b2e11284deb3.dir
+      size: 47243812
+      nfiles: 12
     - path: src/models/
       hash: md5
-      md5: e90278beff1ec6edc4ca759c888942f4.dir
-      size: 23859
+      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
+      size: 25022
       nfiles: 10
     - path: src/run_cycle.py
       hash: md5
@@ -438,16 +439,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: 3373156735d8ad9f195d4d7049e5ea55.dir
+      size: 67653
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: 0f6434c88818dc060e423771b788150b.dir
+      size: 666695
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -458,7 +474,8 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            add_self_loops: true
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -470,6 +487,7 @@ stages:
             depth: -500
             min_samples_per_class:
             connection_radius: 150
+            add_self_loops: false
             n_hotspots: 5
             n_hotspots_random: false
             seed:
@@ -496,6 +514,10 @@ stages:
           n_heads: 5
           dropout: 0.3
           batch_norm: true
+          negative_slope: 0.2
+          add_self_loops: true
+          bias: true
+          residual: false
         train:
           n_epochs: 1000
           lr: 0.001
@@ -505,44 +527,47 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
+          warmup_epochs: 50
+          freeze_early_layers: true
     outs:
     - path: results/data/base/cycle_1
       hash: md5
-      md5: 974d33f72e68aacd28e23fcfc7705725.dir
-      size: 30527509
-      nfiles: 9
+      md5: ca92b942349772d1f1474c5e80ef22ad.dir
+      size: 49249907
+      nfiles: 12
     - path: results/data/prediction/cycle_1
       hash: md5
-      md5: 327cdd557b7f071d0291f7fa91d62d7b.dir
-      size: 103708
+      md5: 77c8666a0d131ba1a043803cde6fd13c.dir
+      size: 101340
       nfiles: 1
     - path: results/drift_analysis/cycle_1
       hash: md5
-      md5: a12e26169dd4b85abd7d10551068ce02.dir
-      size: 4122377
+      md5: 03d60635fd1fdab9b63c8e9f7c282536.dir
+      size: 4251560
       nfiles: 5
     - path: results/evaluation/cycle_1
       hash: md5
-      md5: 6be8c38668aa05ebef996c3e23eff72b.dir
-      size: 430913
+      md5: bfe557c1bfabeb4fead1636a2e1248c4.dir
+      size: 418187
       nfiles: 6
     - path: results/trained/cycle_1
       hash: md5
-      md5: abee783e968dd16675f9becb6cae897e.dir
-      size: 1975676
-      nfiles: 3
+      md5: 031e32ad35b48b3bcec5f6c9e7d19dce.dir
+      size: 2769498
+      nfiles: 4
   cycle_2:
     cmd: python src/run_cycle.py --cycle 2 --model gat
     deps:
     - path: results/data/base/cycle_1
       hash: md5
-      md5: 974d33f72e68aacd28e23fcfc7705725.dir
-      size: 30527509
-      nfiles: 9
+      md5: ca92b942349772d1f1474c5e80ef22ad.dir
+      size: 49249907
+      nfiles: 12
     - path: src/models/
       hash: md5
-      md5: e90278beff1ec6edc4ca759c888942f4.dir
-      size: 23859
+      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
+      size: 25022
       nfiles: 10
     - path: src/run_cycle.py
       hash: md5
@@ -550,16 +575,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: 3373156735d8ad9f195d4d7049e5ea55.dir
+      size: 67653
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: 0f6434c88818dc060e423771b788150b.dir
+      size: 666695
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -570,7 +610,8 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            add_self_loops: true
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -582,6 +623,7 @@ stages:
             depth: -500
             min_samples_per_class:
             connection_radius: 150
+            add_self_loops: false
             n_hotspots: 5
             n_hotspots_random: false
             seed:
@@ -608,6 +650,10 @@ stages:
           n_heads: 5
           dropout: 0.3
           batch_norm: true
+          negative_slope: 0.2
+          add_self_loops: true
+          bias: true
+          residual: false
         train:
           n_epochs: 1000
           lr: 0.001
@@ -617,44 +663,47 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
+          warmup_epochs: 50
+          freeze_early_layers: true
     outs:
     - path: results/data/base/cycle_2
       hash: md5
-      md5: 23515dbb7c180cc6afe842c9dc39c054.dir
-      size: 31121416
-      nfiles: 9
+      md5: cc69ac192ab6c334af06218e93f748c1.dir
+      size: 51242144
+      nfiles: 12
     - path: results/data/prediction/cycle_2
       hash: md5
-      md5: d8a0542e2c5d32668265abee5e21b28d.dir
-      size: 50908
+      md5: b54e3fdd8e3c0622abd60abb90a76834.dir
+      size: 51612
       nfiles: 1
     - path: results/drift_analysis/cycle_2
       hash: md5
-      md5: 65f493ee37c0d73ad65b1c609e52ffe1.dir
-      size: 4862888
+      md5: 1042129cd1163940cb0609dc6aaed101.dir
+      size: 4895294
       nfiles: 5
     - path: results/evaluation/cycle_2
       hash: md5
-      md5: 772112135da24f91d6c14009df7a3b19.dir
-      size: 445421
+      md5: 4c6cb8239e7ed9a8a0c57ac4f57ff01b.dir
+      size: 456411
       nfiles: 6
     - path: results/trained/cycle_2
       hash: md5
-      md5: 4179516dccae37c2d76c9469d78ee2ef.dir
-      size: 1874453
-      nfiles: 3
+      md5: 6bcd27b67d23115600a5852bcc6248a8.dir
+      size: 2712093
+      nfiles: 4
   cycle_3:
     cmd: python src/run_cycle.py --cycle 3 --model gat
     deps:
     - path: results/data/base/cycle_2
       hash: md5
-      md5: 23515dbb7c180cc6afe842c9dc39c054.dir
-      size: 31121416
-      nfiles: 9
+      md5: cc69ac192ab6c334af06218e93f748c1.dir
+      size: 51242144
+      nfiles: 12
     - path: src/models/
       hash: md5
-      md5: e90278beff1ec6edc4ca759c888942f4.dir
-      size: 23859
+      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
+      size: 25022
       nfiles: 10
     - path: src/run_cycle.py
       hash: md5
@@ -662,16 +711,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: 3373156735d8ad9f195d4d7049e5ea55.dir
+      size: 67653
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: 0f6434c88818dc060e423771b788150b.dir
+      size: 666695
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -682,7 +746,8 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            add_self_loops: true
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -694,6 +759,7 @@ stages:
             depth: -500
             min_samples_per_class:
             connection_radius: 150
+            add_self_loops: false
             n_hotspots: 5
             n_hotspots_random: false
             seed:
@@ -720,6 +786,10 @@ stages:
           n_heads: 5
           dropout: 0.3
           batch_norm: true
+          negative_slope: 0.2
+          add_self_loops: true
+          bias: true
+          residual: false
         train:
           n_epochs: 1000
           lr: 0.001
@@ -729,40 +799,43 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
+          warmup_epochs: 50
+          freeze_early_layers: true
     outs:
     - path: results/data/base/cycle_3
       hash: md5
-      md5: 8180338b8c9da4d26cc6abd92a6e0ea9.dir
-      size: 31768868
-      nfiles: 9
+      md5: be0a092cd9033f4f8ab399893eae16a9.dir
+      size: 52924940
+      nfiles: 12
     - path: results/data/prediction/cycle_3
       hash: md5
-      md5: 1087c480c9e81d116b8ef5e065be79a9.dir
-      size: 33116
+      md5: 56c29c00982c580e0d151db64f06bbec.dir
+      size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_3
       hash: md5
-      md5: 6668547cb8d7fc4859c6b881033d9ec4.dir
-      size: 5286287
+      md5: db484a52b43ea598ab85b9c77c7c8a3d.dir
+      size: 5272916
       nfiles: 5
     - path: results/evaluation/cycle_3
       hash: md5
-      md5: 1b81e1bc0133d61daa8bbbc56acdd8fb.dir
-      size: 458845
+      md5: 400e94c557860ae2d5545dcd1438f32c.dir
+      size: 451495
       nfiles: 6
     - path: results/trained/cycle_3
       hash: md5
-      md5: 1934ad8d810b9699a1d555a02a9cd9d9.dir
-      size: 1879762
-      nfiles: 3
+      md5: 7e8abdd316c916adcf5eb9fccb06cc34.dir
+      size: 2822158
+      nfiles: 4
   cycle_4:
     cmd: python src/run_cycle.py --cycle 4 --model gat
     deps:
     - path: results/data/base/cycle_3
       hash: md5
-      md5: 8180338b8c9da4d26cc6abd92a6e0ea9.dir
-      size: 31768868
-      nfiles: 9
+      md5: b564414b3e599ad50cd427835676bb28.dir
+      size: 50483092
+      nfiles: 12
     - path: src/models/
       hash: md5
       md5: e90278beff1ec6edc4ca759c888942f4.dir
@@ -774,16 +847,27 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: 56d794d70c6294fe576946d471cd7cee.dir
+      size: 67261
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: 027c867d581019893cf7efbd6356bc79.dir
+      size: 665238
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -794,7 +878,7 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -841,40 +925,41 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
     outs:
     - path: results/data/base/cycle_4
       hash: md5
-      md5: 84fc92e8db9e49c7b36e7fad06e4f9a9.dir
-      size: 32193420
-      nfiles: 9
+      md5: a25d7498c4135dd5a71ac7abf0779d6f.dir
+      size: 51721306
+      nfiles: 12
     - path: results/data/prediction/cycle_4
       hash: md5
-      md5: c256f2e23426f8324492d80019a828d3.dir
+      md5: 0fcd796d49df6e1ac9a635ee64efbd3e.dir
       size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_4
       hash: md5
-      md5: 398b7aed6f687596a2435eda5bedbcda.dir
-      size: 5619911
+      md5: 9e44c8df077839ff93e6c68580673bd2.dir
+      size: 5917051
       nfiles: 5
     - path: results/evaluation/cycle_4
       hash: md5
-      md5: fddb58a14b67c721236860267220b99e.dir
-      size: 457215
+      md5: 84971f7a2d80f864a84c31ba461e7300.dir
+      size: 460285
       nfiles: 6
     - path: results/trained/cycle_4
       hash: md5
-      md5: ca696dd3188d900e31b4a1a44f91d8a7.dir
-      size: 1826835
-      nfiles: 3
+      md5: ee745a29649adfbbc2a0f7b127ba7fa1.dir
+      size: 2697344
+      nfiles: 4
   cycle_5:
     cmd: python src/run_cycle.py --cycle 5 --model gat
     deps:
     - path: results/data/base/cycle_4
       hash: md5
-      md5: 84fc92e8db9e49c7b36e7fad06e4f9a9.dir
-      size: 32193420
-      nfiles: 9
+      md5: 1dba3d217fb36456fcb6ff429b0b9282.dir
+      size: 51612056
+      nfiles: 12
     - path: src/models/
       hash: md5
       md5: e90278beff1ec6edc4ca759c888942f4.dir
@@ -886,16 +971,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -906,7 +1006,7 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -953,40 +1053,41 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
     outs:
     - path: results/data/base/cycle_5
       hash: md5
-      md5: 95a1c154519fe5be976ce94a3086d772.dir
-      size: 32641782
-      nfiles: 9
+      md5: d649e178f09da738c519976c2982f641.dir
+      size: 52437808
+      nfiles: 12
     - path: results/data/prediction/cycle_5
       hash: md5
-      md5: 8c26d7e1c4429e96554850d36f1a0b83.dir
+      md5: 1f64f354cdda6a03b1c5746ea13e245d.dir
       size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_5
       hash: md5
-      md5: bc7ec80a7fa5ea83c89ca0947c4c54c0.dir
-      size: 5909946
+      md5: 299bdb6d4acf58b9c291900d2e0913b7.dir
+      size: 5783546
       nfiles: 5
     - path: results/evaluation/cycle_5
       hash: md5
-      md5: 019ee2e1a3e5fd4bfeeffbcc51058706.dir
-      size: 455466
+      md5: c584fb2101c1d69ee399da49b73579c2.dir
+      size: 438307
       nfiles: 6
     - path: results/trained/cycle_5
       hash: md5
-      md5: d29a7ce5bda99e341890581a076ba92c.dir
-      size: 1917181
-      nfiles: 3
+      md5: d0836da4d034fd7a9784d010bfa8dee1.dir
+      size: 2590002
+      nfiles: 4
   cycle_6:
     cmd: python src/run_cycle.py --cycle 6 --model gat
     deps:
     - path: results/data/base/cycle_5
       hash: md5
-      md5: 95a1c154519fe5be976ce94a3086d772.dir
-      size: 32641782
-      nfiles: 9
+      md5: d649e178f09da738c519976c2982f641.dir
+      size: 52437808
+      nfiles: 12
     - path: src/models/
       hash: md5
       md5: e90278beff1ec6edc4ca759c888942f4.dir
@@ -998,16 +1099,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -1018,7 +1134,7 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -1065,40 +1181,41 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
     outs:
     - path: results/data/base/cycle_6
       hash: md5
-      md5: dea9d884eefe68193363bc2c920ddf60.dir
-      size: 32984794
-      nfiles: 9
+      md5: 63e182490548e662d14ca6a23291570b.dir
+      size: 53245863
+      nfiles: 12
     - path: results/data/prediction/cycle_6
       hash: md5
-      md5: 33a347f9795b32397bb2513165ac873a.dir
+      md5: cec2c1211edafc2001e05f19870f1f01.dir
       size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_6
       hash: md5
-      md5: d842341fada1d3718a6c0169a9197313.dir
-      size: 6153037
+      md5: 6cc5552e22adaee935593bb39d391baf.dir
+      size: 6124899
       nfiles: 5
     - path: results/evaluation/cycle_6
       hash: md5
-      md5: ea701bfccd04a9795b34a578d572d80e.dir
-      size: 463677
+      md5: d71b7f4f71584145a92f9ee49cf1ecf9.dir
+      size: 451922
       nfiles: 6
     - path: results/trained/cycle_6
       hash: md5
-      md5: 309e98b0fe0b8e208ac3d3f3c7ce55b3.dir
-      size: 1883496
-      nfiles: 3
+      md5: f60f95d3039ea90575d223d7f8715bd2.dir
+      size: 2655723
+      nfiles: 4
   cycle_7:
     cmd: python src/run_cycle.py --cycle 7 --model gat
     deps:
     - path: results/data/base/cycle_6
       hash: md5
-      md5: dea9d884eefe68193363bc2c920ddf60.dir
-      size: 32984794
-      nfiles: 9
+      md5: 63e182490548e662d14ca6a23291570b.dir
+      size: 53245863
+      nfiles: 12
     - path: src/models/
       hash: md5
       md5: e90278beff1ec6edc4ca759c888942f4.dir
@@ -1110,16 +1227,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -1130,7 +1262,7 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -1177,40 +1309,41 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
     outs:
     - path: results/data/base/cycle_7
       hash: md5
-      md5: 1b2bf468c3fba584d28b8fe1e03f10c8.dir
-      size: 33554422
-      nfiles: 9
+      md5: 97cd759db3f92bc5cc83ae1b07f7623e.dir
+      size: 54137468
+      nfiles: 12
     - path: results/data/prediction/cycle_7
       hash: md5
-      md5: 522946ce2004ffa196d60becaa50d534.dir
+      md5: 24b5c5af6f036c9f1b3c9b5c74abee48.dir
       size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_7
       hash: md5
-      md5: c530d7e58dc69b6d450d67826b3029bf.dir
-      size: 6388582
+      md5: 37cfabfa6b16c3545a8916069a3522be.dir
+      size: 6233871
       nfiles: 5
     - path: results/evaluation/cycle_7
       hash: md5
-      md5: 29c62b49242f61bdb1c3edd59cda01a8.dir
-      size: 450463
+      md5: f68746fb9df5a7d41e0bfda296880e5a.dir
+      size: 450249
       nfiles: 6
     - path: results/trained/cycle_7
       hash: md5
-      md5: eff610476d9eef14ebfeebabe681e81a.dir
-      size: 1844882
-      nfiles: 3
+      md5: 8fdc560d69eb0a4c2a2b670baaeec70c.dir
+      size: 2529320
+      nfiles: 4
   cycle_8:
     cmd: python src/run_cycle.py --cycle 8 --model gat
     deps:
     - path: results/data/base/cycle_7
       hash: md5
-      md5: 1b2bf468c3fba584d28b8fe1e03f10c8.dir
-      size: 33554422
-      nfiles: 9
+      md5: 97cd759db3f92bc5cc83ae1b07f7623e.dir
+      size: 54137468
+      nfiles: 12
     - path: src/models/
       hash: md5
       md5: e90278beff1ec6edc4ca759c888942f4.dir
@@ -1222,16 +1355,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -1242,7 +1390,7 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -1289,40 +1437,41 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
     outs:
     - path: results/data/base/cycle_8
       hash: md5
-      md5: ca14cfd491cf62b1744d91e51bc4eed4.dir
-      size: 33811764
-      nfiles: 9
+      md5: c700270a0b32adfeac763dcf50911fbe.dir
+      size: 54945708
+      nfiles: 12
     - path: results/data/prediction/cycle_8
       hash: md5
-      md5: 1d5a07179601f198563aa289dac4c0d8.dir
+      md5: 0a6724fa84700d88f65f2f7f5c3bc944.dir
       size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_8
       hash: md5
-      md5: 9297d04bdeef16b2e1454b34fc5f87cb.dir
-      size: 6470211
+      md5: 6abef8e3f851e020e613cc5028730bc2.dir
+      size: 6406088
       nfiles: 5
     - path: results/evaluation/cycle_8
       hash: md5
-      md5: e8c3a3d833f449317fe8fd32732611bb.dir
-      size: 449735
+      md5: 167b1fc4e7e7c41b1b0d6414d523949a.dir
+      size: 462200
       nfiles: 6
     - path: results/trained/cycle_8
       hash: md5
-      md5: 8da654f98eb2bf2a643a5365335f477e.dir
-      size: 1802290
-      nfiles: 3
+      md5: 64c6adcd4e09514548b8780749059805.dir
+      size: 2615912
+      nfiles: 4
   cycle_9:
     cmd: python src/run_cycle.py --cycle 9 --model gat
     deps:
     - path: results/data/base/cycle_8
       hash: md5
-      md5: ca14cfd491cf62b1744d91e51bc4eed4.dir
-      size: 33811764
-      nfiles: 9
+      md5: c700270a0b32adfeac763dcf50911fbe.dir
+      size: 54945708
+      nfiles: 12
     - path: src/models/
       hash: md5
       md5: e90278beff1ec6edc4ca759c888942f4.dir
@@ -1334,16 +1483,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: 57e4f5ab627085171eda9180e7026d89.dir
-      size: 54908
-      nfiles: 10
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -1354,7 +1518,7 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
@@ -1401,40 +1565,41 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
     outs:
     - path: results/data/base/cycle_9
       hash: md5
-      md5: ce991002176f825ab548bf8203195408.dir
-      size: 34170936
-      nfiles: 9
+      md5: c0b2272aa4ba7bf53c2110e77418a5c0.dir
+      size: 55532209
+      nfiles: 12
     - path: results/data/prediction/cycle_9
       hash: md5
-      md5: 04ade181bfae684cf0cdd21df57d93f1.dir
+      md5: 54b65bdb2d6107dfdb556eeee82a31f9.dir
       size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_9
       hash: md5
-      md5: 7715ec83e43b7f7e3de54ac9b61fcd94.dir
-      size: 6480359
+      md5: dc3f282c7d08f5a056b45697e4b2f3d6.dir
+      size: 6478319
       nfiles: 5
     - path: results/evaluation/cycle_9
       hash: md5
-      md5: a9b081dc8facb33ea01bde58eb10d3da.dir
-      size: 476701
+      md5: da2c2d2fa53536009b4fcad858ae37e8.dir
+      size: 451351
       nfiles: 6
     - path: results/trained/cycle_9
       hash: md5
-      md5: 4ed617601c16e98f407f365bb568aa5c.dir
-      size: 1747053
-      nfiles: 3
+      md5: 2f3d27896bdd93e3954f01a3444a7681.dir
+      size: 2683500
+      nfiles: 4
   cycle_10:
     cmd: python src/run_cycle.py --cycle 10 --model gat
     deps:
     - path: results/data/base/cycle_9
       hash: md5
-      md5: cbc0db6d5edce348a924137c2f8278ef.dir
-      size: 30713841
-      nfiles: 9
+      md5: c0b2272aa4ba7bf53c2110e77418a5c0.dir
+      size: 55532209
+      nfiles: 12
     - path: src/models/
       hash: md5
       md5: e90278beff1ec6edc4ca759c888942f4.dir
@@ -1446,16 +1611,31 @@ stages:
       size: 1566
     - path: src/stages/
       hash: md5
-      md5: ab81cd0764d41101e84206a3a6983d36.dir
-      size: 54867
-      nfiles: 10
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
     - path: src/utilities/
       hash: md5
-      md5: be6f2419863677d779d20bbc9e87c398.dir
-      size: 536066
-      nfiles: 20
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
     params:
       params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
         data:
           base:
             n_samples: 1000
@@ -1466,19 +1646,16 @@ stages:
             threshold_binary: 0.5
             min_samples_per_class: 20
             connection_radius: 150
-            n_splits: 2
+            n_splits: 3
             test_size: 0.3
             calib_size: 0.5
             n_hotspots: 5
             n_hotspots_random: false
             seed: 2321
           pred:
-            n_samples: 100
+            n_samples: 500
             spacing: 50
             depth: -500
-            n_features: 5
-            n_classes: 5
-            threshold_binary: 0.5
             min_samples_per_class:
             connection_radius: 150
             n_hotspots: 5
@@ -1516,29 +1693,1310 @@ stages:
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
+          strategy: incremental
     outs:
     - path: results/data/base/cycle_10
       hash: md5
-      md5: 402f924f8f11498e16dca6a670a2bd2f.dir
-      size: 30757229
-      nfiles: 9
+      md5: 3ee142f17401ce873ae3caba66c3bb8f.dir
+      size: 56184502
+      nfiles: 12
     - path: results/data/prediction/cycle_10
       hash: md5
-      md5: d314bee2e574345ba8868197ea05d5fd.dir
-      size: 8540
+      md5: 5b7c4ada8a8b0aed5e17bcb3eb0ad92d.dir
+      size: 32540
       nfiles: 1
     - path: results/drift_analysis/cycle_10
       hash: md5
-      md5: 97953e45dfe0b3edd55beaec6b2e2b48.dir
-      size: 4077947
+      md5: 1c132d0ba08706c0754bf0cb76de0f7b.dir
+      size: 6560450
       nfiles: 5
     - path: results/evaluation/cycle_10
       hash: md5
-      md5: 72a6ce8e8a95e390c86713781165a2ff.dir
-      size: 447452
+      md5: a721146406cc9f4f8ea6274c042433d3.dir
+      size: 449959
       nfiles: 6
     - path: results/trained/cycle_10
       hash: md5
-      md5: e7d62770dacca4d78101996bc8aedac6.dir
-      size: 1798795
-      nfiles: 3
+      md5: 94b1d0f1635e0721c3945f14442e94a5.dir
+      size: 2625742
+      nfiles: 4
+  cycle_11:
+    cmd: python src/run_cycle.py --cycle 11 --model gat
+    deps:
+    - path: results/data/base/cycle_10
+      hash: md5
+      md5: 3ee142f17401ce873ae3caba66c3bb8f.dir
+      size: 56184502
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_11
+      hash: md5
+      md5: c4447890718a451065a1376a1440b38f.dir
+      size: 56718374
+      nfiles: 12
+    - path: results/data/prediction/cycle_11
+      hash: md5
+      md5: d6a4c671ba99fc9d03d1e261e5f3d26a.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_11
+      hash: md5
+      md5: ab2d236f0796e4b4137cd4965d16a6df.dir
+      size: 6493477
+      nfiles: 5
+    - path: results/evaluation/cycle_11
+      hash: md5
+      md5: d5b11a38022e17896ec5edaa47a1f49c.dir
+      size: 459610
+      nfiles: 6
+    - path: results/trained/cycle_11
+      hash: md5
+      md5: 6cb7cccab7999b992b1ece016a573a8b.dir
+      size: 2630991
+      nfiles: 4
+  cycle_12:
+    cmd: python src/run_cycle.py --cycle 12 --model gat
+    deps:
+    - path: results/data/base/cycle_11
+      hash: md5
+      md5: c4447890718a451065a1376a1440b38f.dir
+      size: 56718374
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_12
+      hash: md5
+      md5: d9de3fb3ae3edfffefc34c82318ad23a.dir
+      size: 57441348
+      nfiles: 12
+    - path: results/data/prediction/cycle_12
+      hash: md5
+      md5: 5670cc8045118629a228daa4893b746a.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_12
+      hash: md5
+      md5: f92d8ab2039c15b0a7bcd08be1f76fcc.dir
+      size: 6533828
+      nfiles: 5
+    - path: results/evaluation/cycle_12
+      hash: md5
+      md5: 67db09985b9f8cbd944818b367c8102f.dir
+      size: 470256
+      nfiles: 6
+    - path: results/trained/cycle_12
+      hash: md5
+      md5: 7eae3e05175f88f36d930e6d22c7b68b.dir
+      size: 2581323
+      nfiles: 4
+  cycle_13:
+    cmd: python src/run_cycle.py --cycle 13 --model gat
+    deps:
+    - path: results/data/base/cycle_12
+      hash: md5
+      md5: d9de3fb3ae3edfffefc34c82318ad23a.dir
+      size: 57441348
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_13
+      hash: md5
+      md5: 9ec9bf00e0bd366d7949870c4db4ed54.dir
+      size: 57943965
+      nfiles: 12
+    - path: results/data/prediction/cycle_13
+      hash: md5
+      md5: 3fe9fd5e11dfc88896b17a37d7cf0f66.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_13
+      hash: md5
+      md5: 53f9b7581091db24529b30e0a0919d7f.dir
+      size: 6583606
+      nfiles: 5
+    - path: results/evaluation/cycle_13
+      hash: md5
+      md5: 19ca763bae8ace7ad538f41f3bd8b9bd.dir
+      size: 467269
+      nfiles: 6
+    - path: results/trained/cycle_13
+      hash: md5
+      md5: 7ed60bc62dc26914b34f91944d38ce83.dir
+      size: 2563936
+      nfiles: 4
+  cycle_14:
+    cmd: python src/run_cycle.py --cycle 14 --model gat
+    deps:
+    - path: results/data/base/cycle_13
+      hash: md5
+      md5: 9ec9bf00e0bd366d7949870c4db4ed54.dir
+      size: 57943965
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_14
+      hash: md5
+      md5: e0f055311a7bfcb655e0e6967c4d1469.dir
+      size: 58294534
+      nfiles: 12
+    - path: results/data/prediction/cycle_14
+      hash: md5
+      md5: b79c8ca6afbeb2f716907568af8390d4.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_14
+      hash: md5
+      md5: 02c3a9c3063b856e6cbfc65dbdb9e1cd.dir
+      size: 6470174
+      nfiles: 5
+    - path: results/evaluation/cycle_14
+      hash: md5
+      md5: 9a5bcc822ebd53dc11be9ac91ca9be74.dir
+      size: 489398
+      nfiles: 6
+    - path: results/trained/cycle_14
+      hash: md5
+      md5: 30cf799b6583d3c4f58c33e973ed568c.dir
+      size: 2598153
+      nfiles: 4
+  cycle_15:
+    cmd: python src/run_cycle.py --cycle 15 --model gat
+    deps:
+    - path: results/data/base/cycle_14
+      hash: md5
+      md5: e0f055311a7bfcb655e0e6967c4d1469.dir
+      size: 58294534
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_15
+      hash: md5
+      md5: 74cc692acbedeeae46f5b2c946e5d539.dir
+      size: 58698437
+      nfiles: 12
+    - path: results/data/prediction/cycle_15
+      hash: md5
+      md5: 67430d3ba534689183ca0025b5ea2118.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_15
+      hash: md5
+      md5: c5942ea80b28bde572357ed1a8754d12.dir
+      size: 6407716
+      nfiles: 5
+    - path: results/evaluation/cycle_15
+      hash: md5
+      md5: 2342e32fe1e679ee4c55470103d9b12b.dir
+      size: 471323
+      nfiles: 6
+    - path: results/trained/cycle_15
+      hash: md5
+      md5: d7beb74b3d93e621d9f858a51ffe0cc3.dir
+      size: 2667808
+      nfiles: 4
+  cycle_16:
+    cmd: python src/run_cycle.py --cycle 16 --model gat
+    deps:
+    - path: results/data/base/cycle_15
+      hash: md5
+      md5: 74cc692acbedeeae46f5b2c946e5d539.dir
+      size: 58698437
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_16
+      hash: md5
+      md5: b36aba7f2852ee6792814ac17407667f.dir
+      size: 59198521
+      nfiles: 12
+    - path: results/data/prediction/cycle_16
+      hash: md5
+      md5: 69e79272a42981028ea2be9f1ca48274.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_16
+      hash: md5
+      md5: cba74e69f36c0fd85aed2d5c2edcb367.dir
+      size: 6409483
+      nfiles: 5
+    - path: results/evaluation/cycle_16
+      hash: md5
+      md5: f9da8c84090af060aaec793ed78fa1b2.dir
+      size: 481215
+      nfiles: 6
+    - path: results/trained/cycle_16
+      hash: md5
+      md5: 5f0f884eb9162fe4325957bcc664b9b4.dir
+      size: 2507484
+      nfiles: 4
+  cycle_17:
+    cmd: python src/run_cycle.py --cycle 17 --model gat
+    deps:
+    - path: results/data/base/cycle_16
+      hash: md5
+      md5: b36aba7f2852ee6792814ac17407667f.dir
+      size: 59198521
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_17
+      hash: md5
+      md5: d7dfb04685a66003eaa5fbd141caa1d8.dir
+      size: 59723929
+      nfiles: 12
+    - path: results/data/prediction/cycle_17
+      hash: md5
+      md5: ba40be2842f3c738b174872ffb7d37b2.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_17
+      hash: md5
+      md5: 0d056cf7e848d073b73f161caa3354a8.dir
+      size: 6390875
+      nfiles: 5
+    - path: results/evaluation/cycle_17
+      hash: md5
+      md5: 0de841453ab658a8e19c8c1d741341ab.dir
+      size: 478077
+      nfiles: 6
+    - path: results/trained/cycle_17
+      hash: md5
+      md5: 2c8e7d37729a41ee665aceb9a4f2099a.dir
+      size: 2555804
+      nfiles: 4
+  cycle_18:
+    cmd: python src/run_cycle.py --cycle 18 --model gat
+    deps:
+    - path: results/data/base/cycle_17
+      hash: md5
+      md5: d7dfb04685a66003eaa5fbd141caa1d8.dir
+      size: 59723929
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_18
+      hash: md5
+      md5: 1c12ec36833c52c2eda37ed8cea1d147.dir
+      size: 60268674
+      nfiles: 12
+    - path: results/data/prediction/cycle_18
+      hash: md5
+      md5: 2b545b3f9edbf8483a2a851da4fab86f.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_18
+      hash: md5
+      md5: fb793d2100eaa2a20c359e466706d859.dir
+      size: 6261176
+      nfiles: 5
+    - path: results/evaluation/cycle_18
+      hash: md5
+      md5: 400740fd3aebae9822263b656d63d689.dir
+      size: 467864
+      nfiles: 6
+    - path: results/trained/cycle_18
+      hash: md5
+      md5: 260f4cca404ecf6fda32952902cec33e.dir
+      size: 2577320
+      nfiles: 4
+  cycle_19:
+    cmd: python src/run_cycle.py --cycle 19 --model gat
+    deps:
+    - path: results/data/base/cycle_18
+      hash: md5
+      md5: 1c12ec36833c52c2eda37ed8cea1d147.dir
+      size: 60268674
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_19
+      hash: md5
+      md5: c7b24e9f566eafb86b9159f595970044.dir
+      size: 60440398
+      nfiles: 12
+    - path: results/data/prediction/cycle_19
+      hash: md5
+      md5: dc7d26f16243ea998a8709ec5906c27c.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_19
+      hash: md5
+      md5: 5d74e01927ff07012f52cacb654bdf78.dir
+      size: 6180271
+      nfiles: 5
+    - path: results/evaluation/cycle_19
+      hash: md5
+      md5: 05e35e0dc4cb98cd1fb262cbfd044bf9.dir
+      size: 462531
+      nfiles: 6
+    - path: results/trained/cycle_19
+      hash: md5
+      md5: a7c64330e0b7dddce1791ae8fb315952.dir
+      size: 2465093
+      nfiles: 4
+  cycle_20:
+    cmd: python src/run_cycle.py --cycle 20 --model gat
+    deps:
+    - path: results/data/base/cycle_19
+      hash: md5
+      md5: c7b24e9f566eafb86b9159f595970044.dir
+      size: 60440398
+      nfiles: 12
+    - path: src/models/
+      hash: md5
+      md5: e90278beff1ec6edc4ca759c888942f4.dir
+      size: 23859
+      nfiles: 10
+    - path: src/run_cycle.py
+      hash: md5
+      md5: 222104e20cb3e9e83164bd1b177be232
+      size: 1566
+    - path: src/stages/
+      hash: md5
+      md5: fb0934bf9fa3ec1c148ca0750e90f39f.dir
+      size: 67335
+      nfiles: 11
+    - path: src/utilities/
+      hash: md5
+      md5: b44ade8e73289140586a80e297d2bcc7.dir
+      size: 666022
+      nfiles: 26
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.05
+            min_permutations: 100
+        combine_data:
+          similarity_metric: cosine
+          top_k: 10
+          similarity_threshold:
+        data:
+          base:
+            n_samples: 1000
+            spacing: 50
+            depth: -500
+            n_features: 5
+            n_classes: 5
+            threshold_binary: 0.5
+            min_samples_per_class: 20
+            connection_radius: 150
+            n_splits: 3
+            test_size: 0.3
+            calib_size: 0.5
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed: 2321
+          pred:
+            n_samples: 500
+            spacing: 50
+            depth: -500
+            min_samples_per_class:
+            connection_radius: 150
+            n_hotspots: 5
+            n_hotspots_random: false
+            seed:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          class_names:
+          calibration_method: beta
+          n_epochs: 1000
+          lr: 0.001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.3
+          batch_norm: true
+        train:
+          n_epochs: 1000
+          lr: 0.001
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+          strategy: incremental
+    outs:
+    - path: results/data/base/cycle_20
+      hash: md5
+      md5: 4a737c135a0e6be776e20c213be5d736.dir
+      size: 60961990
+      nfiles: 12
+    - path: results/data/prediction/cycle_20
+      hash: md5
+      md5: bc1a6c7c61f8b6f3246cf086956b0982.dir
+      size: 32540
+      nfiles: 1
+    - path: results/drift_analysis/cycle_20
+      hash: md5
+      md5: b036f870b082b115827292b14c45f21b.dir
+      size: 6188105
+      nfiles: 5
+    - path: results/evaluation/cycle_20
+      hash: md5
+      md5: 052a99ff302fb149ddd3a9eb7638d405.dir
+      size: 473623
+      nfiles: 6
+    - path: results/trained/cycle_20
+      hash: md5
+      md5: 98d2cd06a4c95449bd6812b95c394ab8.dir
+      size: 2454780
+      nfiles: 4

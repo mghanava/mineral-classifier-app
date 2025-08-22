@@ -103,6 +103,7 @@ def main():
         features,
         labels,
         connection_radius=pred_params["connection_radius"],
+        add_self_loops=pred_params["add_self_loops"],
         should_split=False,
     )
     if type(pred_data) is Data:

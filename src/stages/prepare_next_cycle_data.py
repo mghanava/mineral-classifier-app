@@ -15,7 +15,11 @@ from pathlib import Path
 import torch
 import yaml
 
-from src.utilities.data_utils import construct_graph, export_all_graphs_to_html
+from src.utilities.data_utils import (
+    construct_graph,
+    export_all_graphs_to_html,
+    export_graph_to_html,
+)
 
 
 def load_params():
@@ -23,10 +27,12 @@ def load_params():
     with open("params.yaml") as f:
         return yaml.safe_load(f)
 
+
 def ensure_directory_exists(path):
     """Ensure directory exists, create if it doesn't."""
     Path(path).mkdir(parents=True, exist_ok=True)
     return path
+
 
 def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle."""
@@ -34,6 +40,7 @@ def get_cycle_paths(cycle_num):
         "combined_data": f"results/data/combined/cycle_{cycle_num}",
         "output": f"results/data/base/cycle_{cycle_num}",
     }
+
 
 def prepare_base_data(cycle_num: int, paths: dict, params: dict):
     """Prepare base data for the next cycle.
@@ -56,7 +63,9 @@ def prepare_base_data(cycle_num: int, paths: dict, params: dict):
     eval_params = params["evaluate"]
 
     # Handle class names and labels
-    class_names = eval_params["class_names"] or [f"Class {i}" for i in range(base_params["n_classes"])]
+    class_names = eval_params["class_names"] or [
+        f"Class {i}" for i in range(base_params["n_classes"])
+    ]
     labels_map = dict(zip(range(len(class_names)), class_names, strict=True))
 
     combined_file = os.path.join(paths["combined_data"], "combined_data.pt")
@@ -77,6 +86,7 @@ def prepare_base_data(cycle_num: int, paths: dict, params: dict):
         features,
         labels,
         connection_radius=base_params["connection_radius"],
+        add_self_loops=base_params["add_self_loops"],
         n_splits=base_params["n_splits"],
         test_size=base_params["test_size"],
         calib_size=base_params["calib_size"],
@@ -84,23 +94,38 @@ def prepare_base_data(cycle_num: int, paths: dict, params: dict):
     )
 
     if not isinstance(graph_data, tuple):
-        raise ValueError("Expected construct_graph to return a tuple when should_split is True")
+        raise ValueError(
+            "Expected construct_graph to return a tuple when should_split is True"
+        )
 
     base_data, fold_data, test_data = graph_data
 
     # Export visualizations
     print("Exporting 3D interactive plots of graphs ...")
+    export_graph_to_html(
+        base_data,
+        coordinates,
+        None,
+        base_params["connection_radius"],
+        base_params["add_self_loops"],
+        output_path,
+        labels_map,
+        dataset_tag="base_data",
+    )
     export_all_graphs_to_html(
         fold_data,
         test_data,
         coordinates,
         base_params["connection_radius"],
+        base_params["add_self_loops"],
         labels_map,
-        save_path=output_path
+        save_path=output_path,
     )
 
     # Save data files
-    print(f"Base data to be used in cycle {cycle_num + 1} has {base_data.x.shape[0]} samples.")
+    print(
+        f"Base data to be used in cycle {cycle_num + 1} has {base_data.x.shape[0]} samples."
+    )
     print(f"Saving data files for cycle {cycle_num}")
     try:
         torch.save(base_data, os.path.join(output_path, "base_data.pt"))
@@ -111,6 +136,7 @@ def prepare_base_data(cycle_num: int, paths: dict, params: dict):
         print(f"Error saving files: {e}")
         traceback.print_exc()
         raise
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -124,11 +150,8 @@ def main():
     params = load_params()
     paths = get_cycle_paths(cycle_num)
 
-    prepare_base_data(
-        cycle_num=cycle_num,
-        paths=paths,
-        params=params
-    )
+    prepare_base_data(cycle_num=cycle_num, paths=paths, params=params)
+
 
 if __name__ == "__main__":
     main()

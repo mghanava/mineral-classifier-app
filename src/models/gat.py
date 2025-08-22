@@ -12,6 +12,10 @@ class MineralDepositGAT(nn.Module):
         n_layers: int = 3,
         n_heads: int = 5,
         dropout: float = 0.3,
+        negative_slope: float = 0.2,
+        add_self_loops: bool = False,
+        bias: bool = True,
+        residual: bool = False,
         batch_norm: bool = True,
     ):
         super().__init__()
@@ -29,7 +33,7 @@ class MineralDepositGAT(nn.Module):
         )
         # batch norm on last layer
         self.batch_norms.append(
-            (nn.BatchNorm1d(hidden_channels) if batch_norm else nn.Identity())
+            nn.BatchNorm1d(hidden_channels) if batch_norm else nn.Identity()
         )
         # Multiple GAT layers
         self.convs = nn.ModuleList()
@@ -39,7 +43,10 @@ class MineralDepositGAT(nn.Module):
                 in_channels,
                 hidden_channels,
                 heads=n_heads,
-                add_self_loops=False,
+                negative_slope=negative_slope,
+                bias=bias,
+                residual=residual,
+                add_self_loops=add_self_loops,
                 dropout=dropout,
             )
         )  # in_channels => hidden_channels
@@ -50,7 +57,10 @@ class MineralDepositGAT(nn.Module):
                     hidden_channels * n_heads,
                     hidden_channels,
                     heads=n_heads,
-                    add_self_loops=False,
+                    add_self_loops=add_self_loops,
+                    negative_slope=negative_slope,
+                    bias=bias,
+                    residual=residual,
                     dropout=dropout,
                 )  # hidden_channels * n_heads => hidden_channels* n_heads
             )
