@@ -87,7 +87,7 @@ class AnalyzeDrift:
                 self.gamma = self._median_heuristic_gamma(
                     self.X1_scaled, self.X2_scaled
                 )
-                print(f"median heuristic gamma {self.gamma} used in rbf kernel!\n")
+                print(f"median heuristic gamma {self.gamma:.5f} used in rbf kernel!\n")
             else:
                 raise ValueError(
                     "self.X1_scaled and self.X2_scaled must not be None when gamma is None."

@@ -24,14 +24,14 @@ def ensure_directory_exists(path):
 def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle."""
     return {
-        "base_data": f"results/data/base/cycle_{cycle_num - 1}",  # Previous cycle's data
+        "base_data": f"results/data/base/cycle_{cycle_num - 1}",
         "prediction_data": f"results/data/prediction/cycle_{cycle_num}",
         "drift_analysis": f"results/drift_analysis/cycle_{cycle_num}",
     }
 
 
 def main():
-    """Analyze drift between previous base data and current prediction data."""
+    """Analyze drift between base data and prediction data."""
     parser = argparse.ArgumentParser(description="Analyze drift for a given cycle.")
     parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
     args = parser.parse_args()
@@ -61,10 +61,6 @@ def main():
         raise FileNotFoundError(f"Base data not found at {base_data_path}")
     base_data = torch.load(base_data_path, weights_only=False)
 
-    # Analyze drift
-    print(
-        f"\nAnalyzing drift between cycle {cycle_num - 1} base data and cycle {cycle_num} prediction data"
-    )
     with LogTime(task_name="\nDrift Analysis"):
         analyzer = AnalyzeDrift(
             base_data=base_data,
@@ -80,7 +76,7 @@ def main():
         analyzer.export_drift_analysis_to_file()
         analyzer.export_drift_analysis_plots()
 
-    print(f"\n✓ Drift analysis results saved to {analysis_path}")
+    print(f"✓ Drift analysis results saved to {analysis_path}.\n")
 
 
 if __name__ == "__main__":

@@ -1157,7 +1157,7 @@ class CalibratedModel:
         #     state, os.path.join(filepath, f"calibrator_cycle_{self.cycle_num}.pt")
         # )
         torch.save(state, os.path.join(filepath, "calibrator.pt"))
-        print(f"Calibrated model saved to: {filepath}")
+        print(f"Calibrated model saved to {filepath}.")
 
     def _train_val_split(self, logits, labels, sample_weights):
         """Stratified split of calibration data into train/val sets.
@@ -1463,7 +1463,7 @@ class CalibratedModel:
         # Restore isotonic calibrators
         instance.iso_calibrators = state.get("iso_calibrators")
 
-        print(f"Calibrated model loaded from {filepath}")
+        print(f"Calibrated model loaded from {filepath}.")
         return instance
 
     def predict_proba(self, logits: torch.Tensor) -> torch.Tensor:

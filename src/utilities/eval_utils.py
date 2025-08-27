@@ -220,14 +220,14 @@ def evaluate_with_calibration(
     # confusion_path = os.path.join(save_path, f"confusion_matrix_cycle_{cycle_num}.png")
     confusion_path = os.path.join(save_path, "confusion_matrix.png")
 
-    print(f"Saving reliability diagram to {reliability_path}!")
+    print(f"Saving reliability diagram to {reliability_path} ...")
     plot_reliability_diagram(
         uncalibrated_stats=cal_metrics_uncalibrated,
         calibrated_stats=cal_metrics_calibrated,
         title=f"Reliability Diagram for {calibration_method}",
         save_path=reliability_path,
     )
-    print(f"Saving confusion matrix to {confusion_path}!")
+    print(f"Saving confusion matrix to {confusion_path} ...")
     plot_confusion_matrix(
         y_true_test.cpu().numpy(),
         cal_pred.cpu().numpy(),
@@ -238,7 +238,7 @@ def evaluate_with_calibration(
     # Save metrics as JSON file
     # metrics_path = os.path.join(save_path, f"metrics_cycle_{cycle_num}.json")
     metrics_path = os.path.join(save_path, "metrics.json")
-    print(f"Saving metrics to {metrics_path}")
+    print(f"Saving metrics to {metrics_path} ...")
     metrics = {"uncalibrated": uncal_metrics, "calibrated": cal_metrics}
     with open(metrics_path, "w") as f:
         json.dump(metrics, f, indent=4)

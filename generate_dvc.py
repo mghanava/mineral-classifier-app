@@ -12,8 +12,29 @@ def load_params():
         return yaml.safe_load(f)
 
 
+def generate_performance_analysis_stage(cycles):
+    """Generate the performance analysis stage configuration"""
+    metrics_files = []
+    for cycle in cycles:
+        metrics_files.extend(
+            [
+                f"results/evaluation/cycle_{cycle}/metrics.json",
+                f"results/prediction/cycle_{cycle}/metrics.json",
+            ]
+        )
+
+    return {
+        "analyze_performance": {
+            "cmd": "python src/stages/analyze_cycle_performance.py",
+            "deps": ["src/stages/analyze_cycle_performance.py", *metrics_files],
+            "outs": ["results/performance_analysis/cycle_performance.png"],
+        }
+    }
+
+
 def generate_dvc_yaml():
     params = load_params()
+    cycles = parse_range(params["cycles"])
 
     stages = {
         "stages": {
@@ -26,7 +47,8 @@ def generate_dvc_yaml():
         }
     }
 
-    for cycle in parse_range(params["cycles"]):
+    # Generate cycle stages
+    for cycle in cycles:
         stages["stages"][f"cycle_{cycle}"] = {
             "cmd": f"python src/run_cycle.py --cycle {cycle} --model {params['default_model']}",
             "deps": [
@@ -44,7 +66,6 @@ def generate_dvc_yaml():
                 "train",
                 "evaluate",
                 "analyze_drift",
-                "combine_data",
             ],
             "outs": [
                 f"results/data/base/cycle_{cycle}",
@@ -54,6 +75,9 @@ def generate_dvc_yaml():
                 f"results/drift_analysis/cycle_{cycle}",
             ],
         }
+
+    # Add performance analysis stage
+    stages["stages"].update(generate_performance_analysis_stage(cycles))
 
     with open("dvc.yaml", "w") as f:
         yaml.dump(stages, f, sort_keys=False, default_flow_style=False)

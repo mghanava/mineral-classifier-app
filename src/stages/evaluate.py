@@ -73,7 +73,7 @@ def main():
 
     # Run evaluation
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nEvaluating cycle {cycle_num} on device: {device}")
+    print(f"Using device {device} ...")
 
     with LogTime(task_name=f"\nEvaluation cycle {cycle_num}"):
         evaluate_with_calibration(
@@ -103,7 +103,7 @@ def main():
             seed=eval_params["seed"],
         )
 
-    print(f"\n✓ Evaluation results saved to {evaluation_path}")
+    print(f"✓ Evaluation results saved to {evaluation_path}.\n")
 
 
 if __name__ == "__main__":

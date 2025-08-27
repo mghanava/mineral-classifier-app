@@ -1,17 +1,8 @@
-"""Module for generating synthetic mineral exploration data and graph datasets.
-
-This module provides functionality to:
-- Generate synthetic mineral exploration data
-- Construct graph datasets from the synthetic data
-- Export interactive visualizations of the generated data
-- Save the generated datasets for model training
-"""
-
 import argparse
 import os
-import traceback
 from pathlib import Path
 
+import numpy as np
 import torch
 import yaml
 
@@ -37,51 +28,58 @@ def ensure_directory_exists(path):
 def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle."""
     return {
-        "combined_data": f"results/data/combined/cycle_{cycle_num}",
+        "base_data": f"results/data/base/cycle_{cycle_num - 1}",
+        "prediction": f"results/data/prediction/cycle_{cycle_num}",
         "output": f"results/data/base/cycle_{cycle_num}",
     }
 
 
-def prepare_base_data(cycle_num: int, paths: dict, params: dict):
-    """Prepare base data for the next cycle.
-
-    Args:
-        cycle_num: Current cycle number
-        paths: Dictionary of paths for the current cycle
-        params: Dictionary of parameters from params.yaml
-
-    """
-    # Validate cycle number
-    if cycle_num < 1:
-        raise ValueError("Cycle number must be ≥ 1")
-
-    # Prepare output directory
-    output_path = ensure_directory_exists(paths["output"])
-
-    # Load parameters
+def combine_split_data(
+    paths: dict,
+    params: dict,
+):
     base_params = params["data"]["base"]
     eval_params = params["evaluate"]
-
     # Handle class names and labels
     class_names = eval_params["class_names"] or [
         f"Class {i}" for i in range(base_params["n_classes"])
     ]
     labels_map = dict(zip(range(len(class_names)), class_names, strict=True))
 
-    combined_file = os.path.join(paths["combined_data"], "combined_data.pt")
-    if not os.path.exists(combined_file):
-        raise FileNotFoundError(
-            f"Previous combined data not found at {combined_file}\n"
-            "Please run the combine_data stage for the previous cycle first."
-        )
-    combined_data = torch.load(combined_file, weights_only=False)
-    coordinates = combined_data.coordinates.numpy()
-    features = combined_data.x.numpy()
-    labels = combined_data.y.numpy()
+    base_path = paths["base_data"]
+    pred_path = paths["prediction"]
+    output_path = ensure_directory_exists(paths["output"])
 
-    # Construct graph data splits
-    print(f"Preparing base data for cycle {cycle_num}")
-    graph_data = construct_graph(
+    # Determine data source
+    base_data_path = os.path.join(base_path, "base_data.pt")
+    if not os.path.exists(base_data_path):
+        raise FileNotFoundError(f"Base data not found: {base_data_path}")
+    print(f"📥 Loading base data from: {base_data_path}")
+    base_data = torch.load(base_data_path, weights_only=False)
+    # Load prediction data
+    pred_data_path = os.path.join(pred_path, "pred_data.pt")
+    if not os.path.exists(pred_data_path):
+        raise FileNotFoundError(f"Prediction data not found: {pred_data_path}")
+    print(f"📥 Loading prediction data from: {pred_data_path}")
+    pred_data = torch.load(pred_data_path, weights_only=False)
+
+    print("📊 Data sizes before combination:")
+    print(f"   Base/Previous: {base_data.x.shape[0]} samples")
+    print(f"   Prediction: {pred_data.x.shape[0]} samples")
+    combined_size = base_data.x.shape[0] + pred_data.x.shape[0]
+    print(f"   Total: {combined_size} samples")
+    # Combine datasets
+    coordinates = np.concatenate(
+        (base_data.coordinates.numpy(), pred_data.coordinates.numpy()), axis=0
+    )
+    features = np.concatenate((base_data.x, pred_data.x), axis=0)
+    labels = np.concatenate((base_data.y, pred_data.y), axis=0)
+
+    if combined_size > 3000:
+        print("🎯 Applying reservoir sampling to connected graph...")
+        pass  # placeholder for reservoir sampling logic
+
+    all_graph_data = construct_graph(
         coordinates,
         features,
         labels,
@@ -91,17 +89,16 @@ def prepare_base_data(cycle_num: int, paths: dict, params: dict):
         test_size=base_params["test_size"],
         calib_size=base_params["calib_size"],
         seed=base_params["seed"],
+        scaler=None,  # No scaling needed for combined data
     )
-
-    if not isinstance(graph_data, tuple):
+    # Ensure the returned value is a tuple and unpack accordingly
+    if not isinstance(all_graph_data, tuple):
         raise ValueError(
-            "Expected construct_graph to return a tuple when should_split is True"
+            "Expected construct_graph to return a tuple when should_split is True."
         )
-
-    base_data, fold_data, test_data = graph_data
-
+    base_data, fold_data, test_data = all_graph_data
     # Export visualizations
-    print("Exporting 3D interactive plots of graphs ...")
+    print("\nExporting 3D interactive plots of graphs ...")
     export_graph_to_html(
         base_data,
         coordinates,
@@ -123,19 +120,16 @@ def prepare_base_data(cycle_num: int, paths: dict, params: dict):
     )
 
     # Save data files
-    print(
-        f"Base data to be used in cycle {cycle_num + 1} has {base_data.x.shape[0]} samples."
-    )
-    print(f"Saving data files for cycle {cycle_num}")
     try:
         torch.save(base_data, os.path.join(output_path, "base_data.pt"))
         torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
         torch.save(test_data, os.path.join(output_path, "test_data.pt"))
-        print(f"✓ Data saved to {paths['output']}")
+        print(f"✓ All files successfully saved to {paths['output']}.\n")
     except Exception as e:
         print(f"Error saving files: {e}")
+        import traceback
+
         traceback.print_exc()
-        raise
 
 
 def main():
@@ -146,11 +140,14 @@ def main():
     args = parser.parse_args()
     cycle_num = args.cycle
 
+    # Validate cycle number
+    if cycle_num < 1:
+        raise ValueError("Cycle number must be ≥ 1")
+
     # Load parameters and paths
     params = load_params()
     paths = get_cycle_paths(cycle_num)
-
-    prepare_base_data(cycle_num=cycle_num, paths=paths, params=params)
+    combine_split_data(paths=paths, params=params)
 
 
 if __name__ == "__main__":

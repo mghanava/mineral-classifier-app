@@ -1,10 +1,15 @@
+import json
 import os
 
 import pandas as pd
 import torch
 import torch.nn.functional as F
 from matplotlib import pyplot
-from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import (
+    accuracy_score,
+    fbeta_score,
+    matthews_corrcoef,
+)
 from sklearn.utils.class_weight import compute_sample_weight
 from torch_geometric.data import Data
 
@@ -69,31 +74,49 @@ def prediction(
             "uncalibrated_entropy": uncalib_entropies.cpu().numpy(),
         }
     )
-    fig = result_df.hist(figsize=(20, 10))
+    sample_weights = (
+        compute_sample_weight("balanced", true_label)
+        if true_label is not None
+        else None
+    )
+    metrics = {
+        "acc": accuracy_score(
+            true_label,
+            cal_pred_labels,
+            sample_weight=sample_weights,
+        ),
+        "f1": fbeta_score(
+            true_label,
+            cal_pred_labels,
+            sample_weight=sample_weights,
+            beta=0.5,
+            average="macro",
+        ),
+        "mcc": matthews_corrcoef(
+            true_label, cal_pred_labels, sample_weight=sample_weights
+        ),
+    }
+
     if save_path is not None:
         # result_df.to_csv(
         #     os.path.join(save_path, f"predictions_cycle_{cycle_num}.csv"), index=False
         # )
         # pyplot.savefig(os.path.join(save_path, "histograms_cycle_{cycle_num}.png"))
         result_df.to_csv(os.path.join(save_path, "predictions.csv"), index=False)
+        result_df.hist(figsize=(20, 10))
         pyplot.savefig(os.path.join(save_path, "histograms_cycle.png"))
-    pyplot.close()
-    sample_weights = (
-        compute_sample_weight("balanced", true_label)
-        if true_label is not None
-        else None
-    )
-    mcc = matthews_corrcoef(true_label, cal_pred_labels, sample_weight=sample_weights)
-    if save_path is not None:
         plot_confusion_matrix(
             true_label,
             cal_pred_labels,
             class_names,
-            title=f"Matthews correlation coefficient {mcc:.3f}",
+            title=f"Matthews correlation coefficient {metrics['mcc']:.3f}",
             # save_path=os.path.join(
             #     save_path, f"confussion_matrix_cycle_{cycle_num}.png"
             # ),
             save_path=os.path.join(save_path, "confussion_matrix_.png"),
         )
-
-    return fig
+        # Save metrics as JSON file
+        metrics_path = os.path.join(save_path, "metrics.json")
+        print(f"Saving metrics to {metrics_path} ...")
+        with open(metrics_path, "w") as f:
+            json.dump(metrics, f, indent=4)

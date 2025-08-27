@@ -7,76 +7,71 @@ This module provides functions for:
 - Managing data splits for machine learning tasks
 """
 
-import os
-from typing import Literal
-
 import numpy as np
 import plotly.graph_objects as go
 import torch
-import torch.nn.functional as F
 from matplotlib import pyplot
-from scipy.spatial import distance_matrix
+from scipy.spatial import KDTree, distance_matrix
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 from torch_geometric.data import Data
 
 
 def _generate_coordinates(
+    radius: float,
+    depth: float,
     n_samples: int,
     spacing: float,
-    depth: float,
-    x_range: tuple[float, float] | None = None,
-    y_range: tuple[float, float] | None = None,
+    existing_points: np.ndarray | None = None,
     rng: np.random.Generator = np.random.default_rng(42),
-) -> tuple[np.ndarray, tuple[float, float], tuple[float, float]]:
-    # Calculate the grid size based on n_samples and spacing
-    grid_size = int(np.sqrt(n_samples)) + 1
-    area_size = grid_size * spacing
+) -> np.ndarray:
+    # Initialize
+    all_xy = np.empty((0, 2)) if existing_points is None else existing_points[:, :2]
 
-    # Define x_range and y_range based on spacing and n_samples
-    x_range = (
-        (0, area_size)
-        if x_range is None
-        else (
-            x_range[0] + area_size,
-            x_range[1] + area_size,
-        )  # to avoid overlap with existing data
-    )
-    y_range = (
-        (0, area_size)
-        if y_range is None
-        else (
-            y_range[0] + area_size,
-            y_range[1] + area_size,
-        )  # to avoid overlap with existing data
-    )
+    new_points = []
 
-    # First create a grid
-    x_grid = np.linspace(x_range[0], x_range[1], grid_size)
-    y_grid = np.linspace(y_range[0], y_range[1], grid_size)
+    # Create KDTree for fast distance queries
+    tree = None if len(all_xy) == 0 else KDTree(all_xy)
 
-    # Create all possible grid points
-    xx, yy = np.meshgrid(x_grid, y_grid)
-    grid_points = np.column_stack((xx.ravel(), yy.ravel()))
+    attempts = 0
+    max_attempts = n_samples * 100  # Reasonable limit
 
-    # Add some random jitter to make it more realistic (not exactly on grid)
-    jitter = rng.uniform(0.3, 0.6, 1) * spacing  # % of spacing for natural randomness
-    grid_points[:, 0] += rng.uniform(-jitter, jitter, len(grid_points))
-    grid_points[:, 1] += rng.uniform(-jitter, jitter, len(grid_points))
+    while len(new_points) < n_samples and attempts < max_attempts:
+        # Generate candidate point
+        candidate_xy = rng.uniform(-radius, radius, 2)
 
-    # Select n_samples points from the grid
-    indices = rng.choice(
-        len(grid_points), min(n_samples, len(grid_points)), replace=False
-    )
-    xy_coordinates = grid_points[indices]
+        # Check if within circle
+        if np.linalg.norm(candidate_xy) > radius:
+            attempts += 1
+            continue
 
-    # Generate z coordinates (depth)
-    z_coordinates = rng.uniform(depth, 0, n_samples)
+        # Check spacing using KDTree
+        if tree is not None:
+            dist, _ = tree.query(candidate_xy.reshape(1, -1))
+            if dist[0] < spacing:
+                attempts += 1
+                continue
 
-    # Combine to form complete coordinates
-    coordinates = np.column_stack((xy_coordinates, z_coordinates))
+        # Valid point found
+        candidate_z = rng.uniform(depth, 0)
+        new_point = np.array([candidate_xy[0], candidate_xy[1], candidate_z])
+        new_points.append(new_point)
 
-    return coordinates, x_range, y_range
+        # Update the tree with the new point
+        new_xy = candidate_xy.reshape(1, -1)
+        if tree is None:
+            all_xy = new_xy
+            tree = KDTree(all_xy)
+        else:
+            all_xy = np.vstack([all_xy, new_xy])
+            tree = KDTree(all_xy)
+
+        attempts = 0  # Reset attempts counter
+
+    if len(new_points) < n_samples:
+        print(f"Warning: Only generated {len(new_points)} out of {n_samples} boreholes")
+
+    return np.array(new_points)
 
 
 def _create_hotspots(
@@ -214,15 +209,15 @@ def _generate_features(
 
 
 def generate_mineral_data(
-    n_samples: int = 500,
-    spacing: float = 50,
-    depth: float = -500.0,
+    radius: float,
+    depth: float = -500,
+    n_samples: int = 1000,
+    spacing: float = 10,
+    existing_points: np.ndarray | None = None,
     n_features: int = 10,
     n_classes: int = 5,
     threshold_binary: float = 0.3,
     min_samples_per_class: int | None = 15,
-    x_range: tuple[float, float] | None = None,
-    y_range: tuple[float, float] | None = None,
     n_hotspots: int = 10,
     n_hotspots_random: bool = True,
     seed: int | None = None,
@@ -270,9 +265,11 @@ def generate_mineral_data(
     """
     rng = np.random.default_rng(seed)  # Set random seed for reproducibility
     # 1. Generate spatial coordinates with appropriate spacing
-    coordinates, x_range, y_range = _generate_coordinates(
-        n_samples, spacing, depth, x_range, y_range, rng
+    coordinates = _generate_coordinates(
+        radius, depth, n_samples, spacing, existing_points, rng
     )
+    x_range = coordinates[:, 0].min(), coordinates[:, 0].max()
+    y_range = coordinates[:, 1].min(), coordinates[:, 1].max()
     # 2. Create mineralization hotspots and their strengths (mineralization centers)
     hotspots, hotspot_strengths = _create_hotspots(
         depth, x_range, y_range, n_hotspots, n_hotspots_random, rng
@@ -300,7 +297,7 @@ def generate_mineral_data(
     n_total_samples = len(coordinates)
     features = _generate_features(n_total_samples, gold_values, n_features, rng)
     # Print summary of generated data
-    print("\nLabel distribution:")
+    print("Label distribution:")
     for i in range(n_classes):
         count = np.sum(labels == i)
         print(f"Class {i}: {count} points ({count / n_total_samples * 100:.2f}%)")
@@ -548,7 +545,7 @@ def construct_graph(
     test_size: float | None = None,
     calib_size: float | None = None,
     seed: int | None = None,
-    scaler: ScalerType = RobustScaler(),
+    scaler: ScalerType | None = RobustScaler(),
     should_split: bool = True,
 ) -> tuple[Data, list[Data], Data] | Data:
     """Create graphs from geospatial data using distance matrix with a held-out test set.
@@ -576,7 +573,10 @@ def construct_graph(
 
     """
     # Convert features and labels to torch tensors
-    scaled_features = scale_data(data=features, scaler=scaler)
+    if scaler is not None:
+        scaled_features = scale_data(data=features, scaler=scaler)
+    else:
+        scaled_features = features
     x = torch.tensor(scaled_features, dtype=torch.float32)
     y = torch.tensor(labels, dtype=torch.long)
 
@@ -644,7 +644,7 @@ def prepare_edge_data(
     # from A using edge attributes)
     src_undirected = np.concatenate([src, dst])
     dst_undirected = np.concatenate([dst, src])
-    print(f"Number of edges after making undirected: {len(src_undirected)}")
+
     # Create edge_index tensor
     edge_index = torch.tensor(
         np.array([src_undirected, dst_undirected]), dtype=torch.long
@@ -680,12 +680,15 @@ def export_graph_to_html(
     )
     edge_index, _ = prepare_edge_data(coordinates, connection_radius, add_self_loops)
     src, dst = edge_index
+    title = f"Graph with {coordinates.shape[0]} nodes and {edge_index.shape[1]} edges and avg degree {edge_index.shape[1] / coordinates.shape[0]:.2f}"
+
     fig = visualize_graph(
         coordinates,
         labels,
         np.array(src),
         np.array(dst),
         labels_map=labels_map,
+        title=title,
     )
     if dataset_idx is not None:
         # filename = (
@@ -696,7 +699,7 @@ def export_graph_to_html(
         # filename = f"{save_path}/{dataset_tag}_graph_cycle_{cycle_num}.html"
         filename = f"{save_path}/{dataset_tag}_graph.html"
     fig.write_html(filename)
-    print(f"Graph exported to {filename}\n")
+    print(f"Graph exported to {filename}.")
 
 
 def export_all_graphs_to_html(
@@ -774,183 +777,6 @@ def export_all_graphs_to_html(
         dataset_tag="calib",
         # cycle_num=cycle_num,
     )
-
-
-def connect_graphs_preserve_weights(
-    data1,
-    data2,
-    similarity_metric: Literal["cosine", "euclidean", "dot", "spatial"] = "spatial",
-    top_k: int = 5,
-    similarity_threshold: float | None = None,
-    connection_radius: float = 150.0,
-):
-    """Connect two graphs while preserving their original edge weights.
-
-    Cross-graph edges are weighted by spatial proximity (default) or feature similarity.
-
-    Args:
-        data1: PyG Data object (with edge_attr if weighted)
-        data2: PyG Data object (with edge_attr if weighted)
-        similarity_metric: "spatial" (default), "cosine", "euclidean", or "dot"
-        top_k: Top-k most similar nodes to connect per node (ignored if similarity_threshold is given )
-        similarity_threshold: Min similarity for cross-graph edges (optional)
-        connection_radius: Spatial radius for connecting nodes (only for spatial metric)
-
-    Returns:
-        Combined Data object with edge weights preserved.
-
-    """
-    # Check if original graphs have edge weights
-    orig_weights1 = (
-        data1.edge_attr
-        if hasattr(data1, "edge_attr") and data1.edge_attr is not None
-        else torch.ones(data1.edge_index.size(1), 1)
-    )
-    orig_weights2 = (
-        data2.edge_attr
-        if hasattr(data2, "edge_attr") and data2.edge_attr is not None
-        else torch.ones(data2.edge_index.size(1), 1)
-    )
-
-    # Combine node features first
-    x = torch.cat([data1.x, data2.x], dim=0)
-    y = torch.cat([data1.y, data2.y], dim=0)
-    coords = torch.cat([data1.coordinates, data2.coordinates], dim=0)
-
-    # Offset node indices for data2
-    offset = data1.num_nodes
-
-    # Compute similarity/proximity for cross-graph connections
-    if similarity_metric == "spatial":
-        # Use spatial distance for mineral exploration data
-        coords1 = data1.coordinates.cpu().numpy()
-        coords2 = data2.coordinates.cpu().numpy()
-
-        # Calculate spatial distance matrix
-        spatial_dist_matrix = distance_matrix(coords1, coords2)
-
-        # Find connections within spatial radius
-        src, dst = np.where(spatial_dist_matrix < connection_radius)
-
-        if len(src) > 0:
-            # Convert distances to weights (closer = higher weight)
-            distances = spatial_dist_matrix[src, dst]
-            cross_weights = torch.tensor(
-                1.0 / (distances + 1e-6) ** 2, dtype=torch.float32
-            ).unsqueeze(1)
-
-            # Limit to top_k connections per node if specified
-            if top_k is not None and len(src) > data1.num_nodes * top_k:
-                # Sort by weight (highest first) and keep top_k per source node
-                sorted_indices = np.argsort(-cross_weights.squeeze().numpy())
-
-                # Group by source node and keep top_k
-                kept_indices = []
-                src_counts = {}
-                for idx in sorted_indices:
-                    s = src[idx]
-                    if src_counts.get(s, 0) < top_k:
-                        kept_indices.append(idx)
-                        src_counts[s] = src_counts.get(s, 0) + 1
-
-                src = src[kept_indices]
-                dst = dst[kept_indices]
-                cross_weights = cross_weights[kept_indices]
-        else:
-            # No spatial connections found, create minimal connections
-            print(
-                "⚠️  No spatial connections found, creating minimal feature-based connections"
-            )
-            # Fallback to feature similarity with very few connections
-            sim_matrix = F.cosine_similarity(
-                data1.x.unsqueeze(1), data2.x.unsqueeze(0), dim=-1
-            )
-            topk_sim, topk_idx = torch.topk(sim_matrix, k=min(3, top_k), dim=1)
-            src = torch.arange(data1.num_nodes).repeat_interleave(min(3, top_k))
-            dst = topk_idx.flatten()
-            cross_weights = topk_sim.flatten().unsqueeze(1)
-
-            src = src.numpy()
-            dst = dst.numpy()
-
-    elif similarity_metric == "cosine":
-        sim_matrix = F.cosine_similarity(
-            data1.x.unsqueeze(1), data2.x.unsqueeze(0), dim=-1
-        )
-    elif similarity_metric == "euclidean":
-        sim_matrix = -torch.cdist(
-            data1.x, data2.x
-        )  # Negative distance (higher = more similar)
-    elif similarity_metric == "dot":
-        sim_matrix = data1.x @ data2.x.T
-    else:
-        raise ValueError(f"Unknown metric: {similarity_metric}")
-
-    # For non-spatial metrics, use the original logic
-    if similarity_metric != "spatial":
-        if similarity_threshold is not None:
-            mask = sim_matrix > similarity_threshold
-            src, dst = torch.where(mask)
-            cross_weights = sim_matrix[mask]
-        else:
-            topk_sim, topk_idx = torch.topk(sim_matrix, k=top_k, dim=1)
-            src = torch.arange(data1.num_nodes).repeat_interleave(top_k)
-            dst = topk_idx.flatten()
-            cross_weights = topk_sim.flatten().unsqueeze(1)
-
-        src = src.numpy()
-        dst = dst.numpy()
-
-    # Convert to tensors and add offset
-    src_tensor = torch.tensor(src, dtype=torch.long)
-    dst_tensor = torch.tensor(dst, dtype=torch.long) + offset
-
-    # Combine edge indices
-    cross_edge_index = torch.stack([src_tensor, dst_tensor], dim=0)
-    edge_index = torch.cat(
-        [data1.edge_index, data2.edge_index + offset, cross_edge_index],
-        dim=1,
-    )
-
-    # Combine edge weights
-    edge_attr = torch.cat([orig_weights1, orig_weights2, cross_weights])
-
-    print(
-        f"   Cross-graph connections: {len(src)} edges using {similarity_metric} metric"
-    )
-    print(f"   Final graph: {x.shape[0]} nodes, {edge_index.shape[1]} edges")
-
-    return Data(
-        x=x, y=y, edge_index=edge_index, edge_attr=edge_attr, coordinates=coords
-    )
-
-
-def get_existing_data_bounds(
-    cycle_num: int, base_path: str, combined_data_path: str | None
-):
-    """Get coordinate bounds from existing training data to avoid overlap."""
-    base_data_file = os.path.join(base_path, "base_data.pt")
-    existing_data = None
-    if cycle_num == 1 and os.path.exists(base_data_file):
-        # First cycle: use base_data bounds
-        existing_data = torch.load(base_data_file, weights_only=False)
-    elif combined_data_path is not None:
-        # Subsequent cycles: use combined training data from previous cycle
-        prev_combined_file = os.path.join(combined_data_path, "combined_data.pt")
-        if os.path.exists(prev_combined_file):
-            existing_data = torch.load(prev_combined_file, weights_only=False)
-        else:
-            # Fallback to base_data if combined data doesn't exist yet
-            existing_data = torch.load(base_data_file, weights_only=False)
-    if existing_data is None:
-        raise ValueError("No existing data is available!")
-    # Extract coordinates
-    coords = existing_data.coordinates
-    x_coords, y_coords = coords[:, 0], coords[:, 1]
-    x_range = (x_coords.min(), x_coords.max())
-    y_range = (y_coords.min(), y_coords.max())
-
-    return x_range, y_range, existing_data
 
 
 def no_coordinate_overlap(coords1: torch.Tensor, coords2: torch.Tensor):

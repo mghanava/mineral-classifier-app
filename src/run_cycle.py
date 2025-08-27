@@ -39,7 +39,6 @@ def main():
         ("generate_pred_data", False),
         ("predict", True),
         ("analyze_drift", False),
-        ("combine_data", False),
         ("prepare_next_cycle_data", False),
     ]
     for stage_name, needs_model in stages:

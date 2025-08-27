@@ -80,7 +80,7 @@ def main():
                 f"Warning: Previous model not found at {prev_model_path}, training from scratch"
             )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nUsing device: {device} for training cycle {cycle_num}")
+    print(f"Using device {device} ...")
 
     # Training loop
     fold_results = []
@@ -118,7 +118,7 @@ def main():
         model_trained_path, f"{model_name}_cycle_{cycle_num}.pt"
     )
     torch.save(best_model.state_dict(), model_save_path)
-    print(f"\n✓ Best model saved to {model_save_path}")
+    print(f"✓ Best model saved to {model_save_path}.\n")
 
 
 if __name__ == "__main__":

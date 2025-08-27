@@ -248,7 +248,7 @@ def train(
         early_stopping(loss_val)
         if early_stopping.early_stop:
             print(f"\nEarly stopping triggered after {epoch + 1} epochs!")
-            print(f"Best validation loss achieved: {early_stopping.best_score:.4f}\n")
+            print(f"Best validation loss achieved: {early_stopping.best_score:.4f}.")
             break
 
         training_losses.append(loss.item() if loss else 0)
@@ -265,7 +265,7 @@ def train(
     training_plots_path = os.path.join(
         save_path, f"training_plots_dataset_{dataset_idx}.png"
     )
-    print(f"Saving training plots for dataset {dataset_idx} to {training_plots_path}!")
+    print(f"Saving training plots for dataset {dataset_idx} to {training_plots_path}...")
     plot_training(
         training_losses,
         validation_losses,

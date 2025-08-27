@@ -58,9 +58,10 @@ def prepare_base_data(
     labels_map = dict(zip(range(len(class_names)), class_names, strict=True))
     # Generate synthetic data
     coordinates, features, labels = generate_mineral_data(
-        n_samples=base_params["n_samples"],
-        spacing=base_params["spacing"],
+        radius=base_params["radius"],
         depth=base_params["depth"],
+        spacing=base_params["spacing"],
+        n_samples=base_params["n_samples"],
         n_features=base_params["n_features"],
         n_classes=base_params["n_classes"],
         threshold_binary=base_params["threshold_binary"],
@@ -89,7 +90,7 @@ def prepare_base_data(
     base_data, fold_data, test_data = all_data
 
     # export the interactive 3D plots
-    print("Exporting 3D interactive plots of graphs ...")
+    print("\nExporting 3D interactive plots of graphs ...")
     export_graph_to_html(
         base_data,
         coordinates,
@@ -112,13 +113,11 @@ def prepare_base_data(
     )
 
     # Save the generated data with generic names in the cycle-specific directory
-    print(f"\nBase data at bootstrap cycle 0 has {base_data.x.shape[0]} samples.")
-    print(f"Saving generated data to {output_path}!")
     try:
         torch.save(base_data, os.path.join(output_path, "base_data.pt"))
         torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
         torch.save(test_data, os.path.join(output_path, "test_data.pt"))
-        print("All files saved successfully\n")
+        print(f"All files successfully saved to {output_path}.\n")
     except Exception as e:
         print(f"Error saving files: {e}")
         import traceback
@@ -133,9 +132,7 @@ def main():
     exploration data, constructs graph datasets, and saves outputs to a
     cycle-specific directory.
     """
-    parser = argparse.ArgumentParser(
-        description="Generate prediction data for a given cycle."
-    )
+    parser = argparse.ArgumentParser(description="Generate base data for cycle 0.")
     parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
     args = parser.parse_args()
     cycle_num = args.cycle
@@ -146,9 +143,7 @@ def main():
 
     # Load parameters from YAML file
     params = load_params()
-
     base_output_path = "results/data/base/cycle_0"
-    print("\nCycle 0: Generating bootstrap new synthetic data.")
     prepare_base_data(base_output_path, params)
 
 

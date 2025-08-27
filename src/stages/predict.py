@@ -80,7 +80,7 @@ def main():
 
     # Run prediction
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"\nRunning predictions for cycle {cycle_num} on device: {device}")
+    print(f"Using device {device} ...")
 
     with LogTime(task_name=f"\nPrediction cycle {cycle_num}"):
         prediction(
@@ -92,7 +92,7 @@ def main():
             device=device,
         )
 
-    print(f"\n✓ Predictions saved to {prediction_path}")
+    print(f"✓ Predictions saved to {prediction_path}.\n")
 
 
 if __name__ == "__main__":

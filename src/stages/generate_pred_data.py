@@ -9,7 +9,6 @@ from torch_geometric.data import Data
 from src.utilities.data_utils import (
     construct_graph,
     generate_mineral_data,
-    get_existing_data_bounds,
     no_coordinate_overlap,
 )
 
@@ -64,53 +63,46 @@ def main():
     base_params = params["data"]["base"]
     pred_params = params["data"]["pred"]
 
-    print(f"Generating prediction data for cycle {cycle_num}")
-    # Get bounds from existing training data
-    try:
-        x_range, y_range, existing_data = get_existing_data_bounds(
-            cycle_num,
-            base_path=paths["base_data"],
-            combined_data_path=paths["prev_combined"],
-        )
-    except FileNotFoundError as e:
-        return RuntimeError(f"Missing input data for cycle {cycle_num}: {e!r}")
+    exisiting_coordinates = torch.load(
+        os.path.join(paths["base_data"], "base_data.pt"), weights_only=False
+    ).coordinates.numpy()
 
     # Generate new data
     coordinates, features, labels = generate_mineral_data(
+        radius=base_params["radius"],
+        depth=base_params["depth"],
         n_samples=pred_params["n_samples"],
-        spacing=pred_params["spacing"],
-        depth=pred_params["depth"],
+        spacing=base_params["spacing"],
+        existing_points=exisiting_coordinates,
         n_features=base_params["n_features"],
         n_classes=base_params["n_classes"],
         threshold_binary=base_params["threshold_binary"],
         min_samples_per_class=pred_params["min_samples_per_class"],
-        x_range=x_range,
-        y_range=y_range,
-        n_hotspots=pred_params["n_hotspots"],
-        n_hotspots_random=pred_params["n_hotspots_random"],
+        n_hotspots=base_params["n_hotspots"],
+        n_hotspots_random=base_params["n_hotspots_random"],
         seed=pred_params["seed"],
     )
 
     # Verify no overlap with existing data
     if no_coordinate_overlap(
-        existing_data.coordinates, torch.tensor(coordinates, dtype=torch.float32)
+        exisiting_coordinates, torch.tensor(coordinates, dtype=torch.float32)
     ):
-        print(f"✓ Cycle {cycle_num}: No overlap detected with existing data")
+        print("✓ No overlap detected with existing data!")
 
     # Construct and save graph
     pred_data = construct_graph(
         coordinates,
         features,
         labels,
-        connection_radius=pred_params["connection_radius"],
-        add_self_loops=pred_params["add_self_loops"],
+        connection_radius=base_params["connection_radius"],
+        add_self_loops=base_params["add_self_loops"],
         should_split=False,
     )
-    if type(pred_data) is Data:
+    if type(pred_data) is Data and pred_data.x is not None:
         output_file = os.path.join(paths["output"], "pred_data.pt")
         torch.save(pred_data, output_file)
         print(
-            f"✓ Cycle {cycle_num}: Prediction data with {pred_data.x.shape[0]} samples saved to {output_file}"
+            f"✓ Prediction data with {pred_data.x.shape[0]} samples saved to {output_file}.\n"
         )
 
 
