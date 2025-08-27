@@ -1,19 +1,11 @@
 # Python
 __pycache__/
-*.py[cod]
 
 # IDE
-.idea/
 .vscode/
-*.swp
-*.swo
 
 # DVC
-.dvc/
-.dvcignore
-/dvc_pipelines/
+.dvc/*
 
-# Data and Models (optional - depending on your DVC setup)
-data/
-*.pkl
-*.h5
+# Data 
+results/*
