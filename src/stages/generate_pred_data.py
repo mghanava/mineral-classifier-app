@@ -28,10 +28,7 @@ def ensure_directory_exists(path):
 def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle with directory creation."""
     paths = {
-        "base_data": f"results/data/base/cycle_{cycle_num - 1}",  # Previous cycle
-        "prev_combined": f"results/data/prev_combined/cycle_{cycle_num - 1}"
-        if cycle_num > 1
-        else None,
+        "base_data": f"results/data/base/cycle_{cycle_num - 1}",
         "output": f"results/data/prediction/cycle_{cycle_num}",
     }
 
