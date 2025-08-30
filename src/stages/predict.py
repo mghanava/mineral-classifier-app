@@ -56,11 +56,11 @@ def main():
 
     # Load parameters
     params = load_params()
-    class_names = params["evaluate"]["class_names"]
+    base_params = params["data"]["base"]
     model_params = params["models"][model_name]
 
     # Load trained model
-    model_path = os.path.join(paths["model"], f"{model_name}.pt")
+    model_path = os.path.join(paths["model"], "model.pt")
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model not found at {model_path}")
 
@@ -87,7 +87,7 @@ def main():
             pred_data=pred_data,
             model=model,
             calibrator_path=calibrator_path,
-            class_names=class_names,
+            class_names=base_params["class_names"],
             save_path=prediction_path,
             device=device,
         )

@@ -27,7 +27,7 @@ def ensure_directory_exists(path):
 def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle."""
     return {
-        "base_data": f"results/data/base/cycle_{cycle_num - 1}",  # Previous cycle's data
+        "base_data": f"results/data/base/cycle_{cycle_num - 1}",
         "previous_model": f"results/trained/cycle_{cycle_num - 1}",
         "output": f"results/trained/cycle_{cycle_num}",
     }
@@ -67,9 +67,7 @@ def main():
     # Initialize model
     model = get_model(model_name, model_params)
     if train_params["strategy"] == "incremental" and cycle_num > 1:
-        prev_model_path = os.path.join(
-            paths["previous_model"], f"{model_name}_cycle_{cycle_num - 1}.pt"
-        )
+        prev_model_path = os.path.join(paths["previous_model"], "model.pt")
         if os.path.exists(prev_model_path):
             print(
                 f"Loading previous trained model from {prev_model_path} for incremenetal learning!"
@@ -114,7 +112,7 @@ def main():
 
     # Save best model
     best_model = sorted(fold_results, key=lambda x: x[1], reverse=True)[0][0]
-    model_save_path = os.path.join(model_trained_path, f"{model_name}.pt")
+    model_save_path = os.path.join(model_trained_path, "model.pt")
     torch.save(best_model.state_dict(), model_save_path)
     print(f"✓ Best model saved to {model_save_path}.\n")
 

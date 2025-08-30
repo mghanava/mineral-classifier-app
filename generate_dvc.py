@@ -87,6 +87,7 @@ def generate_fine_grained_dvc_yaml():
                 if cycle > 1
                 else "results/data/base/cycle_0/test_data.pt",
                 "src/models/",
+                f"results/trained/cycle_{cycle}/model.pt",
             ],
             "params": [
                 f"models.{model}",
@@ -121,7 +122,7 @@ def generate_fine_grained_dvc_yaml():
                 "src/utilities/pred_utils.py",
                 "src/utilities/logging_utils.py",
                 f"results/data/prediction/cycle_{cycle}/pred_data.pt",
-                f"results/trained/cycle_{cycle}/{model}.pt",
+                f"results/trained/cycle_{cycle}/model.pt",
                 f"results/evaluation/cycle_{cycle}/calibrator.pt",
                 "src/models/",
             ],

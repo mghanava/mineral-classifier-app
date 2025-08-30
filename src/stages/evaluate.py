@@ -54,6 +54,7 @@ def main():
 
     # Load parameters
     params = load_params()
+    base_params = params["data"]["base"]
     eval_params = params["evaluate"]
     model_params = params["models"][model_name]
 
@@ -64,7 +65,7 @@ def main():
     test_data = torch.load(test_data_path, weights_only=False)
 
     # Load trained model
-    model_path = os.path.join(paths["model"], f"{model_name}.pt")
+    model_path = os.path.join(paths["model"], "model.pt")
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model not found at {model_path}")
 
@@ -82,7 +83,7 @@ def main():
             calibration_method=eval_params["calibration_method"],
             initial_temperature=eval_params["initial_temperature"],
             n_bins=eval_params["n_bins"],
-            class_names=eval_params["class_names"],
+            class_names=base_params["class_names"],
             lr=eval_params["lr"],
             n_epochs=eval_params["n_epochs"],
             weight_decay_adam_optimizer=eval_params["weight_decay_adam_optimizer"],

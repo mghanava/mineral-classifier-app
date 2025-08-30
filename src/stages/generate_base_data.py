@@ -47,12 +47,11 @@ def prepare_base_data(
     """
     # Prepare output directory
     output_path = ensure_directory_exists(path)
-
+    # load parameters
     base_params = params["data"]["base"]
-    eval_params = params["evaluate"]
 
     # Handle class names and labels
-    class_names = eval_params["class_names"] or [
+    class_names = base_params["class_names"] or [
         f"Class {i}" for i in range(base_params["n_classes"])
     ]
     labels_map = dict(zip(range(len(class_names)), class_names, strict=True))
