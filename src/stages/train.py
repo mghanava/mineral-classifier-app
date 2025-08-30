@@ -114,9 +114,7 @@ def main():
 
     # Save best model
     best_model = sorted(fold_results, key=lambda x: x[1], reverse=True)[0][0]
-    model_save_path = os.path.join(
-        model_trained_path, f"{model_name}_cycle_{cycle_num}.pt"
-    )
+    model_save_path = os.path.join(model_trained_path, f"{model_name}.pt")
     torch.save(best_model.state_dict(), model_save_path)
     print(f"✓ Best model saved to {model_save_path}.\n")
 

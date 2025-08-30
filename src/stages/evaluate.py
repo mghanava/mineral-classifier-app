@@ -64,7 +64,7 @@ def main():
     test_data = torch.load(test_data_path, weights_only=False)
 
     # Load trained model
-    model_path = os.path.join(paths["model"], f"{model_name}_cycle_{cycle_num}.pt")
+    model_path = os.path.join(paths["model"], f"{model_name}.pt")
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model not found at {model_path}")
 
