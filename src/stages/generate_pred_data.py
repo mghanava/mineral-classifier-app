@@ -1,9 +1,12 @@
+"""Generate prediction data for a given cycle.
+
+This module provides functionality to generate prediction data, ensuring directory structure and no coordinate overlap.
+"""
+
 import argparse
 import os
-from pathlib import Path
 
 import torch
-import yaml
 from torch_geometric.data import Data
 
 from src.utilities.data_utils import (
@@ -11,57 +14,33 @@ from src.utilities.data_utils import (
     generate_mineral_data,
     no_coordinate_overlap,
 )
-
-
-def load_params():
-    """Load parameters from params.yaml."""
-    with open("params.yaml") as f:
-        return yaml.safe_load(f)
-
-
-def ensure_directory_exists(path):
-    """Ensure directory exists, create if it doesn't."""
-    Path(path).mkdir(parents=True, exist_ok=True)
-    return path
+from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
 
 
 def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle with directory creation."""
-    paths = {
+    return {
         "base_data": f"results/data/base/cycle_{cycle_num - 1}",
         "output": f"results/data/prediction/cycle_{cycle_num}",
     }
 
-    # Ensure all output directories exist
-    for key in ["base_data", "output"]:
-        ensure_directory_exists(paths[key])
 
-    return paths
+def prepare_pred_data(paths: dict, params: dict):
+    """Prepare prediction data for a given cycle.
 
+    Args:
+        paths: Dictionary containing paths for base data and output
+        params: Dictionary of parameters from params.yaml
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Generate prediction data for a given cycle."
-    )
-    parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
-    args = parser.parse_args()
-    cycle_num = args.cycle
-
-    # Validate cycle number
-    if cycle_num < 1:
-        raise ValueError("Cycle number must be ≥ 1")
-
-    # Get and prepare all paths
-    paths = get_cycle_paths(cycle_num)
-    print(f"✓ Cycle {cycle_num}: Ensuring directory structure exists")
-
-    # Load parameters
-    params = load_params()
+    """
+    base_path = paths["base_data"]
+    output_path = ensure_directory_exists(paths["output"])
+    # load parameters
     base_params = params["data"]["base"]
     pred_params = params["data"]["pred"]
 
     exisiting_coordinates = torch.load(
-        os.path.join(paths["base_data"], "base_data.pt"), weights_only=False
+        os.path.join(base_path, "base_data.pt"), weights_only=False
     ).coordinates.numpy()
 
     # Generate new data
@@ -96,11 +75,32 @@ def main():
         should_split=False,
     )
     if type(pred_data) is Data and pred_data.x is not None:
-        output_file = os.path.join(paths["output"], "pred_data.pt")
+        output_file = os.path.join(output_path, "pred_data.pt")
         torch.save(pred_data, output_file)
         print(
             f"✓ Prediction data with {pred_data.x.shape[0]} samples saved to {output_file}.\n"
         )
+
+
+def main():
+    """Parse arguments and generate prediction data for a given cycle."""
+    parser = argparse.ArgumentParser(
+        description="Generate prediction data for a given cycle."
+    )
+    parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
+    args = parser.parse_args()
+    cycle_num = args.cycle
+
+    # Validate cycle number
+    if cycle_num < 1:
+        raise ValueError("Cycle number must be ≥ 1")
+
+    # Load parameters and paths
+    params = load_params()
+    paths = get_cycle_paths(cycle_num)
+
+    with LogTime(task_name=f"\nPrediction data generation for cycle {cycle_num}"):
+        prepare_pred_data(paths=paths, params=params)
 
 
 if __name__ == "__main__":

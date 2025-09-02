@@ -772,7 +772,6 @@ class CalibratedModel:
         patience_early_stopping: int = 50,
         min_delta_early_stopping: float = 0.001,
         save_path: str | None = None,
-        # cycle_num: int = 1,
         seed: int = 42,
     ):
         """Initialize the calibration model.
@@ -823,7 +822,6 @@ class CalibratedModel:
         self.patience_learning_rate_scheduler = patience_learning_rate_scheduler
         self.patience_early_stopping = patience_early_stopping
         self.min_delta_early_stopping = min_delta_early_stopping
-        # self.cycle_num = cycle_num
         self.save_path = save_path
         self.seed = seed
 
@@ -948,9 +946,6 @@ class CalibratedModel:
     def _plot_loss_and_gradients(self, model, track_losses, track_gradients):
         # print optimum parameters based on model type
         if self.save_path is not None:
-            # optimum_params_path = os.path.join(
-            #     self.save_path, f"optimum_params_cycle_{self.cycle_num}.txt"
-            # )
             optimum_params_path = os.path.join(self.save_path, "optimum_params.txt")
             if self.method == "temperature":
                 # Save the optimum parameters to a file
@@ -990,9 +985,6 @@ class CalibratedModel:
         axs[1].set_yscale("log")
         fig.suptitle(f"Calibration Method: {self.method} - Loss and Gradient Norms")
         if self.save_path is not None:
-            # pyplot.savefig(
-            #     f"{self.save_path}/calibration_{self.method}_loss_and_gradients_cycle_{self.cycle_num}.png"
-            # )
             pyplot.savefig(
                 f"{self.save_path}/calibration_{self.method}_loss_and_gradient.png"
             )
@@ -1153,9 +1145,6 @@ class CalibratedModel:
         # Ensure directory exists
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         # Save with both pickle and torch formats for robustness
-        # torch.save(
-        #     state, os.path.join(filepath, f"calibrator_cycle_{self.cycle_num}.pt")
-        # )
         torch.save(state, os.path.join(filepath, "calibrator.pt"))
         print(f"Calibrated model saved to {filepath}.")
 
@@ -1535,7 +1524,6 @@ class CalibrationPipeline:
         labels_train: torch.Tensor,
         sample_weights_train: torch.Tensor | None,
         save_path: str,
-        # cycle_num: int,
         method: Literal[
             "temperature", "isotonic", "platt", "beta", "dirichlet"
         ] = "temperature",
@@ -1560,7 +1548,6 @@ class CalibrationPipeline:
             method=method,
             device=self.device,
             save_path=save_path,
-            # cycle_num=cycle_num,
             **calibration_kwargs,
         )
 

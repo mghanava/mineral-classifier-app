@@ -81,25 +81,8 @@ def plot_metrics(cycles_data, output_dir: Path):
             ax.set_xlim(x_min - 0.2, x_max + 0.2)
 
     plt.tight_layout()
-    output_file = output_dir / "cycle_performance.png"
+    output_file = output_dir / "cycles_performance.png"
     plt.savefig(output_file, bbox_inches="tight", dpi=300)
     plt.close()
 
     return output_file
-
-
-def main():
-    # Setup paths
-    results_dir = Path("results")
-    output_dir = results_dir / "performance_analysis"
-    output_dir.mkdir(exist_ok=True)
-
-    # Load and plot metrics
-    cycles_data = load_metrics_from_cycles(results_dir)
-    output_file = plot_metrics(cycles_data, output_dir)
-
-    print(f"Cycle performance analysis completed. Results saved as '{output_file}'")
-
-
-if __name__ == "__main__":
-    main()

@@ -1,5 +1,5 @@
 # Training cycle configuration
-cycles: "1-2"
+cycles: 3
 default_model: gat
 
 # Data generation parameters
@@ -21,7 +21,7 @@ data:
     calib_size: 0.50
     n_hotspots: 5
     n_hotspots_random: false
-    seed: 2321
+    seed: 646
   pred:
     n_samples: 200
     min_samples_per_class:
@@ -58,7 +58,7 @@ train:
   patience_learning_rate_scheduler: 20
   patience_early_stopping: 50
   min_delta_early_stopping: 1.0e-3
-  strategy: "from_scratch"  # "incremental" or "from_scratch"
+  strategy: from_scratch    # "incremental" or "from_scratch"
   warmup_epochs: 50       # Gradual LR increase for new data
   freeze_early_layers: true  # Freeze first layer for stability
 

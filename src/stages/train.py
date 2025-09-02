@@ -1,27 +1,11 @@
 import argparse
 import os
-from pathlib import Path
 
 import torch
-import yaml
 
 from src.models import get_model
-from src.utilities.logging_utils import (
-    LogTime,
-)
+from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
 from src.utilities.train_utils import train
-
-
-def load_params():
-    """Load parameters from params.yaml."""
-    with open("params.yaml") as f:
-        return yaml.safe_load(f)
-
-
-def ensure_directory_exists(path):
-    """Ensure directory exists, create if it doesn't."""
-    Path(path).mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def get_cycle_paths(cycle_num):
@@ -33,35 +17,33 @@ def get_cycle_paths(cycle_num):
     }
 
 
-def main():
-    """Execute the main training pipeline for the GNN model."""
-    parser = argparse.ArgumentParser(description="Train a GNN model for a given cycle.")
-    parser.add_argument(
-        "--model", type=str, required=True, help="Name of the model to train"
-    )
-    parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
-    args = parser.parse_args()
-    cycle_num = args.cycle
-    model_name = args.model
+def run_training(paths, params, model_name, cycle_num):
+    """Train a model for a specific cycle using provided paths and parameters.
 
-    # Validate cycle number
-    if cycle_num < 1:
-        raise ValueError("Cycle number must be ≥ 1")
+    Parameters
+    ----------
+    paths : dict
+        Dictionary containing paths for base data, previous model, and output.
+    params : dict
+        Dictionary of training and model parameters.
+    model_name : str
+        Name of the model to train.
+    cycle_num : int
+        Current cycle number.
 
-    # Get cycle-specific paths and ensure directories exist
-    paths = get_cycle_paths(cycle_num)
-    model_trained_path = ensure_directory_exists(paths["output"])
+    Returns
+    -------
+    None
 
-    # Load parameters
-    params = load_params()
+    """
     train_params = params["train"]
     model_params = params["models"][model_name]
+    output_path = ensure_directory_exists(paths["output"])
 
     # Load training data from previous cycle
     fold_data_path = os.path.join(paths["base_data"], "fold_data.pt")
     if not os.path.exists(fold_data_path):
         raise FileNotFoundError(f"Training data not found at {fold_data_path}")
-
     fold_data = torch.load(fold_data_path, weights_only=False)
 
     # Initialize model
@@ -82,39 +64,61 @@ def main():
 
     # Training loop
     fold_results = []
-    with LogTime(task_name=f"\nTraining cycle {cycle_num}"):
-        for graph_idx, graph in enumerate(fold_data, 1):
-            print(f"\nTraining model on fold {graph.fold + 1}...")
 
-            trained_model, best_loss_val = train(
-                graph.to(device),
-                model.to(device),
-                n_epochs=train_params["n_epochs"],
-                lr=train_params["lr"],
-                max_grad_norm=train_params["max_grad_norm"],
-                weight_decay=train_params["weight_decay_adam_optimizer"],
-                factor_learning_rate_scheduler=train_params[
-                    "factor_learning_rate_scheduler"
-                ],
-                patience_learning_rate_scheduler=train_params[
-                    "patience_learning_rate_scheduler"
-                ],
-                patience_early_stopping=train_params["patience_early_stopping"],
-                min_delta_early_stopping=train_params["min_delta_early_stopping"],
-                save_path=model_trained_path,
-                dataset_idx=graph_idx,
-                # Incremental learning parameters
-                warmup_epochs=train_params.get("warmup_epochs", 0),
-                freeze_early_layers=train_params.get("freeze_early_layers", False),
-                cycle_num=cycle_num,
-            )
-            fold_results.append((trained_model, best_loss_val))
+    for graph_idx, graph in enumerate(fold_data, 1):
+        print(f"\nTraining model on fold {graph.fold + 1}...")
+
+        trained_model, best_loss_val = train(
+            graph.to(device),
+            model.to(device),
+            n_epochs=train_params["n_epochs"],
+            lr=train_params["lr"],
+            max_grad_norm=train_params["max_grad_norm"],
+            weight_decay=train_params["weight_decay_adam_optimizer"],
+            factor_learning_rate_scheduler=train_params[
+                "factor_learning_rate_scheduler"
+            ],
+            patience_learning_rate_scheduler=train_params[
+                "patience_learning_rate_scheduler"
+            ],
+            patience_early_stopping=train_params["patience_early_stopping"],
+            min_delta_early_stopping=train_params["min_delta_early_stopping"],
+            save_path=output_path,
+            dataset_idx=graph_idx,
+            # Incremental learning parameters
+            warmup_epochs=train_params.get("warmup_epochs", 0),
+            freeze_early_layers=train_params.get("freeze_early_layers", False),
+            cycle_num=cycle_num,
+        )
+        fold_results.append((trained_model, best_loss_val))
 
     # Save best model
     best_model = sorted(fold_results, key=lambda x: x[1], reverse=True)[0][0]
-    model_save_path = os.path.join(model_trained_path, "model.pt")
+    model_save_path = os.path.join(output_path, "model.pt")
     torch.save(best_model.state_dict(), model_save_path)
-    print(f"✓ Best model saved to {model_save_path}.\n")
+    print(f"✓ Best model saved to {model_save_path}.")
+
+
+def main():
+    """Execute the main training pipeline for the GNN model."""
+    parser = argparse.ArgumentParser(description="Train a GNN model for a given cycle.")
+    parser.add_argument(
+        "--model", type=str, required=True, help="Name of the model to train"
+    )
+    parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
+    args = parser.parse_args()
+    cycle_num = args.cycle
+    model_name = args.model
+
+    # Validate cycle number
+    if cycle_num < 1:
+        raise ValueError("Cycle number must be ≥ 1")
+
+    # Load parameters and paths
+    params = load_params()
+    paths = get_cycle_paths(cycle_num)
+    with LogTime(task_name=f"\nTraining cycle {cycle_num}"):
+        run_training(paths, params, model_name, cycle_num)
 
 
 if __name__ == "__main__":

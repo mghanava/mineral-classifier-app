@@ -670,7 +670,6 @@ def export_graph_to_html(
     labels_map: dict[int, str],
     dataset_idx: int | None = None,
     dataset_tag: str = "train",
-    # cycle_num: int | None = None,
     filename="graph.html",
 ):
     """Export the graph to an interactive HTML file using Plotly."""
@@ -691,12 +690,8 @@ def export_graph_to_html(
         title=title,
     )
     if dataset_idx is not None:
-        # filename = (
-        #     f"{save_path}/{dataset_tag}_graph_{dataset_idx}_cycle_{cycle_num}.html"
-        # )
         filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}.html"
     else:
-        # filename = f"{save_path}/{dataset_tag}_graph_cycle_{cycle_num}.html"
         filename = f"{save_path}/{dataset_tag}_graph.html"
     fig.write_html(filename)
     print(f"Graph exported to {filename}.")
@@ -710,7 +705,6 @@ def export_all_graphs_to_html(
     add_self_loops: bool,
     labels_map: dict[int, str],
     save_path: str,
-    # cycle_num: int | None = None,
 ):
     """Export all train, validation, test, and calibration graphs to interactive HTML files.
 
@@ -738,7 +732,6 @@ def export_all_graphs_to_html(
             labels_map=labels_map,
             dataset_idx=i + 1,
             dataset_tag="train",
-            # cycle_num=cycle_num,
         )
         node_indices = graph.val_mask
         export_graph_to_html(
@@ -751,7 +744,6 @@ def export_all_graphs_to_html(
             labels_map=labels_map,
             dataset_idx=i + 1,
             dataset_tag="val",
-            # cycle_num=cycle_num,
         )
     node_indices = test_data.test_mask
     export_graph_to_html(
@@ -763,7 +755,6 @@ def export_all_graphs_to_html(
         save_path=save_path,
         labels_map=labels_map,
         dataset_tag="test",
-        # cycle_num=cycle_num,
     )
     node_indices = test_data.calib_mask
     export_graph_to_html(
@@ -775,7 +766,6 @@ def export_all_graphs_to_html(
         save_path=save_path,
         labels_map=labels_map,
         dataset_tag="calib",
-        # cycle_num=cycle_num,
     )
 
 

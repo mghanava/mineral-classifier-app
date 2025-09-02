@@ -259,9 +259,6 @@ def train(
         validation_ece.append(ece)
         validation_mce.append(mce)
 
-    # training_plots_path = os.path.join(
-    #     save_path, f"training_plots_dataset_{dataset_idx}_cycle_{cycle_num}.png"
-    # )
     training_plots_path = os.path.join(
         save_path, f"training_plots_dataset_{dataset_idx}.png"
     )

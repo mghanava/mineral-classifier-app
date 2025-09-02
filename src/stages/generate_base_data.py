@@ -4,15 +4,13 @@ This module provides functionality to:
 - Generate synthetic mineral exploration data
 - Construct graph datasets from the synthetic data
 - Export interactive visualizations of the generated data
-- Save the generated datasets for model training
+- Save the generated datasets for model training and evaluation
 """
 
 import argparse
 import os
-from pathlib import Path
 
 import torch
-import yaml
 
 from src.utilities.data_utils import (
     construct_graph,
@@ -20,18 +18,7 @@ from src.utilities.data_utils import (
     export_graph_to_html,
     generate_mineral_data,
 )
-
-
-def load_params():
-    """Load parameters from params.yaml."""
-    with open("params.yaml") as f:
-        return yaml.safe_load(f)
-
-
-def ensure_directory_exists(path):
-    """Ensure directory exists, create if it doesn't."""
-    Path(path).mkdir(parents=True, exist_ok=True)
-    return path
+from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
 
 
 def prepare_base_data(
@@ -39,6 +26,8 @@ def prepare_base_data(
     params: dict,
 ):
     """Prepare base data for bootstrap cycle.
+
+    Generates synthetic mineral exploration data, constructs graph datasets, and saves outputs to cycle-0 directory
 
     Args:
         path: base data path for the bootstrap cycle
@@ -80,8 +69,7 @@ def prepare_base_data(
         calib_size=base_params["calib_size"],
         seed=base_params["seed"],
     )
-    # When should_split is True, construct_graph returns a tuple (all_data, fold_data, test_data)
-    # Ensure the returned value is a tuple and unpack accordingly
+    # When should_split is True, construct_graph returns a tuple (all_data, fold_data, test_data). Ensure the returned value is a tuple and unpack accordingly
     if not isinstance(all_data, tuple):
         raise ValueError(
             "Expected construct_graph to return a tuple when should_split is True."
@@ -107,16 +95,15 @@ def prepare_base_data(
         base_params["connection_radius"],
         base_params["add_self_loops"],
         labels_map,
-        # cycle_num,
-        output_path,  # Save plots in the cycle-specific output directory
+        output_path,
     )
 
-    # Save the generated data with generic names in the cycle-specific directory
+    # Save the datasets
     try:
         torch.save(base_data, os.path.join(output_path, "base_data.pt"))
         torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
         torch.save(test_data, os.path.join(output_path, "test_data.pt"))
-        print(f"All files successfully saved to {output_path}.\n")
+        print(f"All files successfully saved to {output_path}.")
     except Exception as e:
         print(f"Error saving files: {e}")
         import traceback
@@ -125,12 +112,7 @@ def prepare_base_data(
 
 
 def main():
-    """Execute the main data generation workflow.
-
-    Reads parameters, accepts a cycle number, generates synthetic mineral
-    exploration data, constructs graph datasets, and saves outputs to a
-    cycle-specific directory.
-    """
+    """Execute the main data generation workflow."""
     parser = argparse.ArgumentParser(description="Generate base data for cycle 0.")
     parser.add_argument("--cycle", type=int, required=True, help="Current cycle number")
     args = parser.parse_args()
@@ -139,11 +121,11 @@ def main():
     # Validate cycle number
     if cycle_num != 0:
         raise ValueError("For the bootstrap stage cycle number must be 0!")
-
     # Load parameters from YAML file
     params = load_params()
     base_output_path = "results/data/base/cycle_0"
-    prepare_base_data(base_output_path, params)
+    with LogTime(task_name="\nInitial base data generation"):
+        prepare_base_data(base_output_path, params)
 
 
 if __name__ == "__main__":

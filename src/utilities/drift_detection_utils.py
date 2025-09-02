@@ -42,7 +42,6 @@ class AnalyzeDrift:
         feature_names: list | None = None,
         gamma: float | None = None,
         n_permutations: int = 1000,
-        # cycle_num: int = 1,
         use_max_sliced_wasserstein: bool | None = None,
         use_sinkhorn_wasserstein: bool | None = None,
         n_projections: int = 1000,
@@ -96,7 +95,6 @@ class AnalyzeDrift:
             self.gamma = gamma
         if feature_names is None:
             self.feature_names = [f"Feature_{i}" for i in range(self.n_features)]
-        # self.cycle_num = cycle_num
         self.save_path = save_path
 
     def _mmd_unbiased(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
@@ -487,9 +485,6 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             pyplot.savefig(
-                # os.path.join(
-                #     self.save_path, f"distance_distributions_cycle_{self.cycle_num}.png"
-                # ),
                 os.path.join(self.save_path, "distance_distributions.png"),
                 bbox_inches="tight",
                 dpi=300,
@@ -564,9 +559,6 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             pyplot.savefig(
-                # os.path.join(
-                #     self.save_path, f"marginal_distributions_cycle_{self.cycle_num}.png"
-                # ),
                 os.path.join(self.save_path, "marginal_distributions.png"),
                 bbox_inches="tight",
                 dpi=300,
@@ -617,9 +609,6 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             pyplot.savefig(
-                # os.path.join(
-                #     self.save_path, f"mutual_information_cycle_{self.cycle_num}.png"
-                # ),
                 os.path.join(self.save_path, "mutual_information.png"),
                 bbox_inches="tight",
                 dpi=300,
@@ -729,9 +718,6 @@ class AnalyzeDrift:
         pyplot.show()
         if self.save_path is not None:
             fig.savefig(
-                # os.path.join(
-                #     self.save_path, f"pca_kpca_grid_cycle_{self.cycle_num}.png"
-                # ),
                 os.path.join(self.save_path, "pca_kpca_grid.png"),
                 bbox_inches="tight",
                 dpi=300,
@@ -767,9 +753,6 @@ class AnalyzeDrift:
                 observed_stat, p_value = self._perform_permutation_test(method=method)
                 results.append((method, observed_stat, p_value))
             with open(
-                # os.path.join(
-                #     self.save_path, f"drift_results_cycle_{self.cycle_num}.txt"
-                # ),
                 os.path.join(self.save_path, "drift_results.txt"),
                 "w",
             ) as f:

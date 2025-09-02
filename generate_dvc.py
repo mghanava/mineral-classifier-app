@@ -1,15 +1,12 @@
+"""Generate a dvc.yaml file with fine-grained stages for a machine learning pipeline.
+
+It includes stages for data generation, training, evaluation, prediction, drift analysis, and performance analysis.
+The pipeline is designed to support iterative training cycles and drift detection.
+"""
+
 import yaml
 
-
-def parse_range(range_str):
-    start, end = map(int, range_str.split("-"))
-    return list(range(start, end + 1))
-
-
-def load_params():
-    """Load parameters from params.yaml."""
-    with open("params.yaml") as f:
-        return yaml.safe_load(f)
+from src.utilities.general_utils import load_params
 
 
 def generate_performance_analysis_stage(cycles):
@@ -24,10 +21,14 @@ def generate_performance_analysis_stage(cycles):
         )
 
     return {
-        "analyze_performance": {
-            "cmd": "python src/stages/analyze_cycle_performance.py",
-            "deps": ["src/stages/analyze_cycle_performance.py", *metrics_files],
-            "outs": ["results/performance_analysis/cycle_performance.png"],
+        "analyze_cycles_performance": {
+            "cmd": "python src/stages/analyze_cycles_performance.py",
+            "deps": [
+                "src/stages/analyze_cycles_performance.py",
+                "src/utilities/cycles_performance_utils.py",
+                *metrics_files,
+            ],
+            "outs": ["results/cycles_performance_analysis/cycles_performance.png"],
         }
     }
 
@@ -35,7 +36,7 @@ def generate_performance_analysis_stage(cycles):
 def generate_fine_grained_dvc_yaml():
     """Generate fine-grained DVC pipeline with individual stages."""
     params = load_params()
-    cycles = parse_range(params["cycles"])
+    cycles = range(params["cycles"] + 1)[1:]  # Skip cycle 0 (bootstrap)
     model = params["default_model"]
 
     stages = {
@@ -45,6 +46,7 @@ def generate_fine_grained_dvc_yaml():
                 "deps": [
                     "src/stages/generate_base_data.py",
                     "src/utilities/data_utils.py",
+                    "src/utilities/general_utils.py",
                 ],
                 "params": ["data.base"],
                 "outs": [
@@ -55,7 +57,6 @@ def generate_fine_grained_dvc_yaml():
             }
         }
     }
-
     # Generate cycle stages
     for cycle in cycles:
         stages["stages"][f"train_cycle_{cycle}"] = {
@@ -63,7 +64,7 @@ def generate_fine_grained_dvc_yaml():
             "deps": [
                 "src/stages/train.py",
                 "src/utilities/train_utils.py",
-                "src/utilities/logging_utils.py",
+                "src/utilities/general_utils.py",
                 f"results/data/base/cycle_{cycle - 1}/fold_data.pt"
                 if cycle > 1
                 else "results/data/base/cycle_0/fold_data.pt",
@@ -82,7 +83,7 @@ def generate_fine_grained_dvc_yaml():
             "deps": [
                 "src/stages/evaluate.py",
                 "src/utilities/eval_utils.py",
-                "src/utilities/logging_utils.py",
+                "src/utilities/general_utils.py",
                 f"results/data/base/cycle_{cycle - 1}/test_data.pt"
                 if cycle > 1
                 else "results/data/base/cycle_0/test_data.pt",
@@ -103,9 +104,10 @@ def generate_fine_grained_dvc_yaml():
                 "src/stages/generate_pred_data.py",
                 "src/utilities/pred_utils.py",
                 "src/utilities/data_utils.py",
+                "src/utilities/general_utils.py",
                 f"results/data/base/cycle_{cycle - 1}/base_data.pt"
                 if cycle > 1
-                else "results/data/base/cycle_0/base_data.pt",  # To avoid overlap
+                else "results/data/base/cycle_0/base_data.pt",
                 "src/models/",
             ],
             "params": [
@@ -120,7 +122,7 @@ def generate_fine_grained_dvc_yaml():
             "deps": [
                 "src/stages/predict.py",
                 "src/utilities/pred_utils.py",
-                "src/utilities/logging_utils.py",
+                "src/utilities/general_utils.py",
                 f"results/data/prediction/cycle_{cycle}/pred_data.pt",
                 f"results/trained/cycle_{cycle}/model.pt",
                 f"results/evaluation/cycle_{cycle}/calibrator.pt",
@@ -138,7 +140,7 @@ def generate_fine_grained_dvc_yaml():
             "deps": [
                 "src/stages/analyze_drift.py",
                 "src/utilities/drift_detection_utils.py",
-                "src/utilities/logging_utils.py",
+                "src/utilities/general_utils.py",
                 f"results/data/base/cycle_{cycle - 1}/base_data.pt"
                 if cycle > 1
                 else "results/data/base/cycle_0/base_data.pt",
@@ -156,6 +158,7 @@ def generate_fine_grained_dvc_yaml():
             "deps": [
                 "src/stages/prepare_next_cycle_data.py",
                 "src/utilities/data_utils.py",
+                "src/utilities/general_utils.py",
                 f"results/data/base/cycle_{cycle - 1}/base_data.pt"
                 if cycle > 1
                 else "results/data/base/cycle_0/base_data.pt",
@@ -171,7 +174,8 @@ def generate_fine_grained_dvc_yaml():
             ],
         }
     # Add performance analysis stage
-    stages["stages"].update(generate_performance_analysis_stage(cycles))
+    if len(cycles) > 1:
+        stages["stages"].update(generate_performance_analysis_stage(cycles))
 
     # Write to dvc.yaml
     with open("dvc.yaml", "w") as f:

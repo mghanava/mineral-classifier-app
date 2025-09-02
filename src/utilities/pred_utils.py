@@ -22,7 +22,6 @@ def prediction(
     model: torch.nn.Module,
     calibrator_path: str,
     class_names: list,
-    # cycle_num: int,
     save_path: str | None = None,
     device: torch.device = torch.device("cpu"),
 ):
@@ -98,10 +97,6 @@ def prediction(
     }
 
     if save_path is not None:
-        # result_df.to_csv(
-        #     os.path.join(save_path, f"predictions_cycle_{cycle_num}.csv"), index=False
-        # )
-        # pyplot.savefig(os.path.join(save_path, "histograms_cycle_{cycle_num}.png"))
         result_df.to_csv(os.path.join(save_path, "predictions.csv"), index=False)
         result_df.hist(figsize=(20, 10))
         pyplot.savefig(os.path.join(save_path, "histograms_cycle.png"))
@@ -110,9 +105,6 @@ def prediction(
             cal_pred_labels,
             class_names,
             title=f"Matthews correlation coefficient {metrics['mcc']:.3f}",
-            # save_path=os.path.join(
-            #     save_path, f"confussion_matrix_cycle_{cycle_num}.png"
-            # ),
             save_path=os.path.join(save_path, "confussion_matrix_.png"),
         )
         # Save metrics as JSON file

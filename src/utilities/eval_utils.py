@@ -58,7 +58,6 @@ def evaluate_with_calibration(
     device: torch.device = torch.device("cpu"),
     verbose: bool = False,
     seed: int = 42,
-    # cycle_num: int = 1,
     save_path: str | None = None,
 ):
     """Evaluate a model's performance with and without calibration, and save results.
@@ -181,7 +180,6 @@ def evaluate_with_calibration(
         patience_early_stopping=patience_early_stopping,
         min_delta_early_stopping=min_delta_early_stopping,
         seed=seed,
-        # cycle_num=cycle_num,
         save_path=save_path,
     ).save(filepath=save_path)
     cal_probs = pipeline.predict_from_logits(logits[data.test_mask])
@@ -213,11 +211,7 @@ def evaluate_with_calibration(
     }
 
     # Save plots to disk
-    # reliability_path = os.path.join(
-    #     save_path, f"reliability_diagram_cycle_{cycle_num}.png"
-    # )
     reliability_path = os.path.join(save_path, "reliability_diagram.png")
-    # confusion_path = os.path.join(save_path, f"confusion_matrix_cycle_{cycle_num}.png")
     confusion_path = os.path.join(save_path, "confusion_matrix.png")
 
     print(f"Saving reliability diagram to {reliability_path} ...")
@@ -236,7 +230,6 @@ def evaluate_with_calibration(
         save_path=confusion_path,
     )
     # Save metrics as JSON file
-    # metrics_path = os.path.join(save_path, f"metrics_cycle_{cycle_num}.json")
     metrics_path = os.path.join(save_path, "metrics.json")
     print(f"Saving metrics to {metrics_path} ...")
     metrics = {"uncalibrated": uncal_metrics, "calibrated": cal_metrics}

@@ -1,10 +1,7 @@
-"""Utilities for logging and measuring execution time.
-
-This module provides:
-- LogTime: A context manager for measuring and logging execution time of code blocks.
-"""
-
 import time
+from pathlib import Path
+
+import yaml
 
 
 class LogTime:
@@ -34,3 +31,16 @@ class LogTime:
         self.execution_time = self.end_time - self.start_time
         print(f"{self.task_name} executed in {self.execution_time:.3f} seconds.\n")
         return False  # Propagate any exceptions
+
+
+def load_params():
+    """Load parameters from params.yaml."""
+    with open("params.yaml") as f:
+        return yaml.safe_load(f)
+
+
+def ensure_directory_exists(path):
+    """Ensure directory exists, create if it doesn't."""
+    Path(path).mkdir(parents=True, exist_ok=True)
+    return path
+

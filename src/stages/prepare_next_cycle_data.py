@@ -1,28 +1,21 @@
+"""Module for preparing base data for the next cycle in the pipeline.
+
+This script combines base and prediction data, constructs graphs, exports visualizations,
+and saves processed data for subsequent cycles.
+"""
+
 import argparse
 import os
-from pathlib import Path
 
 import numpy as np
 import torch
-import yaml
 
 from src.utilities.data_utils import (
     construct_graph,
     export_all_graphs_to_html,
     export_graph_to_html,
 )
-
-
-def load_params():
-    """Load parameters from params.yaml."""
-    with open("params.yaml") as f:
-        return yaml.safe_load(f)
-
-
-def ensure_directory_exists(path):
-    """Ensure directory exists, create if it doesn't."""
-    Path(path).mkdir(parents=True, exist_ok=True)
-    return path
+from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
 
 
 def get_cycle_paths(cycle_num):
@@ -38,6 +31,20 @@ def combine_split_data(
     paths: dict,
     params: dict,
 ):
+    """Combine base and prediction data for the next cycle, construct graphs, export visualizations, and save processed data.
+
+    Parameters
+    ----------
+    paths : dict
+        Dictionary containing paths for base data, prediction data, and output directory.
+    params : dict
+        Dictionary of configuration parameters for data processing.
+
+    Returns
+    -------
+    None
+
+    """
     base_params = params["data"]["base"]
     # Handle class names and labels
     class_names = base_params["class_names"] or [
@@ -132,6 +139,11 @@ def combine_split_data(
 
 
 def main():
+    """Parse command-line arguments and prepare base data for the next cycle.
+
+    This function loads configuration parameters, validates the cycle number,
+    constructs paths, and combines split data for the next cycle.
+    """
     parser = argparse.ArgumentParser(
         description="Prepare base data for the next cycle."
     )
@@ -146,7 +158,9 @@ def main():
     # Load parameters and paths
     params = load_params()
     paths = get_cycle_paths(cycle_num)
-    combine_split_data(paths=paths, params=params)
+
+    with LogTime(task_name=f"\nBase data generation for cycle {cycle_num}"):
+        combine_split_data(paths=paths, params=params)
 
 
 if __name__ == "__main__":
