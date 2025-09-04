@@ -23,7 +23,7 @@ def main():
     cycles_data = load_metrics_from_cycles(results_dir)
     output_file = plot_metrics(cycles_data, output_dir)
 
-    print(f"Cycle performance analysis completed. Results saved as '{output_file}'")
+    print(f"Cycle performance analysis completed. Results saved as '{output_file}'.\n")
 
 
 if __name__ == "__main__":

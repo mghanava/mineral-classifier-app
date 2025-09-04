@@ -43,7 +43,8 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
     base_params = params["data"]["base"]
     eval_params = params["evaluate"]
     model_params = params["models"][model_name]
-
+    model_params["add_self_loops"] = params.get("add_self_loops", True)
+    # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
     # Load test data from previous cycle
     test_data_path = os.path.join(paths["base"], "test_data.pt")

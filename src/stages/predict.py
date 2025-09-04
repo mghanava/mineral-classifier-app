@@ -44,6 +44,8 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     """
     base_params = params["data"]["base"]
     model_params = params["models"][model_name]
+    model_params["add_self_loops"] = params.get("add_self_loops", True)
+    # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
     # Load trained model
     model_path = os.path.join(paths["model"], "model.pt")

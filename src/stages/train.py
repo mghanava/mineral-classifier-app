@@ -12,7 +12,6 @@ def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle."""
     return {
         "base_data": f"results/data/base/cycle_{cycle_num - 1}",
-        "previous_model": f"results/trained/cycle_{cycle_num - 1}",
         "output": f"results/trained/cycle_{cycle_num}",
     }
 
@@ -38,6 +37,8 @@ def run_training(paths, params, model_name, cycle_num):
     """
     train_params = params["train"]
     model_params = params["models"][model_name]
+    model_params["add_self_loops"] = params.get("add_self_loops", True)
+    # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 
     # Load training data from previous cycle
@@ -48,17 +49,7 @@ def run_training(paths, params, model_name, cycle_num):
 
     # Initialize model
     model = get_model(model_name, model_params)
-    if train_params["strategy"] == "incremental" and cycle_num > 1:
-        prev_model_path = os.path.join(paths["previous_model"], "model.pt")
-        if os.path.exists(prev_model_path):
-            print(
-                f"Loading previous trained model from {prev_model_path} for incremenetal learning!"
-            )
-            model.load_state_dict(torch.load(prev_model_path, weights_only=True))
-        else:
-            print(
-                f"Warning: Previous model not found at {prev_model_path}, training from scratch"
-            )
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device} ...")
 
@@ -85,10 +76,6 @@ def run_training(paths, params, model_name, cycle_num):
             min_delta_early_stopping=train_params["min_delta_early_stopping"],
             save_path=output_path,
             dataset_idx=graph_idx,
-            # Incremental learning parameters
-            warmup_epochs=train_params.get("warmup_epochs", 0),
-            freeze_early_layers=train_params.get("freeze_early_layers", False),
-            cycle_num=cycle_num,
         )
         fold_results.append((trained_model, best_loss_val))
 

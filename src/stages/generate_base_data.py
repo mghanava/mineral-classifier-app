@@ -38,6 +38,7 @@ def prepare_base_data(
     output_path = ensure_directory_exists(path)
     # load parameters
     base_params = params["data"]["base"]
+    base_params["add_self_loops"] = params.get("add_self_loops", True)
 
     # Handle class names and labels
     class_names = base_params["class_names"] or [

@@ -741,11 +741,6 @@ class AnalyzeDrift:
             methods.append("sinkhorn_wasserstein")
         else:
             methods.append("wasserstein")
-        # methods: list[Literal["mmd", "energy", "wasserstein"]] = [
-        #     "mmd",
-        #     "energy",
-        #     "wasserstein",
-        # ]
         if self.save_path is not None:
             results = []
             for method in methods:
@@ -757,15 +752,15 @@ class AnalyzeDrift:
                 "w",
             ) as f:
                 for method, observed_stat, p_value in results:
-                    f.write(f"{method} Statistic: {observed_stat}\n")
+                    f.write(f"{method.upper()} Statistic: {observed_stat}\n")
                     f.write(f"p-value: {p_value}\n")
                     if p_value < 0.05:
                         f.write(
-                            "Domain shift detected between base and prediction datasets.\n"
+                            f"Domain shift detected between base and prediction datasets using {method} method.\n"
                         )
                     else:
                         f.write(
-                            "No significant domain shift detected between base and prediction datasets.\n"
+                            f"No domain shift detected between base and prediction datasets using {method} method.\n"
                         )
                 f.write("\n")
 

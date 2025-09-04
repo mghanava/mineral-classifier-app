@@ -46,6 +46,7 @@ def combine_split_data(
 
     """
     base_params = params["data"]["base"]
+    base_params["add_self_loops"] = params.get("add_self_loops", True)
     # Handle class names and labels
     class_names = base_params["class_names"] or [
         f"Class {i}" for i in range(base_params["n_classes"])
@@ -130,7 +131,7 @@ def combine_split_data(
         torch.save(base_data, os.path.join(output_path, "base_data.pt"))
         torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
         torch.save(test_data, os.path.join(output_path, "test_data.pt"))
-        print(f"✓ All files successfully saved to {paths['output']}.\n")
+        print(f"✓ All files successfully saved to {paths['output']}.")
     except Exception as e:
         print(f"Error saving files: {e}")
         import traceback

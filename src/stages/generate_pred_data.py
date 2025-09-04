@@ -33,11 +33,14 @@ def prepare_pred_data(paths: dict, params: dict):
         params: Dictionary of parameters from params.yaml
 
     """
-    base_path = paths["base_data"]
-    output_path = ensure_directory_exists(paths["output"])
     # load parameters
     base_params = params["data"]["base"]
+    base_params["add_self_loops"] = params.get("add_self_loops", True)
     pred_params = params["data"]["pred"]
+
+    base_path = paths["base_data"]
+    # Ensure output directory exists
+    output_path = ensure_directory_exists(paths["output"])
 
     exisiting_coordinates = torch.load(
         os.path.join(base_path, "base_data.pt"), weights_only=False
@@ -78,7 +81,7 @@ def prepare_pred_data(paths: dict, params: dict):
         output_file = os.path.join(output_path, "pred_data.pt")
         torch.save(pred_data, output_file)
         print(
-            f"✓ Prediction data with {pred_data.x.shape[0]} samples saved to {output_file}.\n"
+            f"✓ Prediction data with {pred_data.x.shape[0]} samples saved to {output_file}."
         )
 
 

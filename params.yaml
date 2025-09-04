@@ -1,5 +1,6 @@
 # Training cycle configuration
 cycles: 3
+add_self_loops: true
 default_model: gat
 
 # Data generation parameters
@@ -10,18 +11,17 @@ data:
     n_samples: 1000
     spacing: 10
     n_features: 5
-    n_classes: 2
+    n_classes: 5
     class_names:
     threshold_binary: 0.5
-    min_samples_per_class: 20
+    min_samples_per_class: 100
     connection_radius: 100
-    add_self_loops: true
-    n_splits: 2
+    n_splits: 3
     test_size: 0.3
     calib_size: 0.50
     n_hotspots: 5
     n_hotspots_random: false
-    seed: 646
+    seed: 110
   pred:
     n_samples: 200
     min_samples_per_class:
@@ -36,7 +36,6 @@ models:
     dropout: 0.3
     batch_norm: true
     negative_slope: 0.2
-    add_self_loops: true
     bias: true
     residual: false
   gcn:
@@ -45,7 +44,6 @@ models:
     dropout: 0.3
     batch_norm: true
     improved: false
-    add_self_loops: true
     normalize: true
 
 # Training parameters
@@ -58,9 +56,6 @@ train:
   patience_learning_rate_scheduler: 20
   patience_early_stopping: 50
   min_delta_early_stopping: 1.0e-3
-  strategy: from_scratch    # "incremental" or "from_scratch"
-  warmup_epochs: 50       # Gradual LR increase for new data
-  freeze_early_layers: true  # Freeze first layer for stability
 
 # Evaluation parameters
 evaluate:
