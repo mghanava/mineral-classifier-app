@@ -12,3 +12,5 @@ services:
       - ./.dvc/cache:/app/.dvc/cache # Mount DVC cache to persist between runs
     # Default command (executed with docker-compose up)
     command: tail -f /dev/null # Keeps container running
+    ports:
+      - "8501:8501"

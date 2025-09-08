@@ -1,7 +1,7 @@
 # Training cycle configuration
-cycles: 1
+cycles: 5
 add_self_loops: true
-default_model: gcn
+default_model: gat
 
 # Data generation parameters
 data:
@@ -28,7 +28,7 @@ data:
     calib_size: 0.50
     n_hotspots: 5
     n_hotspots_random: false
-    seed: 546110
+    seed: 14
   pred:
     n_samples: 200
     min_samples_per_class:
