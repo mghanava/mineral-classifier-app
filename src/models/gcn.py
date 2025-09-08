@@ -55,20 +55,21 @@ class MineralDepositGCN(nn.Module):
             )
         # MLP head for classification: hidden_channels => n_classes
         self.classify = nn.Sequential(
-            nn.Linear(hidden_channels, hidden_channels),
-            nn.ReLU(),
+            nn.Linear(hidden_channels, hidden_channels * 2),
+            nn.GELU(),
             nn.Dropout(dropout),
+            nn.Linear(hidden_channels * 2, hidden_channels),
+            nn.GELU(),
             nn.Linear(hidden_channels, n_classes),
         )
 
     def forward(self, data):
-        x, edge_index = data.x, data.edge_index
+        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
         # Process through GCN layers
         for i, conv in enumerate(self.convs):
-            # Apply GAT convolution
-            x = conv(x, edge_index)
-            x = self.batch_norms[i](x)
+            x = conv(x, edge_index, edge_attr)
             x = F.relu(x)
             x = self.dropout(x)
+            x = self.batch_norms[i](x)
         x = self.classify(x)
         return x

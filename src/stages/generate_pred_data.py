@@ -13,8 +13,13 @@ from src.utilities.data_utils import (
     construct_graph,
     generate_mineral_data,
     no_coordinate_overlap,
+    scaler_setup,
 )
-from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
+from src.utilities.general_utils import (
+    LogTime,
+    ensure_directory_exists,
+    load_params,
+)
 
 
 def get_cycle_paths(cycle_num):
@@ -75,6 +80,7 @@ def prepare_pred_data(paths: dict, params: dict):
         labels,
         connection_radius=base_params["connection_radius"],
         add_self_loops=base_params["add_self_loops"],
+        scaler=scaler_setup(params),
         should_split=False,
     )
     if type(pred_data) is Data and pred_data.x is not None:

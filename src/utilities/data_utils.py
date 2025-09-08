@@ -11,7 +11,11 @@ import numpy as np
 import plotly.graph_objects as go
 import torch
 from matplotlib import pyplot
+from matplotlib.cm import get_cmap
+from matplotlib.lines import Line2D
 from scipy.spatial import KDTree, distance_matrix
+from sklearn.manifold import TSNE
+from sklearn.metrics import silhouette_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 from torch_geometric.data import Data
@@ -208,6 +212,191 @@ def _generate_features(
     return features
 
 
+# def _generate_features_new(
+#     n_total_samples: int,
+#     gold_values: np.ndarray,
+#     n_features: int,
+#     labels: np.ndarray,
+#     n_classes: int,
+#     rng: np.random.Generator = np.random.default_rng(42),
+# ) -> np.ndarray:
+#     """Generate discriminative features for mineral classification.
+
+#     Improvements:
+#     1. Non-linear relationships with gold values
+#     2. Class-specific feature correlations
+#     3. Feature interactions
+#     4. Geological domain knowledge incorporation
+#     """
+#     # 1. Generate base features with non-linear relationships
+#     features = np.zeros((n_total_samples, n_features))
+
+#     # Create different non-linear transformations of gold values
+#     gold_sqrt = np.sqrt(gold_values)
+#     gold_squared = gold_values ** 2
+#     gold_log = np.log1p(gold_values)  # log1p handles zero values
+
+#     # Distribute these across feature columns with varying weights
+#     for i in range(n_features):
+#         base = rng.choice([gold_values, gold_sqrt, gold_squared, gold_log])
+#         weight = rng.uniform(0.5, 2.0)
+#         features[:, i] = base * weight
+
+#     # 2. Add class-specific feature correlations
+#     class_profiles = np.zeros((n_classes, n_features))
+#     for i in range(n_classes):
+#         # Generate correlated features for each class
+#         cov_matrix = rng.uniform(0.1, 0.9, size=(n_features, n_features))
+#         cov_matrix = cov_matrix @ cov_matrix.T  # ensure positive semi-definite
+#         class_profiles[i] = rng.multivariate_normal(
+#             mean=rng.uniform(-1, 1, n_features),
+#             cov=cov_matrix,
+#             size=1
+#         )
+
+#     # 3. Add feature interactions
+#     for i in range(n_classes):
+#         mask = labels == i
+#         # Add class-specific profile
+#         features[mask] += class_profiles[i]
+
+#         # Add interaction terms between pairs of features
+#         for j in range(0, n_features-1, 2):
+#             interaction = features[mask, j] * features[mask, j+1]
+#             features[mask, j] += interaction * rng.uniform(0.1, 0.3)
+
+#     # 4. Add domain-specific geological indicators
+#     geological_features = np.zeros((n_total_samples, n_features))
+
+#     # Simulate alteration intensity (increases with gold content)
+#     alteration = gold_values + rng.normal(0, 0.1, n_total_samples)
+
+#     # Simulate mineralization style indicators
+#     for i in range(n_classes):
+#         mask = labels == i
+#         # Each class gets distinct mineralization signatures
+#         style_1 = rng.normal(i/n_classes, 0.1, size=np.sum(mask))
+#         style_2 = rng.normal((n_classes-i)/n_classes, 0.1, size=np.sum(mask))
+
+#         geological_features[mask, 0] = style_1
+#         geological_features[mask, 1] = style_2
+#         geological_features[mask, 2] = alteration[mask]
+
+#     # Blend geological features into main feature matrix
+#     blend_weights = rng.uniform(0.3, 0.7, n_features)
+#     features = (1 - blend_weights) * features + blend_weights * geological_features
+
+#     # Add subtle noise to prevent perfect separation
+#     noise_scale = rng.uniform(0.05, 0.15, n_features)
+#     noise = rng.normal(0, noise_scale, size=(n_total_samples, n_features))
+#     features += noise
+
+#     return features
+
+# def _generate_features_new(
+#     n_total_samples: int,
+#     gold_values: np.ndarray,
+#     n_features: int,
+#     labels: np.ndarray,
+#     n_classes: int,
+#     rng: np.random.Generator = np.random.default_rng(42)
+# ) -> np.ndarray:
+#     """Generate discriminative features for mineral classification with a simpler approach.
+
+#     Key improvements:
+#     1. Non-linear transformations of gold values
+#     2. Class-specific feature patterns
+#     3. Controlled noise addition
+#     """
+#     features = np.zeros((n_total_samples, n_features))
+
+#     # 1. Create base features using different non-linear transformations
+#     transformations = {
+#         'linear': gold_values,
+#         'squared': gold_values ** 2,
+#         'sqrt': np.sqrt(gold_values),
+#         'log': np.log1p(gold_values)
+#     }
+
+#     # 2. Assign different transformations to feature columns
+#     for i in range(n_features):
+#         # Select a random transformation for this feature
+#         trans_name = rng.choice(list(transformations.keys()))
+#         base_feature = transformations[trans_name]
+
+#         # Add class-specific modifications
+#         for class_idx in range(n_classes):
+#             mask = (labels == class_idx)
+#             # Each class gets a distinct multiplier
+#             class_multiplier = 0.5 + (class_idx + 1) / n_classes
+#             features[mask, i] = base_feature[mask] * class_multiplier
+
+#     # 3. Add small controlled noise to prevent perfect separation
+#     noise = rng.normal(0, 0.1, size=features.shape)
+#     features += noise
+
+#     # 4. Normalize features
+#     features = (features - features.mean(axis=0)) / features.std(axis=0)
+
+#     return features
+
+# def _generate_features_new(
+#     n_total_samples: int,
+#     gold_values: np.ndarray,
+#     n_features: int,
+#     rng: np.random.Generator = np.random.default_rng(42),
+# ):
+#     features = np.zeros((n_total_samples, n_features))
+
+#     for i in range(n_features):
+#         # Create different transformations of gold_values for each feature
+#         if i % 4 == 0:
+#             # Linear with different scaling
+#             weight = rng.uniform(1.0, 5.0)
+#             features[:, i] = gold_values * weight
+#         elif i % 4 == 1:
+#             # Squared (emphasizes high values)
+#             weight = rng.uniform(0.5, 2.0)
+#             features[:, i] = (gold_values ** 2) * weight
+#         elif i % 4 == 2:
+#             # Square root (emphasizes low values)
+#             weight = rng.uniform(0.5, 2.0)
+#             features[:, i] = np.sqrt(gold_values) * weight
+#         else:
+#             # Threshold-based feature
+#             threshold = rng.uniform(0.2, 0.8)
+#             steepness = rng.uniform(10, 30)
+#             features[:, i] = 1 / (1 + np.exp(-steepness * (gold_values - threshold)))
+
+#         # Add much less noise
+#         noise = rng.normal(0, 0.05, n_total_samples)  # Much smaller noise
+#         features[:, i] += noise
+
+#     return features
+
+
+def _generate_features_new(
+    n_total_samples: int,
+    labels,
+    n_classes,
+    n_features,
+    rng: np.random.Generator = np.random.default_rng(42),
+):
+    # Random prototype vectors for each class
+    prototypes = rng.uniform(-2, 2, size=(n_classes, n_features))
+    features = np.zeros((n_total_samples, n_features))
+    noise_level = 0.2
+    # For each sample, copy its class prototype and add Gaussian noise
+    features = np.array(
+        [
+            prototypes[lbl] + rng.normal(0, noise_level, size=n_features)
+            for lbl in labels
+        ]
+    )
+
+    return features
+
+
 def generate_mineral_data(
     radius: float,
     depth: float = -500,
@@ -221,6 +410,7 @@ def generate_mineral_data(
     n_hotspots: int = 10,
     n_hotspots_random: bool = True,
     seed: int | None = None,
+    use_new_feature_generation: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate synthetic mineral exploration data with realistic features.
 
@@ -295,7 +485,13 @@ def generate_mineral_data(
         )
     # 6. Generate features for all samples
     n_total_samples = len(coordinates)
-    features = _generate_features(n_total_samples, gold_values, n_features, rng)
+    if use_new_feature_generation:
+        features = _generate_features_new(
+            n_total_samples, labels, n_classes, n_features, rng
+        )
+        # features = _generate_features_new(n_total_samples, gold_values, n_features, labels, n_classes, rng)
+    else:
+        features = _generate_features(n_total_samples, gold_values, n_features, rng)
     # Print summary of generated data
     print("Label distribution:")
     for i in range(n_classes):
@@ -331,7 +527,7 @@ def visualize_graph(
     # Create color map for different classes
     classes = np.unique(labels)
     unique_classes = len(classes)
-    cmap = pyplot.get_cmap("rainbow")
+    cmap = get_cmap("rainbow")
     colors = cmap(np.linspace(0, 1, unique_classes))
     color_map = {
         i: f"rgb({int(255 * c[0])},{int(255 * c[1])},{int(255 * c[2])})"
@@ -776,3 +972,85 @@ def no_coordinate_overlap(coords1: torch.Tensor, coords2: torch.Tensor):
     )  # dim=2 ensures comparing each element of coords1 with elements of coords2
 
     return not torch.any(matches)
+
+
+def analyze_feature_discrimination(
+    features,
+    labels,
+    save_path: str,
+    class_names: list,
+    scaler: ScalerType = RobustScaler(),
+):
+    features_scaled = scale_data(data=features, scaler=scaler)
+    silhouette = silhouette_score(features_scaled, labels)
+
+    fig, axes = pyplot.subplots(2, 2, figsize=(15, 12))
+    fig.suptitle(
+        f"t-SNE with Different Perplexity Values \n The Silhouette Coefficient {silhouette:.2f}",
+        fontsize=16,
+    )
+
+    perplexities = [5, 30, 50, 100]
+    cmap = get_cmap("viridis")
+    # colors = cmap(np.linspace(0, 1, unique_classes))
+    for i, perplexity in enumerate(perplexities):
+        row, col = i // 2, i % 2
+        tsne = TSNE(
+            n_components=2, random_state=42, perplexity=perplexity, max_iter=1000
+        )
+        features_tsne = tsne.fit_transform(features_scaled)
+
+        axes[row, col].scatter(
+            features_tsne[:, 0],
+            features_tsne[:, 1],
+            c=labels,
+            cmap=cmap,
+            alpha=0.7,
+            s=30,
+        )
+        axes[row, col].set_title(f"t-SNE (perplexity={perplexity})")
+        axes[row, col].set_xlabel("t-SNE 1")
+        axes[row, col].set_ylabel("t-SNE 2")
+        # Create legend
+        legend_elements = []
+        for class_idx, class_name in enumerate(class_names):
+            legend_elements.append(
+                Line2D(
+                    [0],
+                    [0],
+                    marker="o",
+                    color="w",
+                    markerfacecolor=cmap(class_idx / len(class_names)),
+                    markersize=8,
+                    label=class_name,
+                )
+            )
+
+        axes[row, col].legend(
+            handles=legend_elements,
+            loc="upper right",
+            bbox_to_anchor=(1.15, 1),
+            fontsize=8,
+        )
+
+    pyplot.tight_layout()
+    if save_path:
+        pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
+
+
+def scaler_setup(params: dict):
+    SCALER_MAP = {
+        "RobustScaler": RobustScaler,
+        "StandardScaler": StandardScaler,
+        "MinMaxScaler": MinMaxScaler,
+    }
+    # Create scaler instance safely
+    scaler_type = params["data"]["scaler_type"]
+    scaler_params = params["data"].get("scaler_params", {})
+    # Convert specific parameters from list to tuple if needed
+    if "quantile_range" in scaler_params and isinstance(
+        scaler_params["quantile_range"], list
+    ):
+        scaler_params["quantile_range"] = tuple(scaler_params["quantile_range"])
+    scaler = SCALER_MAP[scaler_type](**scaler_params)
+    return scaler

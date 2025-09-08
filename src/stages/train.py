@@ -37,6 +37,7 @@ def run_training(paths, params, model_name, cycle_num):
     """
     train_params = params["train"]
     model_params = params["models"][model_name]
+    n_classes = params["data"]["base"]["n_classes"]
     model_params["add_self_loops"] = params.get("add_self_loops", True)
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
@@ -62,6 +63,7 @@ def run_training(paths, params, model_name, cycle_num):
         trained_model, best_loss_val = train(
             graph.to(device),
             model.to(device),
+            n_classes=n_classes,
             n_epochs=train_params["n_epochs"],
             lr=train_params["lr"],
             max_grad_norm=train_params["max_grad_norm"],
@@ -77,10 +79,11 @@ def run_training(paths, params, model_name, cycle_num):
             save_path=output_path,
             dataset_idx=graph_idx,
         )
+
         fold_results.append((trained_model, best_loss_val))
 
     # Save best model
-    best_model = sorted(fold_results, key=lambda x: x[1], reverse=True)[0][0]
+    best_model = sorted(fold_results, key=lambda x: x[1])[0][0]
     model_save_path = os.path.join(output_path, "model.pt")
     torch.save(best_model.state_dict(), model_save_path)
     print(f"✓ Best model saved to {model_save_path}.")

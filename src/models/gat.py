@@ -76,9 +76,11 @@ class MineralDepositGAT(nn.Module):
         )
         # MLP head for classification: hidden_channels => n_classes
         self.classify = nn.Sequential(
-            nn.Linear(hidden_channels, hidden_channels),
-            nn.ReLU(),
+            nn.Linear(hidden_channels, hidden_channels * 2),
+            nn.GELU(),
             nn.Dropout(dropout),
+            nn.Linear(hidden_channels * 2, hidden_channels),
+            nn.GELU(),
             nn.Linear(hidden_channels, n_classes),
         )
 
@@ -89,7 +91,7 @@ class MineralDepositGAT(nn.Module):
             # Apply GAT convolution
             x = conv(x, edge_index, edge_attr)
             x = F.elu(x)
-            x = self.batch_norms[i](x)
             x = self.dropout(x)
+            x = self.batch_norms[i](x)
         x = self.classify(x)
         return x

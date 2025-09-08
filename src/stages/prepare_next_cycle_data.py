@@ -11,11 +11,16 @@ import numpy as np
 import torch
 
 from src.utilities.data_utils import (
+    analyze_feature_discrimination,
     construct_graph,
     export_all_graphs_to_html,
     export_graph_to_html,
 )
-from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
+from src.utilities.general_utils import (
+    LogTime,
+    ensure_directory_exists,
+    load_params,
+)
 
 
 def get_cycle_paths(cycle_num):
@@ -124,6 +129,13 @@ def combine_split_data(
         base_params["add_self_loops"],
         labels_map,
         save_path=output_path,
+    )
+
+    analyze_feature_discrimination(
+        features,
+        labels,
+        save_path=os.path.join(output_path, "tsne_comparison.png"),
+        class_names=class_names,
     )
 
     # Save data files

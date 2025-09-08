@@ -21,6 +21,7 @@ from src.utilities.early_stopping import EarlyStopping
 def train(
     data,
     model,
+    n_classes: int,
     n_epochs: int,
     lr: float,
     max_grad_norm: float,
@@ -40,6 +41,7 @@ def train(
     Args:
         data: The input graph data object containing features, edges, and masks for train/val splits
         model: The GNN model to be trained
+        n_classes (int): The total number of classes in the dataset.
         n_epochs (int): Maximum number of training epochs
         lr (float): Initial learning rate
         max_grad_norm (float): Maximum gradient norm for gradient clipping
@@ -71,23 +73,20 @@ def train(
 
     """
     y_true_train = data.y[data.train_mask]
-    classes_train = np.unique(y_true_train.cpu().numpy())
-
     device = y_true_train.device
 
     class_weights_train = compute_class_weight(
         class_weight="balanced",
-        classes=classes_train,
+        classes=np.arange(n_classes),
         y=y_true_train.cpu().numpy(),
     )
     criterion_train = nn.CrossEntropyLoss(
         weight=torch.tensor(class_weights_train, dtype=torch.float32).to(device)
     )
     y_true_val = data.y[data.val_mask]
-    classes_val = np.unique(y_true_val.cpu().numpy())
     class_weights_val = compute_class_weight(
         class_weight="balanced",
-        classes=classes_val,
+        classes=np.arange(n_classes),
         y=y_true_val.cpu().numpy(),
     )
     criterion_val = nn.CrossEntropyLoss(

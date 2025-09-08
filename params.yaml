@@ -1,10 +1,15 @@
 # Training cycle configuration
-cycles: 3
+cycles: 1
 add_self_loops: true
 default_model: gat
 
 # Data generation parameters
 data:
+  scaler_type: RobustScaler
+  scaler_params:
+    quantile_range:
+    - 25.0
+    - 75.0
   base:
     radius: 2500
     depth: -500
@@ -14,14 +19,14 @@ data:
     n_classes: 5
     class_names:
     threshold_binary: 0.5
-    min_samples_per_class: 100
-    connection_radius: 100
+    min_samples_per_class: 200
+    connection_radius: 500
     n_splits: 3
     test_size: 0.3
     calib_size: 0.50
     n_hotspots: 5
     n_hotspots_random: false
-    seed: 110
+    seed: 7653217
   pred:
     n_samples: 200
     min_samples_per_class:
@@ -37,13 +42,13 @@ models:
     batch_norm: true
     negative_slope: 0.2
     bias: true
-    residual: false
+    residual: true
   gcn:
-    hidden_channels: 64
+    hidden_channels: 128
     n_layers: 3
-    dropout: 0.3
+    dropout: 0.4
     batch_norm: true
-    improved: false
+    improved: true
     normalize: true
 
 # Training parameters

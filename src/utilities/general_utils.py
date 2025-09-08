@@ -43,4 +43,3 @@ def ensure_directory_exists(path):
     """Ensure directory exists, create if it doesn't."""
     Path(path).mkdir(parents=True, exist_ok=True)
     return path
-

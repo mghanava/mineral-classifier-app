@@ -13,12 +13,18 @@ import os
 import torch
 
 from src.utilities.data_utils import (
+    analyze_feature_discrimination,
     construct_graph,
     export_all_graphs_to_html,
     export_graph_to_html,
     generate_mineral_data,
+    scaler_setup,
 )
-from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
+from src.utilities.general_utils import (
+    LogTime,
+    ensure_directory_exists,
+    load_params,
+)
 
 
 def prepare_base_data(
@@ -59,6 +65,7 @@ def prepare_base_data(
         n_hotspots_random=base_params["n_hotspots_random"],
         seed=base_params["seed"],
     )
+
     all_data = construct_graph(
         coordinates,
         features,
@@ -69,6 +76,7 @@ def prepare_base_data(
         test_size=base_params["test_size"],
         calib_size=base_params["calib_size"],
         seed=base_params["seed"],
+        scaler=scaler_setup(params),
     )
     # When should_split is True, construct_graph returns a tuple (all_data, fold_data, test_data). Ensure the returned value is a tuple and unpack accordingly
     if not isinstance(all_data, tuple):
@@ -97,6 +105,13 @@ def prepare_base_data(
         base_params["add_self_loops"],
         labels_map,
         output_path,
+    )
+
+    analyze_feature_discrimination(
+        features,
+        labels,
+        save_path=os.path.join(output_path, "tsne_comparison.png"),
+        class_names=class_names,
     )
 
     # Save the datasets
