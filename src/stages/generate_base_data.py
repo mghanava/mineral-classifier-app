@@ -77,6 +77,8 @@ def prepare_base_data(
         calib_size=base_params["calib_size"],
         seed=base_params["seed"],
         scaler=scaler_setup(params),
+        make_edge_weight=params["data"].get("make_edge_weight", True),
+        make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
     # When should_split is True, construct_graph returns a tuple (all_data, fold_data, test_data). Ensure the returned value is a tuple and unpack accordingly
     if not isinstance(all_data, tuple):

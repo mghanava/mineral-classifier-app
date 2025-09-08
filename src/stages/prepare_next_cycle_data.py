@@ -102,6 +102,8 @@ def combine_split_data(
         calib_size=base_params["calib_size"],
         seed=base_params["seed"],
         scaler=None,  # No scaling needed for combined data
+        make_edge_weight=params["data"].get("make_edge_weight", True),
+        make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
     # Ensure the returned value is a tuple and unpack accordingly
     if not isinstance(all_graph_data, tuple):

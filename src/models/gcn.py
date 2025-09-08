@@ -64,10 +64,10 @@ class MineralDepositGCN(nn.Module):
         )
 
     def forward(self, data):
-        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
+        x, edge_index, edge_weight = data.x, data.edge_index, data.edge_weight
         # Process through GCN layers
         for i, conv in enumerate(self.convs):
-            x = conv(x, edge_index, edge_attr)
+            x = conv(x, edge_index, edge_weight)
             x = F.relu(x)
             x = self.dropout(x)
             x = self.batch_norms[i](x)

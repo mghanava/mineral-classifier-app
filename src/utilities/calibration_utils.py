@@ -221,7 +221,16 @@ class CalibrationMetrics:
 
         # Handle case where all predictions fall into a single bin
         if len(bin_weights_list) == 0:
-            raise ValueError("No valid predictions found in any bin")
+            # All predictions fall into a single bin (or no bins have samples)
+            # Use overall accuracy and confidence as single-bin stats
+            overall_weight = sample_weights.sum()
+            overall_accuracy = (correct @ sample_weights) / overall_weight
+            overall_confidence = (max_probs @ sample_weights) / overall_weight
+            bin_weights_list = [overall_weight]
+            bin_accuracies_list = [overall_accuracy]
+            bin_confidences_list = [overall_confidence]
+            bin_counts = torch.tensor([len(max_probs)], device=y_prob.device)
+            bin_edges = torch.tensor([0.0, 1.0], device=y_prob.device)
 
         # Convert lists to tensors
         bin_weights = torch.tensor(bin_weights_list, device=y_prob.device)

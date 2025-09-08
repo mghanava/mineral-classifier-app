@@ -82,6 +82,8 @@ def prepare_pred_data(paths: dict, params: dict):
         add_self_loops=base_params["add_self_loops"],
         scaler=scaler_setup(params),
         should_split=False,
+        make_edge_weight=params["data"].get("make_edge_weight", True),
+        make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
     if type(pred_data) is Data and pred_data.x is not None:
         output_file = os.path.join(output_path, "pred_data.pt")

@@ -194,195 +194,12 @@ def _change_label_distribution(
 
 def _generate_features(
     n_total_samples: int,
-    gold_values,
-    n_features,
+    labels: np.ndarray,
+    n_classes: int,
+    n_features: int,
     rng: np.random.Generator = np.random.default_rng(42),
 ):
-    # Random weights for each feature
-    weights = rng.uniform(0.5, 5.0, size=(n_features,))
-    # Broadcast gold_values to shape (n_total_samples, n_features)
-    gold_matrix = np.tile(gold_values.reshape(-1, 1), (1, n_features))
-    # Add random noise
-    noise_level = rng.uniform(0.5, 1.5)
-    noise = rng.normal(0, noise_level, size=(n_total_samples, n_features))
-    # generate features as random linear combinations of gold values plus noise,
-    features = gold_matrix * weights + noise
-    # Optionally scale features to positive values
-    # features = np.maximum(features, 0)
-    return features
-
-
-# def _generate_features_new(
-#     n_total_samples: int,
-#     gold_values: np.ndarray,
-#     n_features: int,
-#     labels: np.ndarray,
-#     n_classes: int,
-#     rng: np.random.Generator = np.random.default_rng(42),
-# ) -> np.ndarray:
-#     """Generate discriminative features for mineral classification.
-
-#     Improvements:
-#     1. Non-linear relationships with gold values
-#     2. Class-specific feature correlations
-#     3. Feature interactions
-#     4. Geological domain knowledge incorporation
-#     """
-#     # 1. Generate base features with non-linear relationships
-#     features = np.zeros((n_total_samples, n_features))
-
-#     # Create different non-linear transformations of gold values
-#     gold_sqrt = np.sqrt(gold_values)
-#     gold_squared = gold_values ** 2
-#     gold_log = np.log1p(gold_values)  # log1p handles zero values
-
-#     # Distribute these across feature columns with varying weights
-#     for i in range(n_features):
-#         base = rng.choice([gold_values, gold_sqrt, gold_squared, gold_log])
-#         weight = rng.uniform(0.5, 2.0)
-#         features[:, i] = base * weight
-
-#     # 2. Add class-specific feature correlations
-#     class_profiles = np.zeros((n_classes, n_features))
-#     for i in range(n_classes):
-#         # Generate correlated features for each class
-#         cov_matrix = rng.uniform(0.1, 0.9, size=(n_features, n_features))
-#         cov_matrix = cov_matrix @ cov_matrix.T  # ensure positive semi-definite
-#         class_profiles[i] = rng.multivariate_normal(
-#             mean=rng.uniform(-1, 1, n_features),
-#             cov=cov_matrix,
-#             size=1
-#         )
-
-#     # 3. Add feature interactions
-#     for i in range(n_classes):
-#         mask = labels == i
-#         # Add class-specific profile
-#         features[mask] += class_profiles[i]
-
-#         # Add interaction terms between pairs of features
-#         for j in range(0, n_features-1, 2):
-#             interaction = features[mask, j] * features[mask, j+1]
-#             features[mask, j] += interaction * rng.uniform(0.1, 0.3)
-
-#     # 4. Add domain-specific geological indicators
-#     geological_features = np.zeros((n_total_samples, n_features))
-
-#     # Simulate alteration intensity (increases with gold content)
-#     alteration = gold_values + rng.normal(0, 0.1, n_total_samples)
-
-#     # Simulate mineralization style indicators
-#     for i in range(n_classes):
-#         mask = labels == i
-#         # Each class gets distinct mineralization signatures
-#         style_1 = rng.normal(i/n_classes, 0.1, size=np.sum(mask))
-#         style_2 = rng.normal((n_classes-i)/n_classes, 0.1, size=np.sum(mask))
-
-#         geological_features[mask, 0] = style_1
-#         geological_features[mask, 1] = style_2
-#         geological_features[mask, 2] = alteration[mask]
-
-#     # Blend geological features into main feature matrix
-#     blend_weights = rng.uniform(0.3, 0.7, n_features)
-#     features = (1 - blend_weights) * features + blend_weights * geological_features
-
-#     # Add subtle noise to prevent perfect separation
-#     noise_scale = rng.uniform(0.05, 0.15, n_features)
-#     noise = rng.normal(0, noise_scale, size=(n_total_samples, n_features))
-#     features += noise
-
-#     return features
-
-# def _generate_features_new(
-#     n_total_samples: int,
-#     gold_values: np.ndarray,
-#     n_features: int,
-#     labels: np.ndarray,
-#     n_classes: int,
-#     rng: np.random.Generator = np.random.default_rng(42)
-# ) -> np.ndarray:
-#     """Generate discriminative features for mineral classification with a simpler approach.
-
-#     Key improvements:
-#     1. Non-linear transformations of gold values
-#     2. Class-specific feature patterns
-#     3. Controlled noise addition
-#     """
-#     features = np.zeros((n_total_samples, n_features))
-
-#     # 1. Create base features using different non-linear transformations
-#     transformations = {
-#         'linear': gold_values,
-#         'squared': gold_values ** 2,
-#         'sqrt': np.sqrt(gold_values),
-#         'log': np.log1p(gold_values)
-#     }
-
-#     # 2. Assign different transformations to feature columns
-#     for i in range(n_features):
-#         # Select a random transformation for this feature
-#         trans_name = rng.choice(list(transformations.keys()))
-#         base_feature = transformations[trans_name]
-
-#         # Add class-specific modifications
-#         for class_idx in range(n_classes):
-#             mask = (labels == class_idx)
-#             # Each class gets a distinct multiplier
-#             class_multiplier = 0.5 + (class_idx + 1) / n_classes
-#             features[mask, i] = base_feature[mask] * class_multiplier
-
-#     # 3. Add small controlled noise to prevent perfect separation
-#     noise = rng.normal(0, 0.1, size=features.shape)
-#     features += noise
-
-#     # 4. Normalize features
-#     features = (features - features.mean(axis=0)) / features.std(axis=0)
-
-#     return features
-
-# def _generate_features_new(
-#     n_total_samples: int,
-#     gold_values: np.ndarray,
-#     n_features: int,
-#     rng: np.random.Generator = np.random.default_rng(42),
-# ):
-#     features = np.zeros((n_total_samples, n_features))
-
-#     for i in range(n_features):
-#         # Create different transformations of gold_values for each feature
-#         if i % 4 == 0:
-#             # Linear with different scaling
-#             weight = rng.uniform(1.0, 5.0)
-#             features[:, i] = gold_values * weight
-#         elif i % 4 == 1:
-#             # Squared (emphasizes high values)
-#             weight = rng.uniform(0.5, 2.0)
-#             features[:, i] = (gold_values ** 2) * weight
-#         elif i % 4 == 2:
-#             # Square root (emphasizes low values)
-#             weight = rng.uniform(0.5, 2.0)
-#             features[:, i] = np.sqrt(gold_values) * weight
-#         else:
-#             # Threshold-based feature
-#             threshold = rng.uniform(0.2, 0.8)
-#             steepness = rng.uniform(10, 30)
-#             features[:, i] = 1 / (1 + np.exp(-steepness * (gold_values - threshold)))
-
-#         # Add much less noise
-#         noise = rng.normal(0, 0.05, n_total_samples)  # Much smaller noise
-#         features[:, i] += noise
-
-#     return features
-
-
-def _generate_features_new(
-    n_total_samples: int,
-    labels,
-    n_classes,
-    n_features,
-    rng: np.random.Generator = np.random.default_rng(42),
-):
-    # Random prototype vectors for each class
+    # Random prototype vectors (feature spaces) for each class
     prototypes = rng.uniform(-2, 2, size=(n_classes, n_features))
     features = np.zeros((n_total_samples, n_features))
     noise_level = 0.2
@@ -410,7 +227,6 @@ def generate_mineral_data(
     n_hotspots: int = 10,
     n_hotspots_random: bool = True,
     seed: int | None = None,
-    use_new_feature_generation: bool = True,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Generate synthetic mineral exploration data with realistic features.
 
@@ -485,13 +301,7 @@ def generate_mineral_data(
         )
     # 6. Generate features for all samples
     n_total_samples = len(coordinates)
-    if use_new_feature_generation:
-        features = _generate_features_new(
-            n_total_samples, labels, n_classes, n_features, rng
-        )
-        # features = _generate_features_new(n_total_samples, gold_values, n_features, labels, n_classes, rng)
-    else:
-        features = _generate_features(n_total_samples, gold_values, n_features, rng)
+    features = _generate_features(n_total_samples, labels, n_classes, n_features, rng)
     # Print summary of generated data
     print("Label distribution:")
     for i in range(n_classes):
@@ -743,6 +553,8 @@ def construct_graph(
     seed: int | None = None,
     scaler: ScalerType | None = RobustScaler(),
     should_split: bool = True,
+    make_edge_weight: bool = True,
+    make_edge_weight_method: str | None = None,
 ) -> tuple[Data, list[Data], Data] | Data:
     """Create graphs from geospatial data using distance matrix with a held-out test set.
 
@@ -776,8 +588,12 @@ def construct_graph(
     x = torch.tensor(scaled_features, dtype=torch.float32)
     y = torch.tensor(labels, dtype=torch.long)
 
-    edge_index, edge_attr = prepare_edge_data(
-        coordinates, connection_radius, add_self_loops
+    edge_index, edge_attr, edge_weight = prepare_edge_data(
+        coordinates,
+        connection_radius,
+        add_self_loops,
+        make_edge_weight,
+        make_edge_weight_method,
     )
 
     base_data = Data(
@@ -785,6 +601,7 @@ def construct_graph(
         y=y,
         edge_index=edge_index,
         edge_attr=edge_attr,
+        edge_weight=edge_weight,
         coordinates=torch.tensor(coordinates, dtype=torch.float32),
         unscaled_features=torch.tensor(
             features, dtype=torch.float32
@@ -804,6 +621,8 @@ def prepare_edge_data(
     coordinates: np.ndarray,
     connection_radius: float = 150,
     add_self_loops: bool = False,
+    make_edge_weight: bool = False,
+    make_edge_weight_method: str | None = None,
 ):
     """Prepare edge connectivity and attributes for a graph neural network from coordinate data. This function computes pairwise distances between points and creates edge connections based on a distance threshold, making the resulting graph undirected. It also generates edge attributes including both raw distances and inverse distances.
 
@@ -850,10 +669,14 @@ def prepare_edge_data(
     # Avoid division by zero that matters for self-nodes
     inverse_distances_squared = torch.tensor(
         1.0 / (edge_distances + 1e-6) ** 2, dtype=torch.float32
-    ).unsqueeze(1)  # Shape: [num_edges, 1]
-
-    edge_attr = inverse_distances_squared
-    return edge_index, edge_attr
+    )
+    edge_attr = inverse_distances_squared.unsqueeze(1)  # Shape: [num_edges, 1]
+    # Edge weights
+    if not make_edge_weight:
+        edge_weight = None
+    else:
+        edge_weight = normalize_edge_weight(edge_attr, make_edge_weight_method)
+    return edge_index, edge_attr, edge_weight
 
 
 def export_graph_to_html(
@@ -873,7 +696,7 @@ def export_graph_to_html(
     labels = (
         graph.y[node_indices].numpy() if node_indices is not None else graph.y.numpy()
     )
-    edge_index, _ = prepare_edge_data(coordinates, connection_radius, add_self_loops)
+    edge_index, _, _ = prepare_edge_data(coordinates, connection_radius, add_self_loops)
     src, dst = edge_index
     title = f"Graph with {coordinates.shape[0]} nodes and {edge_index.shape[1]} edges and avg degree {edge_index.shape[1] / coordinates.shape[0]:.2f}"
 
@@ -1054,3 +877,28 @@ def scaler_setup(params: dict):
         scaler_params["quantile_range"] = tuple(scaler_params["quantile_range"])
     scaler = SCALER_MAP[scaler_type](**scaler_params)
     return scaler
+
+
+def normalize_edge_weight(edge_attr, make_edge_weight_method: str | None = "minmax"):
+    """Normalize versions of inverse distance squared weights."""
+    weights = edge_attr.squeeze()  # Shape: [num_edges]
+    if make_edge_weight_method is None:
+        return weights
+
+    if make_edge_weight_method == "minmax":
+        # Scale to [0, 1] range
+        return (weights - weights.min()) / (weights.max() - weights.min() + 1e-8)
+
+    elif make_edge_weight_method == "standard":
+        # Zero mean, unit variance
+        return (weights - weights.mean()) / (weights.std() + 1e-8)
+
+    elif make_edge_weight_method == "softmax":
+        # Convert to probability distribution over edges
+        return torch.softmax(weights, dim=0)
+
+    elif make_edge_weight_method == "log":
+        # Apply log transform for better numerical stability
+        return torch.log1p(weights)
+
+    return weights
