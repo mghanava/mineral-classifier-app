@@ -11,6 +11,6 @@ services:
       - ./results:/app/results # Mount results directory
       - ./.dvc/cache:/app/.dvc/cache # Mount DVC cache to persist between runs
     # Default command (executed with docker-compose up)
-    command: tail -f /dev/null # Keeps container running
+    command: streamlit run app.py
     ports:
       - "8501:8501"

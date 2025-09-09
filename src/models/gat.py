@@ -43,10 +43,10 @@ class MineralDepositGAT(nn.Module):
                 in_channels,
                 hidden_channels,
                 heads=n_heads,
+                add_self_loops=add_self_loops,
                 negative_slope=negative_slope,
                 bias=bias,
                 residual=residual,
-                add_self_loops=add_self_loops,
                 dropout=dropout,
             )
         )  # in_channels => hidden_channels
@@ -70,7 +70,10 @@ class MineralDepositGAT(nn.Module):
                 hidden_channels * n_heads,
                 hidden_channels,
                 heads=1,
-                add_self_loops=False,
+                add_self_loops=add_self_loops,
+                negative_slope=negative_slope,
+                bias=bias,
+                residual=residual,
                 dropout=dropout,
             )  # hidden_channels * n_heads => hidden_channels
         )

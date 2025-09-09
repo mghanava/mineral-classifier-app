@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # copy the rest of the application code
 COPY . .
 # expose the port the app runs on
-EXPOSE 8000
+EXPOSE 8501
 # set python path to include the src directory
 ENV PYTHONPATH=/app
 # Creates a non-root user and adds permission to access the /app folder
@@ -26,7 +26,7 @@ RUN mkdir -p /home/appuser && chown appuser /home/appuser
 ENV PATH="/usr/bin:${PATH}"
 USER appuser
 # command to run when the container starts
-CMD ["dvc", "exp", "save"]
+CMD ["streamlit", "run", "app.py"]
 
 
 

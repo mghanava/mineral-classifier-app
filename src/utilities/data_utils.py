@@ -396,7 +396,6 @@ def visualize_graph(
         showlegend=True,
         legend={"yanchor": "top", "y": 0.99, "xanchor": "left", "x": 0.01},
     )
-    fig.update_layout(width=1000, height=600)
     # Add legend entries for classes
     class_count = [np.sum(labels == i) for i in classes]
     for label, color in color_map.items():
@@ -409,17 +408,6 @@ def visualize_graph(
                 mode="markers",
                 marker={"size": 10, "color": color},
                 name=f"{labels_map[label]} ({count})",
-                showlegend=True,
-            )
-        )
-        fig.add_trace(
-            go.Scatter3d(
-                x=[None],
-                y=[None],
-                z=[None],
-                mode="markers",
-                marker={"size": 10, "color": color},
-                name=f"{labels_map[label]}",
                 showlegend=True,
             )
         )
@@ -712,7 +700,7 @@ def export_graph_to_html(
         filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}.html"
     else:
         filename = f"{save_path}/{dataset_tag}_graph.html"
-    fig.write_html(filename)
+    fig.write_html(filename, full_html=False, include_plotlyjs="cdn", config={"responsive": True})
     print(f"Graph exported to {filename}.")
 
 

@@ -7,3 +7,4 @@ statsmodels==0.14.4
 POT==0.9.5
 ruff==0.12.5
 dvc==3.61.0
+ruamel.yaml==0.18.15
