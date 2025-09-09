@@ -231,7 +231,7 @@ def train(
         grad_norms,
         validation_ece,
         validation_mce,
-        title="Training Plot",
+        title=f"Training Plot\n dataset {dataset_idx}",
         save_path=training_plots_path,
     )
 

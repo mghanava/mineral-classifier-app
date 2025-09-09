@@ -1,11 +1,10 @@
 # Training cycle configuration
-cycles: 5
+cycles: 3
 add_self_loops: true
 default_model: gat
-
 # Data generation parameters
 data:
-  scaler_type: RobustScaler # Options: RobustScaler, StandardScaler, MinMaxScaler
+  scaler_type: RobustScaler  # Options: RobustScaler, StandardScaler, MinMaxScaler
   scaler_params:
     quantile_range:
     - 25.0

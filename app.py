@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 from ruamel.yaml import YAML
-
+import yaml as pyyaml
 
 def get_max_cycles():
     """Reads the number of cycles from params.yaml."""
@@ -76,6 +76,7 @@ def params_tab():
         with open(params_file) as f:
             params_content = f.read()
 
+        # Editable text area
         edited_params = st.text_area("`params.yaml`", value=params_content, height=400)
 
         if st.button("Save Parameters"):
@@ -88,6 +89,16 @@ def params_tab():
             except Exception as e:
                 st.error(f"Error saving `params.yaml`: {e}")
 
+        try:
+            parsed_data = pyyaml.safe_load(edited_params)
+
+            st.subheader("Preview (pretty)")
+            st.json(parsed_data)
+
+        except Exception as e:
+            st.warning(f"Could not render preview: {e}")
+
+        # Run pipeline section
         st.subheader("Run Full Pipeline")
         st.write(
             "This will regenerate `dvc.yaml` based on the saved parameters and execute the entire pipeline."
@@ -149,7 +160,7 @@ def train_tab():
 
 def evaluation_tab():
     st.header("Evaluation")
-    st.write("This stage evaluates the trained model.")
+    st.write("This stage evaluates the trained model for each cycle.")
 
     max_cycles = get_max_cycles()
     cycle_num = st.number_input(
@@ -178,7 +189,7 @@ def evaluation_tab():
 
 def prediction_tab():
     st.header("Prediction")
-    st.write("This stage runs predictions on new data.")
+    st.write("This stage runs predictions on new data for each cycle.")
 
     max_cycles = get_max_cycles()
     cycle_num = st.number_input(
@@ -205,7 +216,7 @@ def prediction_tab():
 
 def drift_analysis_tab():
     st.header("Drift Analysis")
-    st.write("This stage analyzes data drift between cycles.")
+    st.write("This stage analyzes data drift between the base data used to train model and the unseen prediction data for each cycle.")
 
     max_cycles = get_max_cycles()
     cycle_num = st.number_input(

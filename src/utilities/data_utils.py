@@ -686,7 +686,8 @@ def export_graph_to_html(
     )
     edge_index, _, _ = prepare_edge_data(coordinates, connection_radius, add_self_loops)
     src, dst = edge_index
-    title = f"Graph with {coordinates.shape[0]} nodes and {edge_index.shape[1]} edges and avg degree {edge_index.shape[1] / coordinates.shape[0]:.2f}"
+    avg_degree = edge_index.shape[1] / coordinates.shape[0]
+    title = f"Graph with {coordinates.shape[0]} nodes and {edge_index.shape[1]} edges - average node degree {avg_degree:.2f}"
 
     fig = visualize_graph(
         coordinates,
