@@ -157,11 +157,12 @@ def train(
         with torch.no_grad():
             logits = model(data)
             logits_val = logits[data.val_mask]
+            y_prob_val = torch.softmax(logits_val, dim=1)
             loss_val = criterion_val(logits_val, y_true_val)
 
             cal_metrics = CalibrationMetrics()
             cal_metrics_stats = cal_metrics.calculate_metrics(
-                logits_val,
+                y_prob_val,
                 y_true_val,
                 torch.tensor(sample_weights_val, dtype=torch.float32).to(device),
             )

@@ -286,7 +286,10 @@ def generate_mineral_data(
     )
     # 4. Convert to categorical labels
     labels = _assign_labels(gold_values, n_classes, threshold_binary)
-    # (Optional) 5. Check if we have the minimum number of samples per class and redistribute if needed
+    # 5. Generate features for all samples
+    n_total_samples = n_samples
+    features = _generate_features(n_samples, labels, n_classes, n_features, rng)
+    # (Optional) 6. Check if we have the minimum number of samples per class and redistribute if needed
     if min_samples_per_class is not None:
         labels, coordinates, gold_values = _change_label_distribution(
             labels,
@@ -299,9 +302,11 @@ def generate_mineral_data(
             gold_values,
             rng,
         )
-    # 6. Generate features for all samples
-    n_total_samples = len(coordinates)
-    features = _generate_features(n_total_samples, labels, n_classes, n_features, rng)
+        # Regenerate features after changing label distribution
+        n_total_samples = len(coordinates)
+        features = _generate_features(
+            n_total_samples, labels, n_classes, n_features, rng
+        )
     # Print summary of generated data
     print("Label distribution:")
     for i in range(n_classes):
@@ -508,7 +513,7 @@ def _split_graph(
     else:
         test_idx, calib_idx = train_test_split(
             temp_idx,
-            train_size=calib_size,
+            test_size=calib_size,
             stratify=labels[temp_idx],
             random_state=seed,
         )
