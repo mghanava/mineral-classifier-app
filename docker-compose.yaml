@@ -7,10 +7,15 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all 
     volumes:
-      - .:/app
-      - ./results:/app/results # Mount results directory
-      - ./.dvc/cache:/app/.dvc/cache # Mount DVC cache to persist between runs
-    # Default command (executed with docker-compose up)
+      - .:/app:rw
+      - mineral_results:/app/results
+      - dvc_cache:/app/.dvc/cache
     command: streamlit run app.py
     ports:
       - "8501:8501"
+
+volumes:
+  mineral_results:
+    driver: local
+  dvc_cache:
+    driver: local

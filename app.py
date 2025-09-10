@@ -5,11 +5,12 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-from ruamel.yaml import YAML
 import yaml as pyyaml
+from ruamel.yaml import YAML
+
 
 def get_max_cycles():
-    """Reads the number of cycles from params.yaml."""
+    """Read the number of cycles from params.yaml."""
     yaml = YAML()
     params_file = Path("params.yaml")
     try:
@@ -85,7 +86,9 @@ def params_tab():
                 data = yaml.load(edited_params)
                 with open(params_file, "w") as f:
                     yaml.dump(data, f)
-                st.success("`params.yaml` saved successfully. Refresh the page to update cycle limits.")
+                st.success(
+                    "`params.yaml` saved successfully. Refresh the page to update cycle limits."
+                )
             except Exception as e:
                 st.error(f"Error saving `params.yaml`: {e}")
 
@@ -216,7 +219,9 @@ def prediction_tab():
 
 def drift_analysis_tab():
     st.header("Drift Analysis")
-    st.write("This stage analyzes data drift between the base data used to train model and the unseen prediction data for each cycle.")
+    st.write(
+        "This stage analyzes data drift between the base data used to train model and the unseen prediction data for each cycle."
+    )
 
     max_cycles = get_max_cycles()
     cycle_num = st.number_input(

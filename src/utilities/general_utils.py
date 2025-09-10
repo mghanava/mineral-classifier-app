@@ -18,6 +18,7 @@ class LogTime:
 
     def __init__(self, task_name: str):
         """Initialize the LogTime context manager with a task name."""
+        self.start_time = time.time()
         self.task_name = task_name
 
     def __enter__(self):
