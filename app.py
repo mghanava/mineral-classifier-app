@@ -208,11 +208,12 @@ def prediction_tab():
     st.subheader("Prediction Results")
     pred_path = Path(f"results/prediction/cycle_{cycle_num}")
     if pred_path.exists():
+        for img_file in pred_path.glob("*.png"):
+            st.image(str(img_file))
         csv_file = pred_path / "predictions.csv"
         if csv_file.exists():
             st.dataframe(pd.read_csv(csv_file))
-        for img_file in pred_path.glob("*.png"):
-            st.image(str(img_file))
+        
     else:
         st.warning(f"Prediction results for cycle {cycle_num} not found.")
 

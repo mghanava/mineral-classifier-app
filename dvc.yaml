@@ -2,265 +2,183 @@ stages:
   bootstrap:
     cmd: python src/stages/generate_base_data.py --cycle 0
     deps:
-    - src/stages/generate_base_data.py
-    - src/utilities/data_utils.py
-    - src/utilities/general_utils.py
+      - src/stages/generate_base_data.py
+      - src/utilities/data_utils.py
+      - src/utilities/general_utils.py
     params:
-    - data.base
+      - data.base
     outs:
-    - results/data/base/cycle_0/base_data.pt
-    - results/data/base/cycle_0/fold_data.pt
-    - results/data/base/cycle_0/test_data.pt
+      - results/data/base/cycle_0/base_data.pt
+      - results/data/base/cycle_0/fold_data.pt
+      - results/data/base/cycle_0/test_data.pt
   train_cycle_1:
     cmd: python src/stages/train.py --cycle 1 --model gat
     deps:
-    - src/stages/train.py
-    - src/utilities/train_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_0/fold_data.pt
-    - src/models/
+      - src/stages/train.py
+      - src/utilities/train_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_0/fold_data.pt
+      - src/models/
     params:
-    - models.gat
-    - train
+      - models.gat
+      - train
     outs:
-    - results/trained/cycle_1
+      - results/trained/cycle_1
   evaluate_cycle_1:
     cmd: python src/stages/evaluate.py --cycle 1 --model gat
     deps:
-    - src/stages/evaluate.py
-    - src/utilities/eval_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_0/test_data.pt
-    - src/models/
-    - results/trained/cycle_1/model.pt
+      - src/stages/evaluate.py
+      - src/utilities/eval_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_0/test_data.pt
+      - src/models/
+      - results/trained/cycle_1/model.pt
     params:
-    - models.gat
-    - evaluate
+      - models.gat
+      - evaluate
     outs:
-    - results/evaluation/cycle_1
+      - results/evaluation/cycle_1
   generate_pred_data_cycle_1:
     cmd: python src/stages/generate_pred_data.py --cycle 1
     deps:
-    - src/stages/generate_pred_data.py
-    - src/utilities/pred_utils.py
-    - src/utilities/data_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_0/base_data.pt
-    - src/models/
+      - src/stages/generate_pred_data.py
+      - src/utilities/pred_utils.py
+      - src/utilities/data_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_0/base_data.pt
+      - src/models/
     params:
-    - data.pred
+      - data.pred
     outs:
-    - results/data/prediction/cycle_1/pred_data.pt
+      - results/data/prediction/cycle_1/pred_data.pt
   predict_cycle_1:
     cmd: python src/stages/predict.py --cycle 1 --model gat
     deps:
-    - src/stages/predict.py
-    - src/utilities/pred_utils.py
-    - src/utilities/general_utils.py
-    - results/data/prediction/cycle_1/pred_data.pt
-    - results/trained/cycle_1/model.pt
-    - results/evaluation/cycle_1/calibrator.pt
-    - src/models/
+      - src/stages/predict.py
+      - src/utilities/pred_utils.py
+      - src/utilities/general_utils.py
+      - results/data/prediction/cycle_1/pred_data.pt
+      - results/trained/cycle_1/model.pt
+      - results/evaluation/cycle_1/calibrator.pt
+      - src/models/
     params:
-    - models.gat
+      - models.gat
     outs:
-    - results/prediction/cycle_1
+      - results/prediction/cycle_1
   analyze_drift_cycle_1:
     cmd: python src/stages/analyze_drift.py --cycle 1
     deps:
-    - src/stages/analyze_drift.py
-    - src/utilities/drift_detection_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_0/base_data.pt
-    - results/data/prediction/cycle_1/pred_data.pt
+      - src/stages/analyze_drift.py
+      - src/utilities/drift_detection_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_0/base_data.pt
+      - results/data/prediction/cycle_1/pred_data.pt
     params:
-    - analyze_drift
+      - analyze_drift
     outs:
-    - results/drift_analysis/cycle_1
+      - results/drift_analysis/cycle_1
   prepare_next_cycle_data_1:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 1
     deps:
-    - src/stages/prepare_next_cycle_data.py
-    - src/utilities/data_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_0/base_data.pt
-    - results/data/prediction/cycle_1/pred_data.pt
+      - src/stages/prepare_next_cycle_data.py
+      - src/utilities/data_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_0/base_data.pt
+      - results/data/prediction/cycle_1/pred_data.pt
     params:
-    - data.base
+      - data.base
     outs:
-    - results/data/base/cycle_1/base_data.pt
-    - results/data/base/cycle_1/fold_data.pt
-    - results/data/base/cycle_1/test_data.pt
+      - results/data/base/cycle_1/base_data.pt
+      - results/data/base/cycle_1/fold_data.pt
+      - results/data/base/cycle_1/test_data.pt
   train_cycle_2:
     cmd: python src/stages/train.py --cycle 2 --model gat
     deps:
-    - src/stages/train.py
-    - src/utilities/train_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_1/fold_data.pt
-    - src/models/
+      - src/stages/train.py
+      - src/utilities/train_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_1/fold_data.pt
+      - src/models/
     params:
-    - models.gat
-    - train
+      - models.gat
+      - train
     outs:
-    - results/trained/cycle_2
+      - results/trained/cycle_2
   evaluate_cycle_2:
     cmd: python src/stages/evaluate.py --cycle 2 --model gat
     deps:
-    - src/stages/evaluate.py
-    - src/utilities/eval_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_1/test_data.pt
-    - src/models/
-    - results/trained/cycle_2/model.pt
+      - src/stages/evaluate.py
+      - src/utilities/eval_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_1/test_data.pt
+      - src/models/
+      - results/trained/cycle_2/model.pt
     params:
-    - models.gat
-    - evaluate
+      - models.gat
+      - evaluate
     outs:
-    - results/evaluation/cycle_2
+      - results/evaluation/cycle_2
   generate_pred_data_cycle_2:
     cmd: python src/stages/generate_pred_data.py --cycle 2
     deps:
-    - src/stages/generate_pred_data.py
-    - src/utilities/pred_utils.py
-    - src/utilities/data_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_1/base_data.pt
-    - src/models/
+      - src/stages/generate_pred_data.py
+      - src/utilities/pred_utils.py
+      - src/utilities/data_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_1/base_data.pt
+      - src/models/
     params:
-    - data.pred
+      - data.pred
     outs:
-    - results/data/prediction/cycle_2/pred_data.pt
+      - results/data/prediction/cycle_2/pred_data.pt
   predict_cycle_2:
     cmd: python src/stages/predict.py --cycle 2 --model gat
     deps:
-    - src/stages/predict.py
-    - src/utilities/pred_utils.py
-    - src/utilities/general_utils.py
-    - results/data/prediction/cycle_2/pred_data.pt
-    - results/trained/cycle_2/model.pt
-    - results/evaluation/cycle_2/calibrator.pt
-    - src/models/
+      - src/stages/predict.py
+      - src/utilities/pred_utils.py
+      - src/utilities/general_utils.py
+      - results/data/prediction/cycle_2/pred_data.pt
+      - results/trained/cycle_2/model.pt
+      - results/evaluation/cycle_2/calibrator.pt
+      - src/models/
     params:
-    - models.gat
+      - models.gat
     outs:
-    - results/prediction/cycle_2
+      - results/prediction/cycle_2
   analyze_drift_cycle_2:
     cmd: python src/stages/analyze_drift.py --cycle 2
     deps:
-    - src/stages/analyze_drift.py
-    - src/utilities/drift_detection_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_1/base_data.pt
-    - results/data/prediction/cycle_2/pred_data.pt
+      - src/stages/analyze_drift.py
+      - src/utilities/drift_detection_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_1/base_data.pt
+      - results/data/prediction/cycle_2/pred_data.pt
     params:
-    - analyze_drift
+      - analyze_drift
     outs:
-    - results/drift_analysis/cycle_2
+      - results/drift_analysis/cycle_2
   prepare_next_cycle_data_2:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 2
     deps:
-    - src/stages/prepare_next_cycle_data.py
-    - src/utilities/data_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_1/base_data.pt
-    - results/data/prediction/cycle_2/pred_data.pt
+      - src/stages/prepare_next_cycle_data.py
+      - src/utilities/data_utils.py
+      - src/utilities/general_utils.py
+      - results/data/base/cycle_1/base_data.pt
+      - results/data/prediction/cycle_2/pred_data.pt
     params:
-    - data.base
+      - data.base
     outs:
-    - results/data/base/cycle_2/base_data.pt
-    - results/data/base/cycle_2/fold_data.pt
-    - results/data/base/cycle_2/test_data.pt
-  train_cycle_3:
-    cmd: python src/stages/train.py --cycle 3 --model gat
-    deps:
-    - src/stages/train.py
-    - src/utilities/train_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_2/fold_data.pt
-    - src/models/
-    params:
-    - models.gat
-    - train
-    outs:
-    - results/trained/cycle_3
-  evaluate_cycle_3:
-    cmd: python src/stages/evaluate.py --cycle 3 --model gat
-    deps:
-    - src/stages/evaluate.py
-    - src/utilities/eval_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_2/test_data.pt
-    - src/models/
-    - results/trained/cycle_3/model.pt
-    params:
-    - models.gat
-    - evaluate
-    outs:
-    - results/evaluation/cycle_3
-  generate_pred_data_cycle_3:
-    cmd: python src/stages/generate_pred_data.py --cycle 3
-    deps:
-    - src/stages/generate_pred_data.py
-    - src/utilities/pred_utils.py
-    - src/utilities/data_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_2/base_data.pt
-    - src/models/
-    params:
-    - data.pred
-    outs:
-    - results/data/prediction/cycle_3/pred_data.pt
-  predict_cycle_3:
-    cmd: python src/stages/predict.py --cycle 3 --model gat
-    deps:
-    - src/stages/predict.py
-    - src/utilities/pred_utils.py
-    - src/utilities/general_utils.py
-    - results/data/prediction/cycle_3/pred_data.pt
-    - results/trained/cycle_3/model.pt
-    - results/evaluation/cycle_3/calibrator.pt
-    - src/models/
-    params:
-    - models.gat
-    outs:
-    - results/prediction/cycle_3
-  analyze_drift_cycle_3:
-    cmd: python src/stages/analyze_drift.py --cycle 3
-    deps:
-    - src/stages/analyze_drift.py
-    - src/utilities/drift_detection_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_2/base_data.pt
-    - results/data/prediction/cycle_3/pred_data.pt
-    params:
-    - analyze_drift
-    outs:
-    - results/drift_analysis/cycle_3
-  prepare_next_cycle_data_3:
-    cmd: python src/stages/prepare_next_cycle_data.py --cycle 3
-    deps:
-    - src/stages/prepare_next_cycle_data.py
-    - src/utilities/data_utils.py
-    - src/utilities/general_utils.py
-    - results/data/base/cycle_2/base_data.pt
-    - results/data/prediction/cycle_3/pred_data.pt
-    params:
-    - data.base
-    outs:
-    - results/data/base/cycle_3/base_data.pt
-    - results/data/base/cycle_3/fold_data.pt
-    - results/data/base/cycle_3/test_data.pt
+      - results/data/base/cycle_2/base_data.pt
+      - results/data/base/cycle_2/fold_data.pt
+      - results/data/base/cycle_2/test_data.pt
   analyze_cycles_performance:
     cmd: python src/stages/analyze_cycles_performance.py
     deps:
-    - src/stages/analyze_cycles_performance.py
-    - src/utilities/cycles_performance_utils.py
-    - results/evaluation/cycle_1/metrics.json
-    - results/prediction/cycle_1/metrics.json
-    - results/evaluation/cycle_2/metrics.json
-    - results/prediction/cycle_2/metrics.json
-    - results/evaluation/cycle_3/metrics.json
-    - results/prediction/cycle_3/metrics.json
+      - src/stages/analyze_cycles_performance.py
+      - src/utilities/cycles_performance_utils.py
+      - results/evaluation/cycle_1/metrics.json
+      - results/prediction/cycle_1/metrics.json
+      - results/evaluation/cycle_2/metrics.json
+      - results/prediction/cycle_2/metrics.json
     outs:
-    - results/cycles_performance_analysis/cycles_performance.png
+      - results/cycles_performance_analysis/cycles_performance.png

@@ -1,16 +1,16 @@
 # Training cycle configuration
-cycles: 3
+cycles: 2
 add_self_loops: true
 default_model: gat
 # Data generation parameters
 data:
-  scaler_type: RobustScaler  # Options: RobustScaler, StandardScaler, MinMaxScaler
+  scaler_type: RobustScaler # Options: RobustScaler, StandardScaler, MinMaxScaler
   scaler_params:
     quantile_range:
-    - 25.0
-    - 75.0
+      - 25.0
+      - 75.0
   make_edge_weight: true
-  make_edge_weight_method: minmax    # Options: minmax, standard, softmax, log, None
+  make_edge_weight_method: minmax # Options: minmax, standard, softmax, log, None
   base:
     radius: 2500
     depth: -500
@@ -91,5 +91,5 @@ analyze_drift:
   gamma:
   early_stopping:
     enabled: true
-    confidence_threshold: 0.01  # Stop early if p-value < threshold
-    min_permutations: 100  # Minimum permutations before early stopping
+    confidence_threshold: 0.01 # Stop early if p-value < threshold
+    min_permutations: 100 # Minimum permutations before early stopping
