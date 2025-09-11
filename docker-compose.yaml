@@ -3,16 +3,17 @@ services:
     container_name: mineral_classifier_container
     image: my_mineral_classifier:latest
     build: .
-    runtime: nvidia 
+    runtime: nvidia
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all 
+      - NVIDIA_VISIBLE_DEVICES=all
+    working_dir: /app
     volumes:
       - .:/app:rw
       - mineral_results:/app/results
       - dvc_cache:/app/.dvc/cache
-    command: streamlit run app.py
     ports:
       - "8501:8501"
+    restart: unless-stopped
 
 volumes:
   mineral_results:

@@ -1,7 +1,7 @@
 # Training cycle configuration
 cycles: 3
 add_self_loops: true
-default_model: gat
+default_model: gcn
 # Data generation parameters
 data:
   scaler_type: RobustScaler # Options: RobustScaler, StandardScaler, MinMaxScaler

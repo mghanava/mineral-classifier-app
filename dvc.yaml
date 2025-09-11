@@ -12,7 +12,7 @@ stages:
     - results/data/base/cycle_0/fold_data.pt
     - results/data/base/cycle_0/test_data.pt
   train_cycle_1:
-    cmd: python src/stages/train.py --cycle 1 --model gat
+    cmd: python src/stages/train.py --cycle 1 --model gcn
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
@@ -20,12 +20,12 @@ stages:
     - results/data/base/cycle_0/fold_data.pt
     - src/models/
     params:
-    - models.gat
+    - models.gcn
     - train
     outs:
     - results/trained/cycle_1
   evaluate_cycle_1:
-    cmd: python src/stages/evaluate.py --cycle 1 --model gat
+    cmd: python src/stages/evaluate.py --cycle 1 --model gcn
     deps:
     - src/stages/evaluate.py
     - src/utilities/eval_utils.py
@@ -34,7 +34,7 @@ stages:
     - src/models/
     - results/trained/cycle_1/model.pt
     params:
-    - models.gat
+    - models.gcn
     - evaluate
     outs:
     - results/evaluation/cycle_1
@@ -52,7 +52,7 @@ stages:
     outs:
     - results/data/prediction/cycle_1/pred_data.pt
   predict_cycle_1:
-    cmd: python src/stages/predict.py --cycle 1 --model gat
+    cmd: python src/stages/predict.py --cycle 1 --model gcn
     deps:
     - src/stages/predict.py
     - src/utilities/pred_utils.py
@@ -62,7 +62,7 @@ stages:
     - results/evaluation/cycle_1/calibrator.pt
     - src/models/
     params:
-    - models.gat
+    - models.gcn
     outs:
     - results/prediction/cycle_1
   analyze_drift_cycle_1:
@@ -92,7 +92,7 @@ stages:
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
   train_cycle_2:
-    cmd: python src/stages/train.py --cycle 2 --model gat
+    cmd: python src/stages/train.py --cycle 2 --model gcn
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
@@ -100,12 +100,12 @@ stages:
     - results/data/base/cycle_1/fold_data.pt
     - src/models/
     params:
-    - models.gat
+    - models.gcn
     - train
     outs:
     - results/trained/cycle_2
   evaluate_cycle_2:
-    cmd: python src/stages/evaluate.py --cycle 2 --model gat
+    cmd: python src/stages/evaluate.py --cycle 2 --model gcn
     deps:
     - src/stages/evaluate.py
     - src/utilities/eval_utils.py
@@ -114,7 +114,7 @@ stages:
     - src/models/
     - results/trained/cycle_2/model.pt
     params:
-    - models.gat
+    - models.gcn
     - evaluate
     outs:
     - results/evaluation/cycle_2
@@ -132,7 +132,7 @@ stages:
     outs:
     - results/data/prediction/cycle_2/pred_data.pt
   predict_cycle_2:
-    cmd: python src/stages/predict.py --cycle 2 --model gat
+    cmd: python src/stages/predict.py --cycle 2 --model gcn
     deps:
     - src/stages/predict.py
     - src/utilities/pred_utils.py
@@ -142,7 +142,7 @@ stages:
     - results/evaluation/cycle_2/calibrator.pt
     - src/models/
     params:
-    - models.gat
+    - models.gcn
     outs:
     - results/prediction/cycle_2
   analyze_drift_cycle_2:
@@ -172,7 +172,7 @@ stages:
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
   train_cycle_3:
-    cmd: python src/stages/train.py --cycle 3 --model gat
+    cmd: python src/stages/train.py --cycle 3 --model gcn
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
@@ -180,12 +180,12 @@ stages:
     - results/data/base/cycle_2/fold_data.pt
     - src/models/
     params:
-    - models.gat
+    - models.gcn
     - train
     outs:
     - results/trained/cycle_3
   evaluate_cycle_3:
-    cmd: python src/stages/evaluate.py --cycle 3 --model gat
+    cmd: python src/stages/evaluate.py --cycle 3 --model gcn
     deps:
     - src/stages/evaluate.py
     - src/utilities/eval_utils.py
@@ -194,7 +194,7 @@ stages:
     - src/models/
     - results/trained/cycle_3/model.pt
     params:
-    - models.gat
+    - models.gcn
     - evaluate
     outs:
     - results/evaluation/cycle_3
@@ -212,7 +212,7 @@ stages:
     outs:
     - results/data/prediction/cycle_3/pred_data.pt
   predict_cycle_3:
-    cmd: python src/stages/predict.py --cycle 3 --model gat
+    cmd: python src/stages/predict.py --cycle 3 --model gcn
     deps:
     - src/stages/predict.py
     - src/utilities/pred_utils.py
@@ -222,7 +222,7 @@ stages:
     - results/evaluation/cycle_3/calibrator.pt
     - src/models/
     params:
-    - models.gat
+    - models.gcn
     outs:
     - results/prediction/cycle_3
   analyze_drift_cycle_3:
