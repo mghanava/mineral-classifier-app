@@ -51,7 +51,7 @@
         "ms-python.python",
         "charliermarsh.ruff",
         "ms-python.vscode-pylance",
-        "shellomo.enhanced-toml",
+        "tamasfe.even-better-toml",
         "redhat.vscode-yaml",
         "sandertenbrinke.readme-auto-open"
       ]

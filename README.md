@@ -41,9 +41,9 @@ Follow these steps to get the project up and running:
 
 ### Stopping the Application
 
-To stop and remove the container, run:
+To stop and remove the container and attached volumes, run:
 ```bash
-docker-compose down
+docker-compose down -v
 ```
 
 ## Project Structure
@@ -54,7 +54,7 @@ docker-compose down
 ├── Dockerfile                # Dockerfile for the application image
 ├── dvc.yaml                  # DVC pipeline definition
 ├── params.yaml               # Parameters for the DVC pipeline
-├── requirements.txt          # Python dependencies
+├── pyproject.toml            # Python dependencies and ruff formatter setup
 └── src/                      # Source code for the pipeline stages
     ├── models/
     ├── stages/

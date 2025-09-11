@@ -71,6 +71,7 @@ def params_tab():
 
     yaml = YAML()
     yaml.preserve_quotes = True
+    yaml.indent(mapping=2, sequence=4, offset=2)
     params_file = Path("params.yaml")
 
     try:
@@ -213,7 +214,6 @@ def prediction_tab():
         csv_file = pred_path / "predictions.csv"
         if csv_file.exists():
             st.dataframe(pd.read_csv(csv_file))
-        
     else:
         st.warning(f"Prediction results for cycle {cycle_num} not found.")
 

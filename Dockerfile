@@ -1,35 +1,47 @@
-FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel
-# set the working directory in the container
+# Stage 1: Builder
+FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel AS builder
+
 WORKDIR /app
-# install system dependencies
+
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     git \
-    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# copy python requirements file first to leverage docker cache
-COPY requirements.txt .
-# install python dependencies and DVC
-RUN pip install --no-cache-dir -r requirements.txt
-# copy the rest of the application code
-COPY . .
-# expose the port the app runs on
-EXPOSE 8501
-# set python path to include the src directory
+# Copy pyproject.toml and install dependencies
+COPY pyproject.toml ./
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels .
+
+# Stage 2: Runtime (smaller, faster)
+FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-runtime
+
+WORKDIR /app
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -u 1000 appuser \
+    && mkdir -p /home/appuser /app/results /app/.dvc/cache \
+    && chown -R appuser /app /home/appuser \
+    && chmod -R 777 /app/results /app/.dvc/cache
+
+# Copy wheels from builder and install
+COPY --from=builder /app/wheels /wheels
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+# Copy application code
+COPY --chown=appuser:appuser . .
+
+# Set environment
 ENV PYTHONPATH=/app
-# Creates a non-root user and sets up directories with permissions
-RUN useradd -u 1000 appuser && \
-    mkdir -p /home/appuser /app/results /app/.dvc/cache && \
-    chown -R appuser /app /home/appuser && \
-    chmod -R 777 /app/results /app/.dvc/cache
-# Add /usr/bin to PATH for appuser
 ENV PATH="/usr/bin:${PATH}"
+
 USER appuser
-# command to run when the container starts
+EXPOSE 8501
+
 CMD ["streamlit", "run", "app.py"]
-
-
-
-

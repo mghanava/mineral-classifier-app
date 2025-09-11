@@ -1,5 +1,5 @@
 # Training cycle configuration
-cycles: 2
+cycles: 3
 add_self_loops: true
 default_model: gat
 # Data generation parameters

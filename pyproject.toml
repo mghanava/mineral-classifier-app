@@ -1,5 +1,5 @@
 [build-system]
-requires = [ "setuptools>=45", "wheel" ]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 
@@ -10,47 +10,47 @@ description = "Machine learning project for mineral classification"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-"scikit-learn = =1.6.0",
-"torch-geometric = =2.6.1",
-"seaborn = =0.13.2",
-"plotly = =5.24.1",
-"streamlit = =1.45.1",
-"statsmodels = =0.14.4",
-"ruamel.yaml = =0.18.15",
-"POT = =0.9.5",
-"ruff = =0.12.5",
-"dvc = =3.61.0"
+    "scikit-learn ==1.6.0",
+    "torch-geometric ==2.6.1",
+    "seaborn ==0.13.2",
+    "plotly ==5.24.1",
+    "streamlit ==1.45.1",
+    "statsmodels ==0.14.4",
+    "ruamel.yaml ==0.18.15",
+    "POT ==0.9.5",
+    "ruff ==0.12.5",
+    "dvc ==3.61.0",
 ]
 
 
 [tool.ruff]
 exclude = [
-".bzr",
-".direnv",
-".eggs",
-".git",
-".git-rewrite",
-".hg",
-".ipynb_checkpoints",
-".mypy_cache",
-".nox",
-".pants.d",
-".pyenv",
-".pytest_cache",
-".pytype",
-".ruff_cache",
-".svn",
-".tox",
-".venv",
-".vscode",
-"__pypackages__",
-"_build",
-"buck-out",
-"build",
-"dist",
-"node_modules",
-"site-packages",
-"venv"
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
 ]
 line-length = 88
 indent-width = 4
@@ -69,22 +69,22 @@ docstring-code-line-length = 60
 
 [tool.ruff.lint]
 select = [
-"E",
-"W",
-"F",
-"I",
-"B",
-"C4",
-"UP",
-"PD",
-"NPY",
-"RUF",
-"D",
-"SIM",
-"I"
+    "E",
+    "W",
+    "F",
+    "I",
+    "B",
+    "C4",
+    "UP",
+    "PD",
+    "NPY",
+    "RUF",
+    "D",
+    "SIM",
+    "I",
 ]
-extend-select = [ ]
-ignore = [ "E501", "B008", "C901", "PD901" ]
-fixable = [ "ALL" ]
-unfixable = [ ]
+extend-select = []
+ignore = ["E501", "B008", "C901", "PD901"]
+fixable = ["ALL"]
+unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
