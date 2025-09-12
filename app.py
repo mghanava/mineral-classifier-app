@@ -109,7 +109,7 @@ def params_tab():
         )
         if st.button("Generate `dvc.yaml` and Run Full Pipeline"):
             run_command(["python", "generate_dvc.py"])
-            run_command(["dvc", "repro", "-f"])
+            run_command(["dvc", "repro"])
 
     except FileNotFoundError:
         st.error("`params.yaml` not found.")

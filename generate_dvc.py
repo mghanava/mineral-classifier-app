@@ -42,7 +42,7 @@ def generate_fine_grained_dvc_yaml():
     stages = {
         "stages": {
             "bootstrap": {
-                "cmd": "python src/stages/generate_base_data.py --cycle 0",
+                "cmd": "rm -rf results/* && python src/stages/generate_base_data.py --cycle 0",
                 "deps": [
                     "src/stages/generate_base_data.py",
                     "src/utilities/data_utils.py",

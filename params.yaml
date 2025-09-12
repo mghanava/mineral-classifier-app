@@ -1,5 +1,5 @@
 # Training cycle configuration
-cycles: 3
+cycles: 2
 add_self_loops: true
 default_model: gcn
 # Data generation parameters
@@ -22,12 +22,12 @@ data:
     threshold_binary: 0.5
     min_samples_per_class: 50
     connection_radius: 200
-    n_splits: 3
+    n_splits: 2
     test_size: 0.3
     calib_size: 0.50
     n_hotspots: 5
     n_hotspots_random: false
-    seed: 14
+    seed: 6546
   pred:
     n_samples: 200
     min_samples_per_class:

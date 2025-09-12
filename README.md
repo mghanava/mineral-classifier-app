@@ -1,55 +1,66 @@
 # Mineral Deposit Classification
 
-This project provides a web-based dashboard for a DVC pipeline that classifies mineral deposits. The dashboard, built with Streamlit, allows users to interact with and visualize the pipeline's stages, from data generation to model evaluation and prediction.
+This project provides a web-based dashboard for a DVC pipeline that classifies mineral deposits. The dashboard, built with Streamlit, allows users to interact with and visualize the pipeline's stages.
 
-## Prerequisites
+![App Demo GIF](https://raw.githubusercontent.com/mghanava/mineral-deposit-classification/main/docs/app-demo.gif)
 
-Before you begin, ensure you have the following installed on your system:
+## 🚀 Quickstart Demo
 
--   **Docker:** [Get Docker](https://docs.docker.com/get-docker/)
--   **Docker Compose:** [Install Docker Compose](https://docs.docker.com/compose/install/)
--   **NVIDIA Drivers & NVIDIA Container Toolkit:** Required for GPU support.
-    -   [Install NVIDIA Drivers](https://www.nvidia.com/Download/index.aspx)
-    -   [Install NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+This is the fastest way to get the demo up and running on your machine.
 
-## Getting Started
+1.  **Ensure Prerequisites:** Make sure you have [Docker](https://docs.docker.com/get-docker/), [Docker Compose](https://docs.docker.com/compose/install/), and [DVC](https://dvc.org/doc/install) installed. If you have a GPU, ensure the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) is also set up.
 
-Follow these steps to get the project up and running:
+2.  **Run the Demo Script:**
+    Clone the repository, `cd` into it, and run the `demo.sh` script:
+    ```bash
+    git clone https://github.com/mghanava/mineral-deposit-classification.git
+    cd mineral-deposit-classification
+    ./demo.sh
+    ```
+    The script will automatically pull the data, build the Docker container, and open the application in your default web browser.
+
+3.  **Stop the Application:**
+    When you're finished, shut down the container with:
+    ```bash
+    docker-compose down
+    ```
+
+---
+
+## Manual Installation
+
+Follow these steps for a manual setup.
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
-    cd mineral_deposit_classification
+    git clone https://github.com/mghanava/mineral-deposit-classification.git
+    cd mineral-deposit-classification
     ```
 
-2.  **Build and run the container:**
+2.  **Pull DVC Data:**
+    ```bash
+    dvc pull -f
+    ```
+
+3.  **Build and run the container:**
     Use Docker Compose to build the image and start the service in detached mode:
     ```bash
     docker-compose up -d --build
     ```
-    This command will start the Streamlit application, which will be accessible in your web browser.
 
-## Usage
-
-### Accessing the Application
+### Usage
 
 -   **Streamlit Dashboard:** Once the container is running, open your web browser and navigate to `http://localhost:8501`.
--   **Development Shell:** To access an interactive shell inside the running container for debugging or running DVC commands directly, use the following command:
+-   **Development Shell:** To access an interactive shell inside the running container, use:
     ```bash
     docker-compose exec mineral_classifier bash
     ```
 
-### Stopping the Application
-
-To stop and remove the container and attached volumes, run:
-```bash
-docker-compose down -v
-```
-
-## Project Structure
+### Project Structure
 
 ```
 ├── app.py                    # The Streamlit dashboard application
+├── demo.sh                   # One-click demo script
 ├── docker-compose.yaml       # Docker Compose configuration
 ├── Dockerfile                # Dockerfile for the application image
 ├── dvc.yaml                  # DVC pipeline definition
