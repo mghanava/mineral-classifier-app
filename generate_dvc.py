@@ -48,7 +48,7 @@ def generate_fine_grained_dvc_yaml():
                     "src/utilities/data_utils.py",
                     "src/utilities/general_utils.py",
                 ],
-                "params": ["data.base"],
+                "params": ["data.base", "add_self_loops"],
                 "outs": [
                     "results/data/base/cycle_0/base_data.pt",
                     "results/data/base/cycle_0/fold_data.pt",
@@ -72,6 +72,7 @@ def generate_fine_grained_dvc_yaml():
             ],
             "params": [
                 f"models.{model}",
+                "add_self_loops",
                 "train",
             ],
             "outs": [
@@ -164,9 +165,7 @@ def generate_fine_grained_dvc_yaml():
                 else "results/data/base/cycle_0/base_data.pt",
                 f"results/data/prediction/cycle_{cycle}/pred_data.pt",
             ],
-            "params": [
-                "data.base",
-            ],
+            "params": ["data.base", "add_self_loops"],
             "outs": [
                 f"results/data/base/cycle_{cycle}/base_data.pt",
                 f"results/data/base/cycle_{cycle}/fold_data.pt",

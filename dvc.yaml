@@ -7,6 +7,7 @@ stages:
     - src/utilities/general_utils.py
     params:
     - data.base
+    - add_self_loops
     outs:
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/fold_data.pt
@@ -21,6 +22,7 @@ stages:
     - src/models/
     params:
     - models.gcn
+    - add_self_loops
     - train
     outs:
     - results/trained/cycle_1
@@ -87,6 +89,7 @@ stages:
     - results/data/prediction/cycle_1/pred_data.pt
     params:
     - data.base
+    - add_self_loops
     outs:
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_1/fold_data.pt
@@ -101,6 +104,7 @@ stages:
     - src/models/
     params:
     - models.gcn
+    - add_self_loops
     - train
     outs:
     - results/trained/cycle_2
@@ -167,10 +171,93 @@ stages:
     - results/data/prediction/cycle_2/pred_data.pt
     params:
     - data.base
+    - add_self_loops
     outs:
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
+  train_cycle_3:
+    cmd: python src/stages/train.py --cycle 3 --model gcn
+    deps:
+    - src/stages/train.py
+    - src/utilities/train_utils.py
+    - src/utilities/general_utils.py
+    - results/data/base/cycle_2/fold_data.pt
+    - src/models/
+    params:
+    - models.gcn
+    - add_self_loops
+    - train
+    outs:
+    - results/trained/cycle_3
+  evaluate_cycle_3:
+    cmd: python src/stages/evaluate.py --cycle 3 --model gcn
+    deps:
+    - src/stages/evaluate.py
+    - src/utilities/eval_utils.py
+    - src/utilities/general_utils.py
+    - results/data/base/cycle_2/test_data.pt
+    - src/models/
+    - results/trained/cycle_3/model.pt
+    params:
+    - models.gcn
+    - evaluate
+    outs:
+    - results/evaluation/cycle_3
+  generate_pred_data_cycle_3:
+    cmd: python src/stages/generate_pred_data.py --cycle 3
+    deps:
+    - src/stages/generate_pred_data.py
+    - src/utilities/pred_utils.py
+    - src/utilities/data_utils.py
+    - src/utilities/general_utils.py
+    - results/data/base/cycle_2/base_data.pt
+    - src/models/
+    params:
+    - data.pred
+    outs:
+    - results/data/prediction/cycle_3/pred_data.pt
+  predict_cycle_3:
+    cmd: python src/stages/predict.py --cycle 3 --model gcn
+    deps:
+    - src/stages/predict.py
+    - src/utilities/pred_utils.py
+    - src/utilities/general_utils.py
+    - results/data/prediction/cycle_3/pred_data.pt
+    - results/trained/cycle_3/model.pt
+    - results/evaluation/cycle_3/calibrator.pt
+    - src/models/
+    params:
+    - models.gcn
+    outs:
+    - results/prediction/cycle_3
+  analyze_drift_cycle_3:
+    cmd: python src/stages/analyze_drift.py --cycle 3
+    deps:
+    - src/stages/analyze_drift.py
+    - src/utilities/drift_detection_utils.py
+    - src/utilities/general_utils.py
+    - results/data/base/cycle_2/base_data.pt
+    - results/data/prediction/cycle_3/pred_data.pt
+    params:
+    - analyze_drift
+    outs:
+    - results/drift_analysis/cycle_3
+  prepare_next_cycle_data_3:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 3
+    deps:
+    - src/stages/prepare_next_cycle_data.py
+    - src/utilities/data_utils.py
+    - src/utilities/general_utils.py
+    - results/data/base/cycle_2/base_data.pt
+    - results/data/prediction/cycle_3/pred_data.pt
+    params:
+    - data.base
+    - add_self_loops
+    outs:
+    - results/data/base/cycle_3/base_data.pt
+    - results/data/base/cycle_3/fold_data.pt
+    - results/data/base/cycle_3/test_data.pt
   analyze_cycles_performance:
     cmd: python src/stages/analyze_cycles_performance.py
     deps:
@@ -180,5 +267,7 @@ stages:
     - results/prediction/cycle_1/metrics.json
     - results/evaluation/cycle_2/metrics.json
     - results/prediction/cycle_2/metrics.json
+    - results/evaluation/cycle_3/metrics.json
+    - results/prediction/cycle_3/metrics.json
     outs:
     - results/cycles_performance_analysis/cycles_performance.png

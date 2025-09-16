@@ -19,6 +19,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 from torch_geometric.data import Data
+# from torch_geometric.utils import subgraph
 
 
 def _generate_coordinates(
@@ -88,7 +89,7 @@ def _create_hotspots(
 ) -> tuple[np.ndarray, np.ndarray]:
     # In a mineral exploration context, hotspot strengths represent the maximum concentration or intensity of gold at each "source" location in the simulated area. Not all gold deposits are created equal - some have higher  mineral content than others. Values greater than 1.0 represent "high-grade" hotspots that can potentially yield gold values above the baseline (before applying distance decay). Values below 1.0 represent "lower-grade" hotspots that will produce somewhat weaker signals. The range isn't centered at 1.0 (it's 0.7-1.2) to create a slight positive skew, which is common in real mineral deposits
     if n_hotspots is not None and n_hotspots_random:
-        n_hotspots = rng.integers(1, n_hotspots)
+        n_hotspots = int(rng.integers(1, n_hotspots))
     hotspot_strengths = rng.uniform(0.7, 1.2, n_hotspots)
     hotspots = np.zeros((n_hotspots, 3))
     hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
@@ -441,12 +442,35 @@ def scale_data(data: np.ndarray, scaler: ScalerType) -> np.ndarray:
     return scaler.fit_transform(data)
 
 
+def _filter_edges_for_nodes(edge_index, edge_attr, allowed_nodes):
+    """Keep only edges between nodes in allowed_nodes set.
+
+    Args:
+        edge_index: Edge connectivity [2, num_edges]
+        edge_attr: Edge attributes [num_edges, num_features] or None
+        allowed_nodes: torch.Tensor of node indices to keep
+
+    Returns:
+        filtered_edge_index, filtered_edge_attr
+
+    """
+    # Create mask for edges where both source and target are in allowed_nodes
+    mask = torch.isin(edge_index[0], allowed_nodes) & torch.isin(
+        edge_index[1], allowed_nodes
+    )
+
+    filtered_edge_index = edge_index[:, mask]
+    filtered_edge_attr = edge_attr[mask] if edge_attr is not None else None
+
+    return filtered_edge_index, filtered_edge_attr
+
+
 def _split_graph(
     x: torch.Tensor,
     y: torch.Tensor,
     edge_index: torch.Tensor,
     edge_attr: torch.Tensor,
-    n_splits: int | None,
+    n_splits: int,
     test_size: float | None,
     calib_size: float | None,
     seed: int | None,
@@ -454,6 +478,7 @@ def _split_graph(
     features = x.numpy()
     labels = y.numpy()
     n_nodes = len(labels)
+
     # First split into train+val and test
     train_val_idx, temp_idx = train_test_split(
         np.arange(n_nodes),
@@ -461,6 +486,7 @@ def _split_graph(
         stratify=labels,
         random_state=seed,
     )
+
     # Initialize stratified k-fold on the train+val data
     if n_splits is None:
         raise ValueError("n_splits must be specified when should_split is True.")
@@ -478,10 +504,17 @@ def _split_graph(
         train_idx = train_val_idx[train_idx]
         val_idx = train_val_idx[val_idx]
 
+        # Combine train and val indices for this fold
+        fold_nodes = torch.tensor(np.concatenate([train_idx, val_idx]))
+
+        # Filter edges to only include those between nodes in this fold
+        fold_edge_index, fold_edge_attr = _filter_edges_for_nodes(
+            edge_index, edge_attr, fold_nodes
+        )
+
         # Create boolean masks for this fold
         train_mask = torch.zeros(n_nodes, dtype=torch.bool)
         val_mask = torch.zeros(n_nodes, dtype=torch.bool)
-
         train_mask[train_idx] = True
         val_mask[val_idx] = True
 
@@ -489,8 +522,8 @@ def _split_graph(
         data = Data(
             x=x,
             y=y,
-            edge_index=edge_index,
-            edge_attr=edge_attr,
+            edge_index=fold_edge_index,
+            edge_attr=fold_edge_attr,
             train_mask=train_mask,
             val_mask=val_mask,
             fold=fold_idx,
@@ -498,39 +531,38 @@ def _split_graph(
 
         fold_data.append(data)
 
-    if calib_size is None:
-        test_idx = temp_idx
-        # Create separate test Data object
-        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        test_mask[test_idx] = True
-        test_data = Data(
-            x=x,
-            y=y,
-            edge_index=edge_index,
-            edge_attr=edge_attr,
-            test_mask=test_mask,
-        )
-    else:
-        test_idx, calib_idx = train_test_split(
-            temp_idx,
-            test_size=calib_size,
-            stratify=labels[temp_idx],
-            random_state=seed,
-        )
-        # Create separate test Data object
-        test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        test_mask[test_idx] = True
-        # Create separate calibration Data object
-        calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
-        calib_mask[calib_idx] = True
-        test_data = Data(
-            x=x,
-            y=y,
-            edge_index=edge_index,
-            edge_attr=edge_attr,
-            test_mask=test_mask,
-            calib_mask=calib_mask,
-        )
+    # Handle test data splitting
+    test_idx, calib_idx = train_test_split(
+        temp_idx,
+        test_size=calib_size,
+        stratify=labels[temp_idx],
+        random_state=seed,
+    )
+
+    # Combine test and calib indices
+    test_calib_nodes = torch.tensor(np.concatenate([test_idx, calib_idx]))
+
+    # Filter edges to only include those between test/calib nodes
+    test_edge_index, test_edge_attr = _filter_edges_for_nodes(
+        edge_index, edge_attr, test_calib_nodes
+    )
+
+    # Create separate test Data object
+    test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+    test_mask[test_idx] = True
+    # Create separate calibration Data object
+    calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
+    calib_mask[calib_idx] = True
+
+    test_data = Data(
+        x=x,
+        y=y,
+        edge_index=test_edge_index,
+        edge_attr=test_edge_attr,
+        test_mask=test_mask,
+        calib_mask=calib_mask,
+    )
+
     return fold_data, test_data
 
 
@@ -538,8 +570,10 @@ def construct_graph(
     coordinates: np.ndarray,
     features: np.ndarray,
     labels: np.ndarray,
-    connection_radius: float,
-    add_self_loops: bool,
+    k_nearest: int | None = None,
+    connection_radius: float | None = None,
+    distance_percentile: float | None = None,
+    add_self_loops: bool = False,
     n_splits: int | None = None,
     test_size: float | None = None,
     calib_size: float | None = None,
@@ -583,7 +617,9 @@ def construct_graph(
 
     edge_index, edge_attr, edge_weight = prepare_edge_data(
         coordinates,
+        k_nearest,
         connection_radius,
+        distance_percentile,
         add_self_loops,
         make_edge_weight,
         make_edge_weight_method,
@@ -601,8 +637,7 @@ def construct_graph(
         ),  # store for data drift detection
     )
 
-    split_params = (n_splits, test_size, calib_size, seed)
-    if should_split and all(split_params) is not None:
+    if should_split and n_splits is not None:
         fold_data, test_data = _split_graph(
             x, y, edge_index, edge_attr, n_splits, test_size, calib_size, seed
         )
@@ -610,9 +645,60 @@ def construct_graph(
     return base_data
 
 
+def _create_graph_adaptive_distance(
+    dist_matrix: np.ndarray, add_self_loops: bool, percentile: float
+) -> tuple[np.ndarray, np.ndarray]:
+    dist_matrix_for_percentile = dist_matrix.copy()
+    # Mask out self-distances (set diagonal to infinity)
+    np.fill_diagonal(dist_matrix_for_percentile, np.inf)
+    # Vectorized percentile computation for all nodes at once
+    thresholds = np.percentile(dist_matrix_for_percentile, percentile, axis=1)
+    if not add_self_loops:
+        # Create boolean mask for connections
+        connections = (dist_matrix <= thresholds[:, np.newaxis]) & (dist_matrix > 0.0)
+    else:
+        # Include self-nodes assuming current node features are also important for prediction (node own features)
+        connections = dist_matrix <= thresholds[:, np.newaxis]
+    # Get source and destination indices
+    src, dst = np.where(connections)
+    return src, dst
+
+
+def _create_graph_fixed_distance(
+    dist_matrix: np.ndarray, add_self_loops: bool, connection_radius: float
+) -> tuple[np.ndarray, np.ndarray]:
+    if not add_self_loops:
+        src, dst = np.where((dist_matrix < connection_radius) & (dist_matrix > 0))
+    else:
+        src, dst = np.where(dist_matrix < connection_radius)
+    return src, dst
+
+
+def _create_graph_k_nearest(
+    coordinates: np.ndarray, add_self_loops: bool, k: int
+) -> tuple[np.ndarray, np.ndarray]:
+    tree = KDTree(coordinates)
+    _, indices = tree.query(coordinates, k=k + 1)
+
+    if add_self_loops:
+        # Keep all k+1 neighbors (including self)
+        src = np.repeat(np.arange(len(coordinates)), k + 1)
+        dst = indices.flatten()
+    else:
+        # Keep only k neighbors (excluding self)
+        src = np.repeat(np.arange(len(coordinates)), k)
+        # Ensure indices is 2D for consistent slicing
+        assert indices.ndim == 2, "Expected indices to be a 2D array."
+        dst = indices[:, 1:].flatten()  # Skip first column (self)
+
+    return src, dst
+
+
 def prepare_edge_data(
     coordinates: np.ndarray,
-    connection_radius: float = 150,
+    k_nearest: int | None = None,
+    connection_radius: float | None = None,
+    distance_percentile: float | None = None,
     add_self_loops: bool = False,
     make_edge_weight: bool = False,
     make_edge_weight_method: str | None = None,
@@ -637,15 +723,20 @@ def prepare_edge_data(
     """
     # Compute pairwise Euclidean distances
     dist_matrix = distance_matrix(coordinates, coordinates)
-    # Find edges based on distance threshold avoiding self-node thru distance > 0
-    # to force the model to learn purely from neighboring nodes
-    if not add_self_loops:
-        # Exclude self-loops (nodes cannot connect to themselves)
-        src, dst = np.where((dist_matrix < connection_radius) & (dist_matrix > 0))
+    if k_nearest is not None:
+        src, dst = _create_graph_k_nearest(coordinates, add_self_loops, k_nearest)
+    elif distance_percentile is not None:
+        src, dst = _create_graph_adaptive_distance(
+            dist_matrix, add_self_loops, distance_percentile
+        )
+    elif connection_radius is not None:
+        src, dst = _create_graph_fixed_distance(
+            dist_matrix, add_self_loops, connection_radius
+        )
     else:
-        # include self-nodes assuming current node features are also important for prediction (node own features along with its neighbors)
-        src, dst = np.where(dist_matrix < connection_radius)
-
+        raise ValueError(
+            "Either k_nearest or connection_radius or distance_percentile must be set."
+        )
     # Make the graph undirected by adding reciprocal edges; for each edge A→B,
     # add the reverse edge B→A to assure same information passage both ways
     # between connected points (we can get node properties of A from B or B
@@ -676,7 +767,9 @@ def export_graph_to_html(
     graph,
     coordinates: np.ndarray,
     node_indices: np.ndarray | None,
+    k_nearest: int,
     connection_radius: float,
+    distance_percentile: float,
     add_self_loops: bool,
     save_path: str,
     labels_map: dict[int, str],
@@ -689,10 +782,15 @@ def export_graph_to_html(
     labels = (
         graph.y[node_indices].numpy() if node_indices is not None else graph.y.numpy()
     )
-    edge_index, _, _ = prepare_edge_data(coordinates, connection_radius, add_self_loops)
+    edge_index, _, _ = prepare_edge_data(
+        coordinates, k_nearest, connection_radius, distance_percentile, add_self_loops
+    )
     src, dst = edge_index
-    avg_degree = edge_index.shape[1] / coordinates.shape[0]
-    title = f"Graph with {coordinates.shape[0]} nodes and {edge_index.shape[1]} edges - average node degree {avg_degree:.2f}"
+    network_density = _calculate_network_density(
+        edge_index.shape[1], coordinates.shape[0]
+    )
+    avg_degree = _calculate_average_degree(edge_index.shape[1], coordinates.shape[0])
+    title = f"Graph with {coordinates.shape[0]} nodes and {edge_index.shape[1]} edges: network degree {network_density:.2f} & average node degree {avg_degree:.2f}"
 
     fig = visualize_graph(
         coordinates,
@@ -706,7 +804,9 @@ def export_graph_to_html(
         filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}.html"
     else:
         filename = f"{save_path}/{dataset_tag}_graph.html"
-    fig.write_html(filename, full_html=False, include_plotlyjs="cdn", config={"responsive": True})
+    fig.write_html(
+        filename, full_html=False, include_plotlyjs="cdn", config={"responsive": True}
+    )
     print(f"Graph exported to {filename}.")
 
 
@@ -714,7 +814,9 @@ def export_all_graphs_to_html(
     fold_data: list[Data],
     test_data: Data,
     coordinates: np.ndarray,
+    k_nearest: int,
     connection_radius: float,
+    distance_percentile: float,
     add_self_loops: bool,
     labels_map: dict[int, str],
     save_path: str,
@@ -739,7 +841,9 @@ def export_all_graphs_to_html(
             graph,
             coordinates,
             node_indices,
+            k_nearest=k_nearest,
             connection_radius=connection_radius,
+            distance_percentile=distance_percentile,
             add_self_loops=add_self_loops,
             save_path=save_path,
             labels_map=labels_map,
@@ -751,7 +855,9 @@ def export_all_graphs_to_html(
             graph,
             coordinates,
             node_indices,
+            k_nearest=k_nearest,
             connection_radius=connection_radius,
+            distance_percentile=distance_percentile,
             add_self_loops=add_self_loops,
             save_path=save_path,
             labels_map=labels_map,
@@ -763,7 +869,9 @@ def export_all_graphs_to_html(
         test_data,
         coordinates,
         node_indices,
+        k_nearest=k_nearest,
         connection_radius=connection_radius,
+        distance_percentile=distance_percentile,
         add_self_loops=add_self_loops,
         save_path=save_path,
         labels_map=labels_map,
@@ -774,7 +882,9 @@ def export_all_graphs_to_html(
         test_data,
         coordinates,
         node_indices,
+        k_nearest=k_nearest,
         connection_radius=connection_radius,
+        distance_percentile=distance_percentile,
         add_self_loops=add_self_loops,
         save_path=save_path,
         labels_map=labels_map,
@@ -896,3 +1006,387 @@ def normalize_edge_weight(edge_attr, make_edge_weight_method: str | None = "minm
         return torch.log1p(weights)
 
     return weights
+
+
+# def diagnose_data_leakage(fold_data, test_data):
+#     """Comprehensive data leakage detection for graph splits.
+
+#     Args:
+#         fold_data: List of Data objects (one per fold)
+#         test_data: Single Data object for test/calib
+
+#     Returns:
+#         dict: Diagnostic results
+
+#     """
+#     results = {
+#         "node_overlap": {},
+#         "edge_leakage": {},
+#         "connectivity_stats": {},
+#         "feature_stats": {},
+#     }
+
+#     n_nodes = fold_data[0].x.shape[0]
+
+#     # 1. Check for node overlap between splits
+#     print("=== NODE OVERLAP ANALYSIS ===")
+
+#     # Get all node sets
+#     all_train_nodes = []
+#     all_val_nodes = []
+#     test_nodes = test_data.test_mask.nonzero().flatten().numpy()
+#     calib_nodes = (
+#         test_data.calib_mask.nonzero().flatten().numpy()
+#         if hasattr(test_data, "calib_mask")
+#         else np.array([])
+#     )
+
+#     for i, fold in enumerate(fold_data):
+#         train_nodes = fold.train_mask.nonzero().flatten().numpy()
+#         val_nodes = fold.val_mask.nonzero().flatten().numpy()
+#         all_train_nodes.extend(train_nodes)
+#         all_val_nodes.extend(val_nodes)
+
+#         # Check within-fold overlap
+#         overlap = set(train_nodes) & set(val_nodes)
+#         if overlap:
+#             print(
+#                 f"❌ LEAKAGE: Fold {i} has {len(overlap)} overlapping train/val nodes"
+#             )
+#             results["node_overlap"][f"fold_{i}_internal"] = len(overlap)
+#         else:
+#             print(
+#                 f"✅ Fold {i}: No train/val overlap ({len(train_nodes)} train, {len(val_nodes)} val)"
+#             )
+
+#     # Check cross-fold overlap
+#     all_train_nodes = np.array(all_train_nodes)
+#     all_val_nodes = np.array(all_val_nodes)
+
+#     cross_fold_overlap = set(all_train_nodes) & set(all_val_nodes)
+#     if cross_fold_overlap:
+#         print(
+#             f"❌ LEAKAGE: {len(cross_fold_overlap)} nodes appear in both train and val across folds"
+#         )
+#         results["node_overlap"]["cross_fold"] = len(cross_fold_overlap)
+
+#     # Check train/val vs test overlap
+#     train_val_nodes = np.concatenate([all_train_nodes, all_val_nodes])
+#     test_overlap = set(train_val_nodes) & set(test_nodes)
+#     if test_overlap:
+#         print(
+#             f"❌ LEAKAGE: {len(test_overlap)} nodes appear in both train/val and test"
+#         )
+#         results["node_overlap"]["train_val_test"] = len(test_overlap)
+
+#     if calib_nodes.size > 0:
+#         calib_overlap = set(train_val_nodes) & set(calib_nodes)
+#         if calib_overlap:
+#             print(
+#                 f"❌ LEAKAGE: {len(calib_overlap)} nodes appear in both train/val and calib"
+#             )
+#             results["node_overlap"]["train_val_calib"] = len(calib_overlap)
+
+#     # 2. Check for edge leakage
+#     print("\n=== EDGE LEAKAGE ANALYSIS ===")
+
+#     for i, fold in enumerate(fold_data):
+#         fold_train_nodes = set(fold.train_mask.nonzero().flatten().numpy())
+#         fold_val_nodes = set(fold.val_mask.nonzero().flatten().numpy())
+#         fold_all_nodes = fold_train_nodes | fold_val_nodes
+
+#         # Check if edges connect to nodes outside this fold
+#         edge_index = fold.edge_index.numpy()
+#         source_nodes = set(edge_index[0])
+#         target_nodes = set(edge_index[1])
+#         all_edge_nodes = source_nodes | target_nodes
+
+#         outside_nodes = all_edge_nodes - fold_all_nodes
+#         if outside_nodes:
+#             print(
+#                 f"❌ LEAKAGE: Fold {i} has edges connecting to {len(outside_nodes)} nodes outside the fold"
+#             )
+#             results["edge_leakage"][f"fold_{i}"] = len(outside_nodes)
+#         else:
+#             print(f"✅ Fold {i}: All edges contained within fold nodes")
+
+#     # Check test data edge leakage
+#     test_all_nodes = set(test_nodes) | set(calib_nodes)
+#     test_edge_index = test_data.edge_index.numpy()
+#     test_source_nodes = set(test_edge_index[0])
+#     test_target_nodes = set(test_edge_index[1])
+#     test_all_edge_nodes = test_source_nodes | test_target_nodes
+
+#     test_outside_nodes = test_all_edge_nodes - test_all_nodes
+#     if test_outside_nodes:
+#         print(
+#             f"❌ LEAKAGE: Test data has edges connecting to {len(test_outside_nodes)} nodes outside test/calib"
+#         )
+#         results["edge_leakage"]["test"] = len(test_outside_nodes)
+#     else:
+#         print("✅ Test data: All edges contained within test/calib nodes")
+
+#     # 3. Connectivity statistics
+#     print("\n=== CONNECTIVITY STATISTICS ===")
+
+#     for i, fold in enumerate(fold_data):
+#         n_edges = fold.edge_index.shape[1]
+#         n_nodes_in_fold = fold.train_mask.sum() + fold.val_mask.sum()
+#         density = _calculate_network_density(n_edges, n_nodes_in_fold)
+
+#         print(
+#             f"Fold {i}: {n_nodes_in_fold} nodes, {n_edges} edges, density: {density:.4f}"
+#         )
+#         results["connectivity_stats"][f"fold_{i}"] = {
+#             "nodes": int(n_nodes_in_fold),
+#             "edges": n_edges,
+#             "density": density,
+#         }
+
+#     test_n_nodes = len(test_nodes) + len(calib_nodes)
+#     test_n_edges = test_data.edge_index.shape[1]
+#     test_density = _calculate_network_density(test_n_edges, test_n_nodes)
+#     print(
+#         f"Test: {test_n_nodes} nodes, {test_n_edges} edges, density: {test_density:.4f}"
+#     )
+
+#     return results
+
+
+# def check_isolated_components(fold_data, test_data):
+#     """Check for isolated nodes or components that might cause training issues."""
+#     print("\n=== CONNECTIVITY ANALYSIS ===")
+
+#     def count_isolated_nodes(edge_index, node_mask):
+#         nodes_in_mask = node_mask.nonzero().flatten().numpy()
+#         nodes_with_edges = set(edge_index.flatten().numpy())
+#         isolated = set(nodes_in_mask) - nodes_with_edges
+#         return len(isolated)
+
+#     for i, fold in enumerate(fold_data):
+#         train_isolated = count_isolated_nodes(fold.edge_index, fold.train_mask)
+#         val_isolated = count_isolated_nodes(fold.edge_index, fold.val_mask)
+
+#         if train_isolated > 0 or val_isolated > 0:
+#             print(
+#                 f"⚠️  Fold {i}: {train_isolated} isolated train nodes, {val_isolated} isolated val nodes"
+#             )
+#         else:
+#             print(f"✅ Fold {i}: No isolated nodes")
+
+#     test_isolated = count_isolated_nodes(test_data.edge_index, test_data.test_mask)
+#     calib_isolated = count_isolated_nodes(test_data.edge_index, test_data.calib_mask)
+#     if test_isolated > 0 or calib_isolated > 0:
+#         print(
+#             f"⚠️  Test: {test_isolated} isolated test nodes, {calib_isolated} isolated calib nodes"
+#         )
+#     else:
+#         print("✅ Test: No isolated nodes")
+#         print("✅ Calibration: No isolated nodes")
+
+
+def _calculate_network_density(n_edges, n_nodes):
+    """Calculate the density of the undirecetd graph.
+
+    Density measures how many edges are in the graph compared to the maximum possible number of edges between nodes. It ranges from 0 (no edges) to 1 (a complete graph where every node is connected to every other node).
+
+    Density = 2 * E / (N * (N - 1)) for undirected graphs where E is the number of edges and N is the number of nodes.
+    """
+    density = (2 * n_edges) / (n_nodes * (n_nodes - 1)) if n_nodes > 1 else 0
+    return density
+
+
+def _calculate_average_degree(n_edges, n_nodes):
+    """Calculate the average node degree of the undirecetd graph.
+
+    It describes the average connectivity of individual nodes rather than the overall connectedness of the entire network.
+    Average Degree = 2 * E / N for undirected graphs
+    where E is the number of edges and N is the number of nodes
+    """
+    avg_degree = (2 * n_edges) / n_nodes if n_nodes > 0 else 0
+    return avg_degree
+
+
+# def _split_graph_no_leakage(
+#     x: torch.Tensor,
+#     y: torch.Tensor,
+#     edge_index: torch.Tensor,
+#     edge_attr: torch.Tensor,
+#     n_splits: int | None,
+#     test_size: float | None,
+#     calib_size: float | None,
+#     seed: int | None,
+#     method: str = "subgraph",  # "subgraph" or "mask_edges"
+# ):
+#     """Split graph data without leakage through nodes or edges.
+
+#     Args:
+#         method: Either "subgraph" (recommended) or "mask_edges"
+
+#     """
+#     features = x.numpy()
+#     labels = y.numpy()
+#     n_nodes = len(labels)
+
+#     # First split into train+val and temp (test+calib)
+#     train_val_idx, temp_idx = train_test_split(
+#         np.arange(n_nodes),
+#         test_size=test_size,
+#         stratify=labels,
+#         random_state=seed,
+#     )
+
+#     # Split temp into test and calibration
+#     test_idx, calib_idx = train_test_split(
+#         temp_idx,
+#         test_size=calib_size,
+#         stratify=labels[temp_idx],
+#         random_state=seed,
+#     )
+
+#     if n_splits is None:
+#         raise ValueError("n_splits must be specified when should_split is True.")
+
+#     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+#     fold_data = []
+
+#     # Generate folds from the train+val data
+#     for fold_idx, (train_fold_idx, val_fold_idx) in enumerate(
+#         skf.split(features[train_val_idx], labels[train_val_idx])
+#     ):
+#         # Map fold indices back to original indices
+#         train_idx = train_val_idx[train_fold_idx]
+#         val_idx = train_val_idx[val_fold_idx]
+
+#         if method == "subgraph":
+#             # Create separate subgraphs for train and val
+#             train_data = _create_subgraph(
+#                 x, y, edge_index, edge_attr, train_idx, fold_idx, "train"
+#             )
+#             val_data = _create_subgraph(
+#                 x, y, edge_index, edge_attr, val_idx, fold_idx, "val"
+#             )
+#             fold_data.append((train_data, val_data))
+
+#         elif method == "mask_edges":
+#             # Create train/val data with masked edges
+#             fold_data.append(
+#                 _create_masked_data(
+#                     x,
+#                     y,
+#                     edge_index,
+#                     edge_attr,
+#                     train_idx,
+#                     val_idx,
+#                     test_idx,
+#                     calib_idx,
+#                     fold_idx,
+#                 )
+#             )
+
+#     # Create test and calibration data
+#     if method == "subgraph":
+#         test_data = _create_subgraph(
+#             x, y, edge_index, edge_attr, test_idx, None, "test"
+#         )
+#         calib_data = _create_subgraph(
+#             x, y, edge_index, edge_attr, calib_idx, None, "calib"
+#         )
+#     else:
+#         test_data = _create_masked_data(
+#             x, y, edge_index, edge_attr, [], [], test_idx, calib_idx, None
+#         )
+#         calib_data = test_data  # Same object, different masks
+
+#     return fold_data, test_data, calib_data
+
+
+# def _create_subgraph(x, y, edge_index, edge_attr, node_indices, fold_idx, split_type):
+#     """Create a subgraph containing only specified nodes and their connections."""
+#     node_indices = torch.tensor(node_indices, dtype=torch.long)
+
+#     # Extract subgraph with only edges between nodes in node_indices
+#     sub_edge_index, sub_edge_attr = subgraph(
+#         node_indices, edge_index, edge_attr, relabel_nodes=True, num_nodes=x.size(0)
+#     )
+
+#     # Extract node features and labels for the subgraph
+#     sub_x = x[node_indices]
+#     sub_y = y[node_indices]
+
+#     data = Data(
+#         x=sub_x,
+#         y=sub_y,
+#         edge_index=sub_edge_index,
+#         edge_attr=sub_edge_attr,
+#         original_node_indices=node_indices,  # Keep track of original indices
+#         fold=fold_idx,
+#         split_type=split_type,
+#     )
+
+#     return data
+
+
+# def _create_masked_data(
+#     x, y, edge_index, edge_attr, train_idx, val_idx, test_idx, calib_idx, fold_idx
+# ):
+#     """Create data with edge masking to prevent leakage."""
+#     n_nodes = x.size(0)
+
+#     # Create node masks
+#     train_mask = torch.zeros(n_nodes, dtype=torch.bool)
+#     val_mask = torch.zeros(n_nodes, dtype=torch.bool)
+#     test_mask = torch.zeros(n_nodes, dtype=torch.bool)
+#     calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
+
+#     if len(train_idx) > 0:
+#         train_mask[train_idx] = True
+#     if len(val_idx) > 0:
+#         val_mask[val_idx] = True
+#     if len(test_idx) > 0:
+#         test_mask[test_idx] = True
+#     if len(calib_idx) > 0:
+#         calib_mask[calib_idx] = True
+
+#     # Filter edges to prevent leakage
+#     # Only keep edges where both nodes are in the same split or allowed combinations
+#     train_val_nodes = (
+#         set(train_idx.tolist() + val_idx.tolist())
+#         if len(train_idx) > 0 or len(val_idx) > 0
+#         else set()
+#     )
+#     test_calib_nodes = (
+#         set(test_idx.tolist() + calib_idx.tolist())
+#         if len(test_idx) > 0 or len(calib_idx) > 0
+#         else set()
+#     )
+
+#     # Create edge mask - keep edges within train+val or within test+calib
+#     edge_mask = torch.zeros(edge_index.size(1), dtype=torch.bool)
+
+#     for i in range(edge_index.size(1)):
+#         src, tgt = edge_index[0, i].item(), edge_index[1, i].item()
+
+#         # Keep edge if both nodes are in train+val OR both in test+calib
+#         if (src in train_val_nodes and tgt in train_val_nodes) or (
+#             src in test_calib_nodes and tgt in test_calib_nodes
+#         ):
+#             edge_mask[i] = True
+
+#     # Filter edges and edge attributes
+#     filtered_edge_index = edge_index[:, edge_mask]
+#     filtered_edge_attr = edge_attr[edge_mask] if edge_attr is not None else None
+
+#     data = Data(
+#         x=x,
+#         y=y,
+#         edge_index=filtered_edge_index,
+#         edge_attr=filtered_edge_attr,
+#         train_mask=train_mask,
+#         val_mask=val_mask,
+#         test_mask=test_mask,
+#         calib_mask=calib_mask,
+#         fold=fold_idx,
+#     )
+
+#     return data

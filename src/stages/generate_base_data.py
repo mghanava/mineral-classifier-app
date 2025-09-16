@@ -14,7 +14,9 @@ import torch
 
 from src.utilities.data_utils import (
     analyze_feature_discrimination,
+    # check_isolated_components,
     construct_graph,
+    # diagnose_data_leakage,
     export_all_graphs_to_html,
     export_graph_to_html,
     generate_mineral_data,
@@ -70,7 +72,9 @@ def prepare_base_data(
         coordinates,
         features,
         labels,
-        connection_radius=base_params["connection_radius"],
+        k_nearest=base_params.get("k_nearest", None),
+        connection_radius=base_params.get("connection_radius", None),
+        distance_percentile=base_params.get("distance_percentile", None),
         add_self_loops=base_params["add_self_loops"],
         n_splits=base_params["n_splits"],
         test_size=base_params["test_size"],
@@ -87,13 +91,18 @@ def prepare_base_data(
         )
     base_data, fold_data, test_data = all_data
 
+    # diagnose_data_leakage(fold_data, test_data)
+    # check_isolated_components(fold_data, test_data)
+
     # export the interactive 3D plots
     print("\nExporting 3D interactive plots of graphs ...")
     export_graph_to_html(
         base_data,
         coordinates,
         None,
+        base_params["k_nearest"],
         base_params["connection_radius"],
+        base_params["distance_percentile"],
         base_params["add_self_loops"],
         output_path,
         labels_map,
@@ -103,7 +112,9 @@ def prepare_base_data(
         fold_data,
         test_data,
         coordinates,
+        base_params["k_nearest"],
         base_params["connection_radius"],
+        base_params["distance_percentile"],
         base_params["add_self_loops"],
         labels_map,
         output_path,

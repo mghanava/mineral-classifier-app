@@ -1,6 +1,6 @@
 # Training cycle configuration
-cycles: 2
-add_self_loops: true
+cycles: 3
+add_self_loops: false
 default_model: gcn
 # Data generation parameters
 data:
@@ -21,8 +21,10 @@ data:
     class_names:
     threshold_binary: 0.5
     min_samples_per_class: 50
-    connection_radius: 200
-    n_splits: 2
+    k_nearest: 
+    connection_radius: 
+    distance_percentile: 5
+    n_splits: 3
     test_size: 0.3
     calib_size: 0.50
     n_hotspots: 5
@@ -45,8 +47,8 @@ models:
     bias: true
     residual: true
   gcn:
-    hidden_channels: 128
-    n_layers: 3
+    hidden_channels: 8
+    n_layers: 2
     dropout: 0.4
     batch_norm: true
     improved: true
@@ -55,7 +57,7 @@ models:
 # Training parameters
 train:
   n_epochs: 1000
-  lr: 0.001
+  lr: 0.0005
   max_grad_norm: 1.0
   weight_decay_adam_optimizer: 5.0e-4
   factor_learning_rate_scheduler: 0.5
@@ -69,7 +71,7 @@ evaluate:
   n_bins: 10
   calibration_method: beta # Options: "temperature", "isotonic", "platt", "beta", "dirichlet"
   n_epochs: 1000
-  lr: 1.0e-3
+  lr: 1.0e-4
   weight_decay_adam_optimizer: 5.0e-4
   verbose: true
   factor_learning_rate_scheduler: 0.4
