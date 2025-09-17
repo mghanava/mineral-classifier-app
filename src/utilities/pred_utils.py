@@ -23,8 +23,8 @@ def prediction(
     calibrator_path: str,
     class_names: list,
     save_path: str | None = None,
-    device: torch.device = torch.device("cpu"),
 ):
+    device = next(model.parameters()).device
     # hide the labels from model
     hidden_labels = pred_data.y
     pred_data.y = None

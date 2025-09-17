@@ -72,8 +72,13 @@ def train(
         - Comprehensive training visualization plots
 
     """
-    y_true_train = data.y[data.train_mask]
-    device = y_true_train.device
+    device = next(model.parameters()).device
+
+    train_data, val_data = data
+    train_data = train_data.to(device)
+    val_data = val_data.to(device)
+    y_true_train = train_data.y
+    y_true_val = val_data.y
 
     class_weights_train = compute_class_weight(
         class_weight="balanced",
@@ -83,7 +88,7 @@ def train(
     criterion_train = nn.CrossEntropyLoss(
         weight=torch.tensor(class_weights_train, dtype=torch.float32).to(device)
     )
-    y_true_val = data.y[data.val_mask]
+
     class_weights_val = compute_class_weight(
         class_weight="balanced",
         classes=np.arange(n_classes),
@@ -125,13 +130,11 @@ def train(
     early_stopping = EarlyStopping(
         patience=patience_early_stopping, min_delta=min_delta_early_stopping
     )
-
+    # Training phase
+    model.train()
     for epoch in range(n_epochs):
-        # Training phase
-        model.train()
         optimizer.zero_grad()
-        logits = model(data)
-        logits_train = logits[data.train_mask]
+        logits_train = model(train_data)
         loss = criterion_train(logits_train, y_true_train)
         loss.backward()
 
@@ -155,8 +158,7 @@ def train(
         # Evaluation phase
         model.eval()
         with torch.no_grad():
-            logits = model(data)
-            logits_val = logits[data.val_mask]
+            logits_val = model(val_data)
             y_prob_val = torch.softmax(logits_val, dim=1)
             loss_val = criterion_val(logits_val, y_true_val)
 

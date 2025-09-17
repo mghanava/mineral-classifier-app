@@ -4,7 +4,12 @@ import os
 import torch
 
 from src.models import get_model
-from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
+from src.utilities.general_utils import (
+    LogTime,
+    ensure_directory_exists,
+    load_data,
+    load_params,
+)
 from src.utilities.train_utils import train
 
 
@@ -43,10 +48,7 @@ def run_training(paths, params, model_name, cycle_num):
     output_path = ensure_directory_exists(paths["output"])
 
     # Load training data from previous cycle
-    fold_data_path = os.path.join(paths["base_data"], "fold_data.pt")
-    if not os.path.exists(fold_data_path):
-        raise FileNotFoundError(f"Training data not found at {fold_data_path}")
-    fold_data = torch.load(fold_data_path, weights_only=False)
+    fold_data = load_data(os.path.join(paths["base_data"], "fold_data.pt"))
 
     # Initialize model
     model = get_model(model_name, model_params)
@@ -57,11 +59,11 @@ def run_training(paths, params, model_name, cycle_num):
     # Training loop
     fold_results = []
 
-    for graph_idx, graph in enumerate(fold_data, 1):
-        print(f"\nTraining model on fold {graph.fold + 1}...")
+    for fold_idx, fold in enumerate(fold_data, 1):
+        print(f"\nTraining model on fold {fold_idx}...")
 
         trained_model, best_loss_val = train(
-            graph.to(device),
+            fold,
             model.to(device),
             n_classes=n_classes,
             n_epochs=train_params["n_epochs"],
@@ -77,7 +79,7 @@ def run_training(paths, params, model_name, cycle_num):
             patience_early_stopping=train_params["patience_early_stopping"],
             min_delta_early_stopping=train_params["min_delta_early_stopping"],
             save_path=output_path,
-            dataset_idx=graph_idx,
+            dataset_idx=fold_idx,
         )
 
         fold_results.append((trained_model, best_loss_val))

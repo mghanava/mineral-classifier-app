@@ -37,7 +37,8 @@ from src.utilities.calibration_utils import (
 
 
 def evaluate_with_calibration(
-    data,
+    test_data,
+    calibration_data,
     model,
     calibration_method: Literal[
         "temperature", "isotonic", "platt", "beta", "dirichlet"
@@ -55,7 +56,6 @@ def evaluate_with_calibration(
     patience_learning_rate_scheduler: int,
     patience_early_stopping: int,
     min_delta_early_stopping: float,
-    device: torch.device = torch.device("cpu"),
     verbose: bool = False,
     seed: int = 42,
     save_path: str | None = None,
@@ -112,8 +112,9 @@ def evaluate_with_calibration(
         - Saves calibrator model to '{save_path}/calibrator.pkl'
 
     """
-    y_true_test = data.y[data.test_mask]
-    y_tru_calib = data.y[data.calib_mask]
+    device = next(model.parameters()).device
+    y_true_test = test_data.y
+    y_tru_calib = calibration_data.y
     sample_weights_test = compute_sample_weight("balanced", y_true_test.cpu())
     sample_weights_test = torch.tensor(sample_weights_test, dtype=torch.float32).to(
         device
@@ -124,38 +125,37 @@ def evaluate_with_calibration(
     )
     # Get base model predictions
     model.eval()
-    logits = model(data)
-    base_probs = F.softmax(logits, dim=1)
+    test_logits = model(test_data)
+    calib_logits = model(calibration_data)
     # Calculate metrics before calibration
-    uncal_probs = base_probs[data.test_mask]
-    uncal_pred = uncal_probs.argmax(dim=1)
+    uncalibrated_probs = F.softmax(test_logits, dim=1)
+    uncalibrated_pred = uncalibrated_probs.argmax(dim=1)
 
     cal_metrics = CalibrationMetrics(n_bins=n_bins)
     cal_metrics_uncalibrated = cal_metrics.calculate_metrics(
-        uncal_probs, y_true_test, sample_weights_test
+        uncalibrated_probs, y_true_test, sample_weights_test
     )
     uncal_metrics = {
         "acc": accuracy_score(
             y_true_test.cpu().numpy(),
-            uncal_pred.cpu().numpy(),
+            uncalibrated_pred.cpu().numpy(),
             sample_weight=sample_weights_test.cpu().numpy(),
         ),
         "f1": fbeta_score(
             y_true_test.cpu().numpy(),
-            uncal_pred.cpu().numpy(),
+            uncalibrated_pred.cpu().numpy(),
             sample_weight=sample_weights_test.cpu().numpy(),
             beta=0.5,
             average="macro",
         ),
         "mcc": matthews_corrcoef(
             y_true_test.cpu().numpy(),
-            uncal_pred.cpu().numpy(),
+            uncalibrated_pred.cpu().numpy(),
             sample_weight=sample_weights_test.cpu().numpy(),
         ),
         "ece": cal_metrics_uncalibrated.ece,
         "mce": cal_metrics_uncalibrated.mce,
     }
-    calib_logits = logits[data.calib_mask]
     if save_path is None:
         save_path = "results/evaluation"
     os.makedirs(save_path, exist_ok=True)
@@ -182,25 +182,25 @@ def evaluate_with_calibration(
         seed=seed,
         save_path=save_path,
     ).save(filepath=save_path)
-    cal_probs = pipeline.predict_from_logits(logits[data.test_mask])
-    cal_pred = cal_probs.argmax(dim=1)
+    calibrated_probs = pipeline.predict_from_logits(test_logits)
+    calibrated_pred = calibrated_probs.argmax(dim=1)
     cal_metrics_calibrated = cal_metrics.calculate_metrics(
-        cal_probs, y_true_test, sample_weights_test, verbose=False
+        calibrated_probs, y_true_test, sample_weights_test, verbose=False
     )
     cal_mcc = matthews_corrcoef(
         y_true_test.cpu().numpy(),
-        cal_pred.cpu().numpy(),
+        calibrated_pred.cpu().numpy(),
         sample_weight=sample_weights_test.cpu().numpy(),
     )
     cal_metrics = {
         "acc": accuracy_score(
             y_true_test.cpu().numpy(),
-            cal_pred.cpu().numpy(),
+            calibrated_pred.cpu().numpy(),
             sample_weight=sample_weights_test.cpu().numpy(),
         ),
         "f1": fbeta_score(
             y_true_test.cpu().numpy(),
-            cal_pred.cpu().numpy(),
+            calibrated_pred.cpu().numpy(),
             sample_weight=sample_weights_test.cpu().numpy(),
             beta=0.5,
             average="macro",
@@ -224,7 +224,7 @@ def evaluate_with_calibration(
     print(f"Saving confusion matrix to {confusion_path} ...")
     plot_confusion_matrix(
         y_true_test.cpu().numpy(),
-        cal_pred.cpu().numpy(),
+        calibrated_pred.cpu().numpy(),
         class_names,
         title=f"Matthews correlation coefficient {cal_mcc:.3f}",
         save_path=confusion_path,

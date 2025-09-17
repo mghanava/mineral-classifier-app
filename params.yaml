@@ -1,7 +1,7 @@
 # Training cycle configuration
 cycles: 3
 add_self_loops: false
-default_model: gcn
+default_model: gat
 # Data generation parameters
 data:
   scaler_type: RobustScaler # Options: RobustScaler, StandardScaler, MinMaxScaler
@@ -21,8 +21,8 @@ data:
     class_names:
     threshold_binary: 0.5
     min_samples_per_class: 50
-    k_nearest: 
-    connection_radius: 
+    k_nearest:
+    connection_radius:
     distance_percentile: 5
     n_splits: 3
     test_size: 0.3
@@ -47,8 +47,8 @@ models:
     bias: true
     residual: true
   gcn:
-    hidden_channels: 8
-    n_layers: 2
+    hidden_channels: 64
+    n_layers: 3
     dropout: 0.4
     batch_norm: true
     improved: true

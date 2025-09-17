@@ -1,6 +1,8 @@
+import os
 import time
 from pathlib import Path
 
+import torch
 import yaml
 
 
@@ -38,6 +40,22 @@ def load_params():
     """Load parameters from params.yaml."""
     with open("params.yaml") as f:
         return yaml.safe_load(f)
+
+
+def load_data(path: str):
+    """Load data from a given path.
+
+    Args:
+        path (str): Path to the data file.
+
+    Returns:
+        Loaded data object.
+
+    """
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Data not found at {path}")
+    data = torch.load(path, weights_only=False)
+    return data
 
 
 def ensure_directory_exists(path):

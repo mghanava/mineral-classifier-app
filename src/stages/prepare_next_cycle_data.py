@@ -93,7 +93,7 @@ def combine_split_data(
         print("🎯 Applying reservoir sampling to connected graph...")
         pass  # placeholder for reservoir sampling logic
 
-    all_graph_data = construct_graph(
+    all_data = construct_graph(
         coordinates,
         features,
         labels,
@@ -110,11 +110,11 @@ def combine_split_data(
         make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
     # Ensure the returned value is a tuple and unpack accordingly
-    if not isinstance(all_graph_data, tuple):
+    if not isinstance(all_data, tuple):
         raise ValueError(
             "Expected construct_graph to return a tuple when should_split is True."
         )
-    base_data, fold_data, test_data = all_graph_data
+    base_data, fold_data, test_data, calib_data = all_data
 
     # diagnose_data_leakage(fold_data, test_data)
     # check_isolated_components(fold_data, test_data)
@@ -136,6 +136,7 @@ def combine_split_data(
     export_all_graphs_to_html(
         fold_data,
         test_data,
+        calib_data,
         coordinates,
         base_params["k_nearest"],
         base_params["connection_radius"],
@@ -157,6 +158,7 @@ def combine_split_data(
         torch.save(base_data, os.path.join(output_path, "base_data.pt"))
         torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
         torch.save(test_data, os.path.join(output_path, "test_data.pt"))
+        torch.save(calib_data, os.path.join(output_path, "calib_data.pt"))
         print(f"✓ All files successfully saved to {paths['output']}.")
     except Exception as e:
         print(f"Error saving files: {e}")

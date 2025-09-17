@@ -14,9 +14,7 @@ import torch
 
 from src.utilities.data_utils import (
     analyze_feature_discrimination,
-    # check_isolated_components,
     construct_graph,
-    # diagnose_data_leakage,
     export_all_graphs_to_html,
     export_graph_to_html,
     generate_mineral_data,
@@ -89,10 +87,7 @@ def prepare_base_data(
         raise ValueError(
             "Expected construct_graph to return a tuple when should_split is True."
         )
-    base_data, fold_data, test_data = all_data
-
-    # diagnose_data_leakage(fold_data, test_data)
-    # check_isolated_components(fold_data, test_data)
+    base_data, fold_data, test_data, calib_data = all_data
 
     # export the interactive 3D plots
     print("\nExporting 3D interactive plots of graphs ...")
@@ -108,9 +103,11 @@ def prepare_base_data(
         labels_map,
         dataset_tag="base_data",
     )
+    # Convert fold_data to list of tuples
     export_all_graphs_to_html(
         fold_data,
         test_data,
+        calib_data,
         coordinates,
         base_params["k_nearest"],
         base_params["connection_radius"],
@@ -132,6 +129,7 @@ def prepare_base_data(
         torch.save(base_data, os.path.join(output_path, "base_data.pt"))
         torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
         torch.save(test_data, os.path.join(output_path, "test_data.pt"))
+        torch.save(calib_data, os.path.join(output_path, "calib_data.pt"))
         print(f"All files successfully saved to {output_path}.")
     except Exception as e:
         print(f"Error saving files: {e}")

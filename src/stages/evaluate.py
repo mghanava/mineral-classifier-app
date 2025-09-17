@@ -10,7 +10,12 @@ import torch
 
 from src.models import get_model
 from src.utilities.eval_utils import evaluate_with_calibration
-from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
+from src.utilities.general_utils import (
+    LogTime,
+    ensure_directory_exists,
+    load_data,
+    load_params,
+)
 
 
 def get_cycle_paths(cycle_num):
@@ -46,11 +51,9 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
     model_params["add_self_loops"] = params.get("add_self_loops", True)
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
-    # Load test data from previous cycle
-    test_data_path = os.path.join(paths["base"], "test_data.pt")
-    if not os.path.exists(test_data_path):
-        raise FileNotFoundError(f"Test data not found at {test_data_path}")
-    test_data = torch.load(test_data_path, weights_only=False)
+    # Load test and calibration data from previous cycle
+    test_data = load_data(os.path.join(paths["base"], "test_data.pt"))
+    calib_data = load_data(os.path.join(paths["base"], "calib_data.pt"))
 
     # Load trained model
     model_path = os.path.join(paths["model"], "model.pt")
@@ -65,7 +68,8 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
     print(f"Using device {device} ...")
 
     evaluate_with_calibration(
-        data=test_data.to(device),
+        test_data=test_data.to(device),
+        calibration_data=calib_data.to(device),
         model=model.to(device),
         calibration_method=eval_params["calibration_method"],
         initial_temperature=eval_params["initial_temperature"],
@@ -74,19 +78,18 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
         lr=eval_params["lr"],
         n_epochs=eval_params["n_epochs"],
         weight_decay_adam_optimizer=eval_params["weight_decay_adam_optimizer"],
+        reg_lambda=eval_params["reg_lambda"],
+        reg_mu=eval_params["reg_mu"],
+        eps=eval_params["eps"],
         factor_learning_rate_scheduler=eval_params["factor_learning_rate_scheduler"],
         patience_learning_rate_scheduler=eval_params[
             "patience_learning_rate_scheduler"
         ],
         patience_early_stopping=eval_params["patience_early_stopping"],
         min_delta_early_stopping=eval_params["min_delta_early_stopping"],
-        save_path=output_path,
         verbose=eval_params["verbose"],
-        device=device,
-        eps=eval_params["eps"],
-        reg_lambda=eval_params["reg_lambda"],
-        reg_mu=eval_params["reg_mu"],
         seed=eval_params["seed"],
+        save_path=output_path,
     )
     print(f"✓ Evaluation results saved to {output_path}.")
 

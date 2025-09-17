@@ -10,7 +10,12 @@ import os
 import torch
 
 from src.models import get_model
-from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
+from src.utilities.general_utils import (
+    LogTime,
+    ensure_directory_exists,
+    load_data,
+    load_params,
+)
 from src.utilities.pred_utils import prediction
 
 
@@ -56,10 +61,7 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     model.load_state_dict(torch.load(model_path, weights_only=True))
 
     # Load prediction data
-    pred_data_path = os.path.join(paths["prediction_data"], "pred_data.pt")
-    if not os.path.exists(pred_data_path):
-        raise FileNotFoundError(f"Prediction data not found at {pred_data_path}")
-    pred_data = torch.load(pred_data_path, weights_only=False)
+    pred_data = load_data(os.path.join(paths["prediction_data"], "pred_data.pt"))
 
     # Load calibrator from evaluation
     calibrator_path = os.path.join(paths["evaluation"], "calibrator.pt")
@@ -71,12 +73,11 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     print(f"Using device {device} ...")
 
     prediction(
-        pred_data=pred_data,
-        model=model,
+        pred_data=pred_data.to(device),
+        model=model.to(device),
         calibrator_path=calibrator_path,
         class_names=base_params["class_names"],
         save_path=output_path,
-        device=device,
     )
     print(f"✓ Prediction results saved to {output_path}.")
 
