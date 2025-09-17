@@ -99,7 +99,7 @@ def prediction(
     if save_path is not None:
         result_df.to_csv(os.path.join(save_path, "predictions.csv"), index=False)
         result_df.hist(figsize=(20, 10))
-        pyplot.savefig(os.path.join(save_path, "histograms_cycle.png"))
+        pyplot.savefig(os.path.join(save_path, "histograms.png"))
         plot_confusion_matrix(
             true_label,
             cal_pred_labels,

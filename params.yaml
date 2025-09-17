@@ -1,6 +1,6 @@
 # Training cycle configuration
 cycles: 3
-add_self_loops: false
+add_self_loops: true
 default_model: gat
 # Data generation parameters
 data:
@@ -69,7 +69,7 @@ train:
 evaluate:
   initial_temperature: 1.2
   n_bins: 10
-  calibration_method: beta # Options: "temperature", "isotonic", "platt", "beta", "dirichlet"
+  calibration_method: dirichlet # Options: "temperature", "isotonic", "platt", "beta", "dirichlet"
   n_epochs: 1000
   lr: 1.0e-4
   weight_decay_adam_optimizer: 5.0e-4

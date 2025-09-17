@@ -449,21 +449,21 @@ class AnalyzeDrift:
             X_dists,
             bins=50,
             alpha=0.7,
-            label=f"Within X (mean={X_dists.mean():.2f})",
+            label=f"Within Train (mean={X_dists.mean():.2f})",
             density=True,
         )
         axes[0].hist(
             Y_dists,
             bins=50,
             alpha=0.7,
-            label=f"Within Y (mean={Y_dists.mean():.2f})",
+            label=f"Within Pred (mean={Y_dists.mean():.2f})",
             density=True,
         )
         axes[0].hist(
             cross_dists,
             bins=50,
             alpha=0.7,
-            label=f"Cross X-Y (mean={np.mean(cross_dists):.2f})",
+            label=f"Cross Train-Pred (mean={np.mean(cross_dists):.2f})",
             density=True,
         )
         axes[0].set_xlabel("Euclidean Distance")
@@ -475,7 +475,7 @@ class AnalyzeDrift:
         # Box plot
         axes[1].boxplot(
             [X_dists, Y_dists, cross_dists],
-            labels=["Within X", "Within Y", "Cross X-Y"],
+            labels=["Within Train", "Within Pred", "Cross Train-Pred"],
         )
         axes[1].set_ylabel("Euclidean Distance")
         axes[1].set_title("Distance Box Plots")
@@ -508,8 +508,12 @@ class AnalyzeDrift:
             ax = axes[row][col] if rows > 1 else axes[col]
 
             # Histograms
-            ax.hist(X1[:, i], bins=30, alpha=0.6, label="X", density=True, color="blue")
-            ax.hist(X2[:, i], bins=30, alpha=0.6, label="Y", density=True, color="red")
+            ax.hist(
+                X1[:, i], bins=30, alpha=0.6, label="Train", density=True, color="blue"
+            )
+            ax.hist(
+                X2[:, i], bins=30, alpha=0.6, label="Pred", density=True, color="red"
+            )
 
             # Add statistics
             x_mean = X1[:, i].mean()
@@ -520,14 +524,14 @@ class AnalyzeDrift:
                 color="blue",
                 linestyle="--",
                 alpha=0.8,
-                label=f"X mean: {x_mean:.2f}",
+                label=f"Train mean: {x_mean:.2f}",
             )
             ax.axvline(
                 y_mean,
                 color="red",
                 linestyle="--",
                 alpha=0.8,
-                label=f"Y mean: {y_mean:.2f}",
+                label=f"Pred mean: {y_mean:.2f}",
             )
 
             ax.set_title(f"{self.feature_names[i]}")
@@ -573,7 +577,7 @@ class AnalyzeDrift:
 
         # X correlation
         im1 = axes[0].imshow(X_mi, cmap="coolwarm", vmin=0, vmax=1)
-        axes[0].set_title("Base Features Mutual Information Matrix")
+        axes[0].set_title("Train Features Mutual Information Matrix")
         axes[0].set_xticks(range(len(self.feature_names)))
         axes[0].set_yticks(range(len(self.feature_names)))
         axes[0].set_xticklabels(
@@ -642,10 +646,20 @@ class AnalyzeDrift:
         pca_labels = [("PC1", "PC2"), ("PC1", "PC3"), ("PC2", "PC3")]
         for idx, (i, j) in enumerate(pca_pairs):
             axes[0, idx].scatter(
-                X_pca[:, i], X_pca[:, j], alpha=0.5, label="X", color="blue", marker="o"
+                X_pca[:, i],
+                X_pca[:, j],
+                alpha=0.5,
+                label="Train",
+                color="blue",
+                marker="o",
             )
             axes[0, idx].scatter(
-                Y_pca[:, i], Y_pca[:, j], alpha=0.5, label="Y", color="red", marker="o"
+                Y_pca[:, i],
+                Y_pca[:, j],
+                alpha=0.5,
+                label="Pred",
+                color="red",
+                marker="o",
             )
             axes[0, idx].set_xlabel(pca_labels[idx][0])
             axes[0, idx].set_ylabel(pca_labels[idx][1])
@@ -661,7 +675,7 @@ class AnalyzeDrift:
                 X_kpca[:, i],
                 X_kpca[:, j],
                 alpha=0.5,
-                label="X",
+                label="Train",
                 color="blue",
                 marker="^",
             )
@@ -669,7 +683,7 @@ class AnalyzeDrift:
                 Y_kpca[:, i],
                 Y_kpca[:, j],
                 alpha=0.5,
-                label="Y",
+                label="Pred",
                 color="red",
                 marker="^",
             )
@@ -756,11 +770,11 @@ class AnalyzeDrift:
                     f.write(f"p-value: {p_value}\n")
                     if p_value < 0.05:
                         f.write(
-                            f"Domain shift detected between base and prediction datasets using {method} method.\n"
+                            f"Domain shift detected between train and prediction datasets using {method} method.\n"
                         )
                     else:
                         f.write(
-                            f"No domain shift detected between base and prediction datasets using {method} method.\n"
+                            f"No domain shift detected between train and prediction datasets using {method} method.\n"
                         )
                 f.write("\n")
 

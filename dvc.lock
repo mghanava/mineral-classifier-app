@@ -1,7 +1,9 @@
 schema: '2.0'
 stages:
   bootstrap:
-    cmd: rm -rf results/* && python src/stages/generate_base_data.py --cycle 0
+    cmd: rm -rf results/* && find results -type d -name 'cycle_*' | grep -E 
+      'cycle_[0-9]+$' | awk -F'cycle_' '{if ($2 > 3) system("rm -rf "$0)}' && 
+      python src/stages/generate_base_data.py --cycle 0
     deps:
     - path: src/stages/generate_base_data.py
       hash: md5
@@ -17,7 +19,7 @@ stages:
       size: 1631
     params:
       params.yaml:
-        add_self_loops: false
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
@@ -40,23 +42,23 @@ stages:
     outs:
     - path: results/data/base/cycle_0/base_data.pt
       hash: md5
-      md5: 8c26199c59638ea5fe85ddf22db5bc1e
-      size: 2721498
+      md5: 442a4bbbc3d08e6071c362890555756c
+      size: 2771674
     - path: results/data/base/cycle_0/fold_data.pt
       hash: md5
-      md5: 16a5e6c75fdb3f32158bd16304753619
-      size: 1885376
+      md5: 445f09f9c4fe15c731ca9e830ef877b4
+      size: 1973056
     - path: results/data/base/cycle_0/test_data.pt
       hash: md5
-      md5: 081b7e10cb793db1a79e919d0511958f
-      size: 55518
+      md5: 3c5e4b9cea3e93c3624ece9517dc0a54
+      size: 61790
   train_cycle_1:
     cmd: python src/stages/train.py --cycle 1 --model gat
     deps:
     - path: results/data/base/cycle_0/fold_data.pt
       hash: md5
-      md5: 16a5e6c75fdb3f32158bd16304753619
-      size: 1885376
+      md5: 445f09f9c4fe15c731ca9e830ef877b4
+      size: 1973056
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -76,7 +78,7 @@ stages:
       size: 11309
     params:
       params.yaml:
-        add_self_loops: false
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
@@ -98,19 +100,19 @@ stages:
     outs:
     - path: results/trained/cycle_1
       hash: md5
-      md5: 0dafa261503601c5b55e0ad63e90679b.dir
-      size: 2155209
+      md5: 612cc37b1da295f6192d7f614f487394.dir
+      size: 2192726
       nfiles: 4
   evaluate_cycle_1:
     cmd: python src/stages/evaluate.py --cycle 1 --model gat
     deps:
     - path: results/data/base/cycle_0/test_data.pt
       hash: md5
-      md5: 081b7e10cb793db1a79e919d0511958f
-      size: 55518
+      md5: 3c5e4b9cea3e93c3624ece9517dc0a54
+      size: 61790
     - path: results/trained/cycle_1/model.pt
       hash: md5
-      md5: d3c4e1844bce42175f654143d693441c
+      md5: 1baff78cd14c9615dc314b2227d3f788
       size: 1092890
     - path: src/models/
       hash: md5
@@ -134,7 +136,7 @@ stages:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
           lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
@@ -159,16 +161,16 @@ stages:
     outs:
     - path: results/evaluation/cycle_1
       hash: md5
-      md5: 71192a098b081e33b9a700339f2d0737.dir
-      size: 402859
+      md5: 0f236f3afbe548b3942eda67f1e06afa.dir
+      size: 429344
       nfiles: 6
   generate_pred_data_cycle_1:
     cmd: python src/stages/generate_pred_data.py --cycle 1
     deps:
     - path: results/data/base/cycle_0/base_data.pt
       hash: md5
-      md5: 8c26199c59638ea5fe85ddf22db5bc1e
-      size: 2721498
+      md5: 442a4bbbc3d08e6071c362890555756c
+      size: 2771674
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -188,8 +190,8 @@ stages:
       size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 29fb7644ac2c741e966e6e73832ff106
-      size: 3745
+      md5: 5473b92db821c799c16bc473c68055d6
+      size: 3739
     params:
       params.yaml:
         data.pred:
@@ -199,22 +201,22 @@ stages:
     outs:
     - path: results/data/prediction/cycle_1/pred_data.pt
       hash: md5
-      md5: f1e7960ea1746356060d2f55ac20870f
-      size: 110938
+      md5: d981180f0a3c3e5b718849dec5a198ea
+      size: 120538
   predict_cycle_1:
     cmd: python src/stages/predict.py --cycle 1 --model gat
     deps:
     - path: results/data/prediction/cycle_1/pred_data.pt
       hash: md5
-      md5: f1e7960ea1746356060d2f55ac20870f
-      size: 110938
+      md5: d981180f0a3c3e5b718849dec5a198ea
+      size: 120538
     - path: results/evaluation/cycle_1/calibrator.pt
       hash: md5
-      md5: f07d0da469aa3cc29ea782db657e5cf3
-      size: 3496
+      md5: 1b9c2767a5e2f6edbe3f9c22f70970c4
+      size: 3305
     - path: results/trained/cycle_1/model.pt
       hash: md5
-      md5: d3c4e1844bce42175f654143d693441c
+      md5: 1baff78cd14c9615dc314b2227d3f788
       size: 1092890
     - path: src/models/
       hash: md5
@@ -231,8 +233,8 @@ stages:
       size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 29fb7644ac2c741e966e6e73832ff106
-      size: 3745
+      md5: 5473b92db821c799c16bc473c68055d6
+      size: 3739
     params:
       params.yaml:
         models.gat:
@@ -247,28 +249,28 @@ stages:
     outs:
     - path: results/prediction/cycle_1
       hash: md5
-      md5: e5a1041ffe5c06b265e5e43e5287510c.dir
-      size: 187254
+      md5: 8395ef48c0ca4a32ca567087a6385e04.dir
+      size: 190610
       nfiles: 4
   analyze_drift_cycle_1:
     cmd: python src/stages/analyze_drift.py --cycle 1
     deps:
     - path: results/data/base/cycle_0/base_data.pt
       hash: md5
-      md5: 8c26199c59638ea5fe85ddf22db5bc1e
-      size: 2721498
+      md5: 442a4bbbc3d08e6071c362890555756c
+      size: 2771674
     - path: results/data/prediction/cycle_1/pred_data.pt
       hash: md5
-      md5: f1e7960ea1746356060d2f55ac20870f
-      size: 110938
+      md5: d981180f0a3c3e5b718849dec5a198ea
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
       size: 3323
     - path: src/utilities/drift_detection_utils.py
       hash: md5
-      md5: 7e23fac31afdf9a6cd21ad7474a66e87
-      size: 30054
+      md5: 81a85e75b2146666f9e25ebcc0cc501e
+      size: 30335
     - path: src/utilities/general_utils.py
       hash: md5
       md5: b47bc717702c4f7f12edd8c0eaf137fb
@@ -289,20 +291,20 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_1
       hash: md5
-      md5: 00ba260e2219097d1a38aeb2af8054d9.dir
-      size: 1807996
+      md5: 6a1b67073689569c0b71e08363b1a436.dir
+      size: 2032933
       nfiles: 5
   prepare_next_cycle_data_1:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 1
     deps:
     - path: results/data/base/cycle_0/base_data.pt
       hash: md5
-      md5: 8c26199c59638ea5fe85ddf22db5bc1e
-      size: 2721498
+      md5: 442a4bbbc3d08e6071c362890555756c
+      size: 2771674
     - path: results/data/prediction/cycle_1/pred_data.pt
       hash: md5
-      md5: f1e7960ea1746356060d2f55ac20870f
-      size: 110938
+      md5: d981180f0a3c3e5b718849dec5a198ea
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
       md5: 355f0267811931b5e429e3265aa0a001
@@ -317,7 +319,7 @@ stages:
       size: 1631
     params:
       params.yaml:
-        add_self_loops: false
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
@@ -340,23 +342,23 @@ stages:
     outs:
     - path: results/data/base/cycle_1/base_data.pt
       hash: md5
-      md5: a39899f77ff896824262487f2680c947
-      size: 3839386
+      md5: 5a824d45c9c6e64af6fd29c0b54a6546
+      size: 3899162
     - path: results/data/base/cycle_1/fold_data.pt
       hash: md5
-      md5: d67732a55a010eb939d83e7482a560e6
-      size: 2630976
+      md5: cd5fe6a806beb9e5d072c265b8472bd0
+      size: 2733568
     - path: results/data/base/cycle_1/test_data.pt
       hash: md5
-      md5: 8f3f3f52ed5cc7badf8f37d19f682e82
-      size: 80990
+      md5: 29fd838fd27dcecfaa01daff1263fead
+      size: 86814
   train_cycle_2:
     cmd: python src/stages/train.py --cycle 2 --model gat
     deps:
     - path: results/data/base/cycle_1/fold_data.pt
       hash: md5
-      md5: d67732a55a010eb939d83e7482a560e6
-      size: 2630976
+      md5: cd5fe6a806beb9e5d072c265b8472bd0
+      size: 2733568
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -376,7 +378,7 @@ stages:
       size: 11309
     params:
       params.yaml:
-        add_self_loops: false
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
@@ -398,19 +400,19 @@ stages:
     outs:
     - path: results/trained/cycle_2
       hash: md5
-      md5: 0edfc0a01a9b4d1bba209dce8c66a5ce.dir
-      size: 2143739
+      md5: b194a759ebfc1f8855e971d907080750.dir
+      size: 2206744
       nfiles: 4
   evaluate_cycle_2:
     cmd: python src/stages/evaluate.py --cycle 2 --model gat
     deps:
     - path: results/data/base/cycle_1/test_data.pt
       hash: md5
-      md5: 8f3f3f52ed5cc7badf8f37d19f682e82
-      size: 80990
+      md5: 29fd838fd27dcecfaa01daff1263fead
+      size: 86814
     - path: results/trained/cycle_2/model.pt
       hash: md5
-      md5: 206ddea494aa6d6aeefb2bbe82fddb1d
+      md5: ec4516ebed166b240c9c73bbbbf5af4b
       size: 1092890
     - path: src/models/
       hash: md5
@@ -434,7 +436,7 @@ stages:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
           lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
@@ -459,16 +461,16 @@ stages:
     outs:
     - path: results/evaluation/cycle_2
       hash: md5
-      md5: bfa7a14f246c3e5540cb3defba582fb9.dir
-      size: 474795
+      md5: 682e8328646003c2443e4f09185fc298.dir
+      size: 435201
       nfiles: 6
   generate_pred_data_cycle_2:
     cmd: python src/stages/generate_pred_data.py --cycle 2
     deps:
     - path: results/data/base/cycle_1/base_data.pt
       hash: md5
-      md5: a39899f77ff896824262487f2680c947
-      size: 3839386
+      md5: 5a824d45c9c6e64af6fd29c0b54a6546
+      size: 3899162
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -488,8 +490,8 @@ stages:
       size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 29fb7644ac2c741e966e6e73832ff106
-      size: 3745
+      md5: 5473b92db821c799c16bc473c68055d6
+      size: 3739
     params:
       params.yaml:
         data.pred:
@@ -499,22 +501,22 @@ stages:
     outs:
     - path: results/data/prediction/cycle_2/pred_data.pt
       hash: md5
-      md5: bc153bec7b4ba1f169c0cadfb52fb24c
-      size: 110938
+      md5: 951b7a9f3cbe86c8366675547c598191
+      size: 120538
   predict_cycle_2:
     cmd: python src/stages/predict.py --cycle 2 --model gat
     deps:
     - path: results/data/prediction/cycle_2/pred_data.pt
       hash: md5
-      md5: bc153bec7b4ba1f169c0cadfb52fb24c
-      size: 110938
+      md5: 951b7a9f3cbe86c8366675547c598191
+      size: 120538
     - path: results/evaluation/cycle_2/calibrator.pt
       hash: md5
-      md5: 0fa335a63e0d3095d953b8c970691c10
-      size: 3752
+      md5: d58dce249d739614f691e609c75db6e6
+      size: 3561
     - path: results/trained/cycle_2/model.pt
       hash: md5
-      md5: 206ddea494aa6d6aeefb2bbe82fddb1d
+      md5: ec4516ebed166b240c9c73bbbbf5af4b
       size: 1092890
     - path: src/models/
       hash: md5
@@ -531,8 +533,8 @@ stages:
       size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 29fb7644ac2c741e966e6e73832ff106
-      size: 3745
+      md5: 5473b92db821c799c16bc473c68055d6
+      size: 3739
     params:
       params.yaml:
         models.gat:
@@ -547,28 +549,28 @@ stages:
     outs:
     - path: results/prediction/cycle_2
       hash: md5
-      md5: 96d8979712bbd9edb2856b68ba704c3e.dir
-      size: 183791
+      md5: 97486217d9f8323376ea3b4fc70d9df9.dir
+      size: 181692
       nfiles: 4
   analyze_drift_cycle_2:
     cmd: python src/stages/analyze_drift.py --cycle 2
     deps:
     - path: results/data/base/cycle_1/base_data.pt
       hash: md5
-      md5: a39899f77ff896824262487f2680c947
-      size: 3839386
+      md5: 5a824d45c9c6e64af6fd29c0b54a6546
+      size: 3899162
     - path: results/data/prediction/cycle_2/pred_data.pt
       hash: md5
-      md5: bc153bec7b4ba1f169c0cadfb52fb24c
-      size: 110938
+      md5: 951b7a9f3cbe86c8366675547c598191
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
       size: 3323
     - path: src/utilities/drift_detection_utils.py
       hash: md5
-      md5: 7e23fac31afdf9a6cd21ad7474a66e87
-      size: 30054
+      md5: 81a85e75b2146666f9e25ebcc0cc501e
+      size: 30335
     - path: src/utilities/general_utils.py
       hash: md5
       md5: b47bc717702c4f7f12edd8c0eaf137fb
@@ -589,20 +591,20 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_2
       hash: md5
-      md5: 6c08e766fac686a7ad4ec90120e30136.dir
-      size: 1960142
+      md5: 19e606413be38a795680d0f9f20f952c.dir
+      size: 2478488
       nfiles: 5
   prepare_next_cycle_data_2:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 2
     deps:
     - path: results/data/base/cycle_1/base_data.pt
       hash: md5
-      md5: a39899f77ff896824262487f2680c947
-      size: 3839386
+      md5: 5a824d45c9c6e64af6fd29c0b54a6546
+      size: 3899162
     - path: results/data/prediction/cycle_2/pred_data.pt
       hash: md5
-      md5: bc153bec7b4ba1f169c0cadfb52fb24c
-      size: 110938
+      md5: 951b7a9f3cbe86c8366675547c598191
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
       md5: 355f0267811931b5e429e3265aa0a001
@@ -617,7 +619,7 @@ stages:
       size: 1631
     params:
       params.yaml:
-        add_self_loops: false
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
@@ -640,23 +642,23 @@ stages:
     outs:
     - path: results/data/base/cycle_2/base_data.pt
       hash: md5
-      md5: 031defbba94bdba2a16b077ff6290d6a
-      size: 5149338
+      md5: 7165e0d071d04a4f2e00a54e8a0f40c1
+      size: 5218714
     - path: results/data/base/cycle_2/fold_data.pt
       hash: md5
-      md5: d5fa4a950c38b31a87cc96e127155d98
-      size: 3553152
+      md5: 2728cb304d3ef793f43fcdd291c6471b
+      size: 3642304
     - path: results/data/base/cycle_2/test_data.pt
       hash: md5
-      md5: 6ab5f6a6669920e84d08a56e010d65db
-      size: 101982
+      md5: 3e07aa3fcb78b978a8550c7aa17da4bf
+      size: 110494
   train_cycle_3:
     cmd: python src/stages/train.py --cycle 3 --model gat
     deps:
     - path: results/data/base/cycle_2/fold_data.pt
       hash: md5
-      md5: d5fa4a950c38b31a87cc96e127155d98
-      size: 3553152
+      md5: 2728cb304d3ef793f43fcdd291c6471b
+      size: 3642304
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -676,7 +678,7 @@ stages:
       size: 11309
     params:
       params.yaml:
-        add_self_loops: false
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
@@ -698,19 +700,19 @@ stages:
     outs:
     - path: results/trained/cycle_3
       hash: md5
-      md5: b894ecfecedc630afabbf94d080714cb.dir
-      size: 2281228
+      md5: 0ddb04b8244efbb4daf3a9d5ed4ceee3.dir
+      size: 2416188
       nfiles: 4
   evaluate_cycle_3:
     cmd: python src/stages/evaluate.py --cycle 3 --model gat
     deps:
     - path: results/data/base/cycle_2/test_data.pt
       hash: md5
-      md5: 6ab5f6a6669920e84d08a56e010d65db
-      size: 101982
+      md5: 3e07aa3fcb78b978a8550c7aa17da4bf
+      size: 110494
     - path: results/trained/cycle_3/model.pt
       hash: md5
-      md5: a6a710b5cb16559abe0ffa5bb4ea5d47
+      md5: a5b786ca7a24bc4065cc77e348124db4
       size: 1092890
     - path: src/models/
       hash: md5
@@ -734,7 +736,7 @@ stages:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
           lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
@@ -759,16 +761,316 @@ stages:
     outs:
     - path: results/evaluation/cycle_3
       hash: md5
-      md5: 08c728ba696cac81afec894813bd5286.dir
-      size: 456716
+      md5: d8fdfa26a025d658e1a19f7629be361e.dir
+      size: 433487
       nfiles: 6
   generate_pred_data_cycle_3:
     cmd: python src/stages/generate_pred_data.py --cycle 3
     deps:
     - path: results/data/base/cycle_2/base_data.pt
       hash: md5
-      md5: 031defbba94bdba2a16b077ff6290d6a
-      size: 5149338
+      md5: 7165e0d071d04a4f2e00a54e8a0f40c1
+      size: 5218714
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 5473b92db821c799c16bc473c68055d6
+      size: 3739
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_3/pred_data.pt
+      hash: md5
+      md5: 81a1d958ec796e67a6576a6d4658dc96
+      size: 120538
+  predict_cycle_3:
+    cmd: python src/stages/predict.py --cycle 3 --model gat
+    deps:
+    - path: results/data/prediction/cycle_3/pred_data.pt
+      hash: md5
+      md5: 81a1d958ec796e67a6576a6d4658dc96
+      size: 120538
+    - path: results/evaluation/cycle_3/calibrator.pt
+      hash: md5
+      md5: e4e7a9d645b7dd0e31245d9979746647
+      size: 3817
+    - path: results/trained/cycle_3/model.pt
+      hash: md5
+      md5: a5b786ca7a24bc4065cc77e348124db4
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 5473b92db821c799c16bc473c68055d6
+      size: 3739
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_3
+      hash: md5
+      md5: 46f9cbf413d606bf00d29b2614fecdd1.dir
+      size: 188802
+      nfiles: 4
+  analyze_drift_cycle_3:
+    cmd: python src/stages/analyze_drift.py --cycle 3
+    deps:
+    - path: results/data/base/cycle_2/base_data.pt
+      hash: md5
+      md5: 7165e0d071d04a4f2e00a54e8a0f40c1
+      size: 5218714
+    - path: results/data/prediction/cycle_3/pred_data.pt
+      hash: md5
+      md5: 81a1d958ec796e67a6576a6d4658dc96
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 81a85e75b2146666f9e25ebcc0cc501e
+      size: 30335
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_3
+      hash: md5
+      md5: 433ed3061dca7c1a078c1e27a9c9a07c.dir
+      size: 2386591
+      nfiles: 5
+  prepare_next_cycle_data_3:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 3
+    deps:
+    - path: results/data/base/cycle_2/base_data.pt
+      hash: md5
+      md5: 7165e0d071d04a4f2e00a54e8a0f40c1
+      size: 5218714
+    - path: results/data/prediction/cycle_3/pred_data.pt
+      hash: md5
+      md5: 81a1d958ec796e67a6576a6d4658dc96
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_3/base_data.pt
+      hash: md5
+      md5: 59551218f8f4e261d6f1c4422cda6c76
+      size: 6730202
+    - path: results/data/base/cycle_3/fold_data.pt
+      hash: md5
+      md5: a4f99bcb4b5e64e5ea617f20c0bc65ee
+      size: 4708480
+    - path: results/data/base/cycle_3/test_data.pt
+      hash: md5
+      md5: dfa4955084efba2027fceddb5201193c
+      size: 143838
+  train_cycle_4:
+    cmd: python src/stages/train.py --cycle 4 --model gat
+    deps:
+    - path: results/data/base/cycle_3/fold_data.pt
+      hash: md5
+      md5: 304764f686fcac47c4f5db85ff99f4a5
+      size: 4675200
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_4
+      hash: md5
+      md5: b4ddc8a56cf98988bb387484873d843f.dir
+      size: 2446247
+      nfiles: 4
+  evaluate_cycle_4:
+    cmd: python src/stages/evaluate.py --cycle 4 --model gat
+    deps:
+    - path: results/data/base/cycle_3/test_data.pt
+      hash: md5
+      md5: 905ca05ad9dec214ae0a6b3f07db1be9
+      size: 146142
+    - path: results/trained/cycle_4/model.pt
+      hash: md5
+      md5: 0e117b57b3f7a6b124dc44936c21218f
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_4
+      hash: md5
+      md5: a0da673a6af779c8f289d499f516302f.dir
+      size: 449293
+      nfiles: 6
+  generate_pred_data_cycle_4:
+    cmd: python src/stages/generate_pred_data.py --cycle 4
+    deps:
+    - path: results/data/base/cycle_3/base_data.pt
+      hash: md5
+      md5: 928af5618dcbcf0d8702d669a3b08af9
+      size: 6730202
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -797,24 +1099,24 @@ stages:
           min_samples_per_class:
           seed:
     outs:
-    - path: results/data/prediction/cycle_3/pred_data.pt
+    - path: results/data/prediction/cycle_4/pred_data.pt
       hash: md5
-      md5: 2e7fe0e570657dffc3323ee3ae36f49c
-      size: 110938
-  predict_cycle_3:
-    cmd: python src/stages/predict.py --cycle 3 --model gat
+      md5: bf78e45a550bc174ec7edc6192881a80
+      size: 120538
+  predict_cycle_4:
+    cmd: python src/stages/predict.py --cycle 4 --model gat
     deps:
-    - path: results/data/prediction/cycle_3/pred_data.pt
+    - path: results/data/prediction/cycle_4/pred_data.pt
       hash: md5
-      md5: 2e7fe0e570657dffc3323ee3ae36f49c
-      size: 110938
-    - path: results/evaluation/cycle_3/calibrator.pt
+      md5: bf78e45a550bc174ec7edc6192881a80
+      size: 120538
+    - path: results/evaluation/cycle_4/calibrator.pt
       hash: md5
-      md5: e88ed3d5ccdfe3e84f53f07538d4da36
-      size: 4008
-    - path: results/trained/cycle_3/model.pt
+      md5: c1a684f55bbf0582c653f7c1a0a67356
+      size: 4009
+    - path: results/trained/cycle_4/model.pt
       hash: md5
-      md5: a6a710b5cb16559abe0ffa5bb4ea5d47
+      md5: 0e117b57b3f7a6b124dc44936c21218f
       size: 1092890
     - path: src/models/
       hash: md5
@@ -845,22 +1147,22 @@ stages:
           bias: true
           residual: true
     outs:
-    - path: results/prediction/cycle_3
+    - path: results/prediction/cycle_4
       hash: md5
-      md5: c067009717d9e8c0ac912c522d09dddd.dir
-      size: 180888
+      md5: 673b949e20daf9137a1494c674f63a10.dir
+      size: 190010
       nfiles: 4
-  analyze_drift_cycle_3:
-    cmd: python src/stages/analyze_drift.py --cycle 3
+  analyze_drift_cycle_4:
+    cmd: python src/stages/analyze_drift.py --cycle 4
     deps:
-    - path: results/data/base/cycle_2/base_data.pt
+    - path: results/data/base/cycle_3/base_data.pt
       hash: md5
-      md5: 031defbba94bdba2a16b077ff6290d6a
-      size: 5149338
-    - path: results/data/prediction/cycle_3/pred_data.pt
+      md5: 928af5618dcbcf0d8702d669a3b08af9
+      size: 6730202
+    - path: results/data/prediction/cycle_4/pred_data.pt
       hash: md5
-      md5: 2e7fe0e570657dffc3323ee3ae36f49c
-      size: 110938
+      md5: bf78e45a550bc174ec7edc6192881a80
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
@@ -887,22 +1189,22 @@ stages:
             confidence_threshold: 0.01
             min_permutations: 100
     outs:
-    - path: results/drift_analysis/cycle_3
+    - path: results/drift_analysis/cycle_4
       hash: md5
-      md5: 6aee5c2c3249aa461ad91eb6ab53b2bc.dir
-      size: 1939201
+      md5: 562f129591ede59b985b6d9b9348f432.dir
+      size: 2442687
       nfiles: 5
-  prepare_next_cycle_data_3:
-    cmd: python src/stages/prepare_next_cycle_data.py --cycle 3
+  prepare_next_cycle_data_4:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 4
     deps:
-    - path: results/data/base/cycle_2/base_data.pt
+    - path: results/data/base/cycle_3/base_data.pt
       hash: md5
-      md5: 031defbba94bdba2a16b077ff6290d6a
-      size: 5149338
-    - path: results/data/prediction/cycle_3/pred_data.pt
+      md5: 928af5618dcbcf0d8702d669a3b08af9
+      size: 6730202
+    - path: results/data/prediction/cycle_4/pred_data.pt
       hash: md5
-      md5: 2e7fe0e570657dffc3323ee3ae36f49c
-      size: 110938
+      md5: bf78e45a550bc174ec7edc6192881a80
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
       md5: 355f0267811931b5e429e3265aa0a001
@@ -917,7 +1219,7 @@ stages:
       size: 1631
     params:
       params.yaml:
-        add_self_loops: false
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
@@ -938,315 +1240,25 @@ stages:
           n_hotspots_random: false
           seed: 6546
     outs:
-    - path: results/data/base/cycle_3/base_data.pt
-      hash: md5
-      md5: 89637eb77c3c7155c2422922c7c53756
-      size: 6651226
-    - path: results/data/base/cycle_3/fold_data.pt
-      hash: md5
-      md5: 82ea4c7c87ab58cfbcc47f98ea28a566
-      size: 4564544
-    - path: results/data/base/cycle_3/test_data.pt
-      hash: md5
-      md5: c05fce99a507b412bb55844fb6356bdc
-      size: 134366
-  train_cycle_4:
-    cmd: python src/stages/train.py --cycle 4 --model gcn
-    deps:
-    - path: results/data/base/cycle_3/fold_data.pt
-      hash: md5
-      md5: 7c7d963cdaf4de1bc53d785b05a73489
-      size: 428052
-    - path: src/models/
-      hash: md5
-      md5: 65e103299243a348a19abf295110d172.dir
-      size: 26668
-      nfiles: 10
-    - path: src/stages/train.py
-      hash: md5
-      md5: 50fff7535fe3fccf4175848c73ce81ef
-      size: 3835
-    - path: src/utilities/general_utils.py
-      hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
-    - path: src/utilities/train_utils.py
-      hash: md5
-      md5: a3f1a94d8cfb90c5f390495ad5d9970b
-      size: 11294
-    params:
-      params.yaml:
-        models.gcn:
-          hidden_channels: 128
-          n_layers: 3
-          dropout: 0.4
-          batch_norm: true
-          improved: true
-          normalize: true
-        train:
-          n_epochs: 1000
-          lr: 0.001
-          max_grad_norm: 1.0
-          weight_decay_adam_optimizer: 0.0005
-          factor_learning_rate_scheduler: 0.5
-          patience_learning_rate_scheduler: 20
-          patience_early_stopping: 50
-          min_delta_early_stopping: 0.001
-    outs:
-    - path: results/trained/cycle_4
-      hash: md5
-      md5: 884b198a32051fa601ad71422b884111.dir
-      size: 2399344
-      nfiles: 4
-  evaluate_cycle_4:
-    cmd: python src/stages/evaluate.py --cycle 4 --model gcn
-    deps:
-    - path: results/data/base/cycle_3/test_data.pt
-      hash: md5
-      md5: 08b298bc5944375a432834028bcaa65d
-      size: 420508
-    - path: results/trained/cycle_4/model.pt
-      hash: md5
-      md5: f39737db19d97cea4654a853293e1ca0
-      size: 414663
-    - path: src/models/
-      hash: md5
-      md5: 65e103299243a348a19abf295110d172.dir
-      size: 26668
-      nfiles: 10
-    - path: src/stages/evaluate.py
-      hash: md5
-      md5: 112d0e5736f8a91d609196126a8dbdc8
-      size: 4267
-    - path: src/utilities/eval_utils.py
-      hash: md5
-      md5: b792dd6e919555c9a58dddceebd3acb8
-      size: 14584
-    - path: src/utilities/general_utils.py
-      hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
-    params:
-      params.yaml:
-        evaluate:
-          initial_temperature: 1.2
-          n_bins: 10
-          calibration_method: isotonic
-          n_epochs: 1000
-          lr: 0.001
-          weight_decay_adam_optimizer: 0.0005
-          verbose: true
-          factor_learning_rate_scheduler: 0.4
-          patience_learning_rate_scheduler: 20
-          patience_early_stopping: 100
-          min_delta_early_stopping: 0.001
-          reg_lambda: 0.01
-          reg_mu: 0.01
-          eps: 1e-08
-          seed: 40
-        models.gcn:
-          hidden_channels: 128
-          n_layers: 3
-          dropout: 0.4
-          batch_norm: true
-          improved: true
-          normalize: true
-    outs:
-    - path: results/evaluation/cycle_4
-      hash: md5
-      md5: d3893e2e7b5883542ebfefbde85634de.dir
-      size: 417724
-      nfiles: 4
-  generate_pred_data_cycle_4:
-    cmd: python src/stages/generate_pred_data.py --cycle 4
-    deps:
-    - path: results/data/base/cycle_3/base_data.pt
-      hash: md5
-      md5: 868fdf87d8ffd1ccdeb738b8c4846902
-      size: 543834
-    - path: src/models/
-      hash: md5
-      md5: 65e103299243a348a19abf295110d172.dir
-      size: 26668
-      nfiles: 10
-    - path: src/stages/generate_pred_data.py
-      hash: md5
-      md5: ca3b5286f2078c189b94e8a25434c225
-      size: 3783
-    - path: src/utilities/data_utils.py
-      hash: md5
-      md5: 3ef35e945a2960eedaa1c8d17fce115a
-      size: 32134
-    - path: src/utilities/general_utils.py
-      hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
-    - path: src/utilities/pred_utils.py
-      hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
-    params:
-      params.yaml:
-        data.pred:
-          n_samples: 200
-          min_samples_per_class:
-          seed:
-    outs:
-    - path: results/data/prediction/cycle_4/pred_data.pt
-      hash: md5
-      md5: 67a010579df9709c98c2f72683c587ff
-      size: 28762
-  predict_cycle_4:
-    cmd: python src/stages/predict.py --cycle 4 --model gcn
-    deps:
-    - path: results/data/prediction/cycle_4/pred_data.pt
-      hash: md5
-      md5: 67a010579df9709c98c2f72683c587ff
-      size: 28762
-    - path: results/evaluation/cycle_4/calibrator.pt
-      hash: md5
-      md5: bea2cd02084ae0673252262f3e6d41da
-      size: 13091
-    - path: results/trained/cycle_4/model.pt
-      hash: md5
-      md5: f39737db19d97cea4654a853293e1ca0
-      size: 414663
-    - path: src/models/
-      hash: md5
-      md5: 65e103299243a348a19abf295110d172.dir
-      size: 26668
-      nfiles: 10
-    - path: src/stages/predict.py
-      hash: md5
-      md5: 94c955c11dd0a5e6947827998fa5e46b
-      size: 3656
-    - path: src/utilities/general_utils.py
-      hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
-    - path: src/utilities/pred_utils.py
-      hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
-    params:
-      params.yaml:
-        models.gcn:
-          hidden_channels: 128
-          n_layers: 3
-          dropout: 0.4
-          batch_norm: true
-          improved: true
-          normalize: true
-    outs:
-    - path: results/prediction/cycle_4
-      hash: md5
-      md5: a5490ae6469670ad2653f5b8871fb1d4.dir
-      size: 182545
-      nfiles: 4
-  analyze_drift_cycle_4:
-    cmd: python src/stages/analyze_drift.py --cycle 4
-    deps:
-    - path: results/data/base/cycle_3/base_data.pt
-      hash: md5
-      md5: 868fdf87d8ffd1ccdeb738b8c4846902
-      size: 543834
-    - path: results/data/prediction/cycle_4/pred_data.pt
-      hash: md5
-      md5: 67a010579df9709c98c2f72683c587ff
-      size: 28762
-    - path: src/stages/analyze_drift.py
-      hash: md5
-      md5: bc9b9a13f4ba5df3dc11319fde218c41
-      size: 3323
-    - path: src/utilities/drift_detection_utils.py
-      hash: md5
-      md5: 7e23fac31afdf9a6cd21ad7474a66e87
-      size: 30054
-    - path: src/utilities/general_utils.py
-      hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
-    params:
-      params.yaml:
-        analyze_drift:
-          n_permutations: 1000
-          use_max_sliced_wasserstein:
-          n_projections: 100
-          use_sinkhorn_wasserstein:
-          sinkhorn_wasserstein_reg: 0.1
-          gamma:
-          early_stopping:
-            enabled: true
-            confidence_threshold: 0.01
-            min_permutations: 100
-    outs:
-    - path: results/drift_analysis/cycle_4
-      hash: md5
-      md5: f0aab212084e620f51fd67f135056da9.dir
-      size: 2685896
-      nfiles: 5
-  prepare_next_cycle_data_4:
-    cmd: python src/stages/prepare_next_cycle_data.py --cycle 4
-    deps:
-    - path: results/data/base/cycle_3/base_data.pt
-      hash: md5
-      md5: 868fdf87d8ffd1ccdeb738b8c4846902
-      size: 543834
-    - path: results/data/prediction/cycle_4/pred_data.pt
-      hash: md5
-      md5: 67a010579df9709c98c2f72683c587ff
-      size: 28762
-    - path: src/stages/prepare_next_cycle_data.py
-      hash: md5
-      md5: 654db906e5c0003b289cb29a875b3134
-      size: 6266
-    - path: src/utilities/data_utils.py
-      hash: md5
-      md5: 3ef35e945a2960eedaa1c8d17fce115a
-      size: 32134
-    - path: src/utilities/general_utils.py
-      hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
-    params:
-      params.yaml:
-        data.base:
-          radius: 2500
-          depth: -500
-          n_samples: 1000
-          spacing: 10
-          n_features: 5
-          n_classes: 4
-          class_names:
-          threshold_binary: 0.5
-          min_samples_per_class: 50
-          connection_radius: 200
-          n_splits: 3
-          test_size: 0.3
-          calib_size: 0.5
-          n_hotspots: 5
-          n_hotspots_random: false
-          seed: 14
-    outs:
     - path: results/data/base/cycle_4/base_data.pt
       hash: md5
-      md5: 48d30bc702df37d7485962748c318365
-      size: 655514
+      md5: 20b59de81276d1154e1c3ea5a605b03b
+      size: 8433754
     - path: results/data/base/cycle_4/fold_data.pt
       hash: md5
-      md5: 8ab1ff1288ed890e660cb4605916440d
-      size: 517908
+      md5: bfcbd1192b50ca13abcbbbd80f1fb3f1
+      size: 5882944
     - path: results/data/base/cycle_4/test_data.pt
       hash: md5
-      md5: 5da2fa040d37f0b58b1ee90bcaaac821
-      size: 509596
+      md5: 2b49cb313688b79b2871ddecfbe9d623
+      size: 176670
   train_cycle_5:
-    cmd: python src/stages/train.py --cycle 5 --model gcn
+    cmd: python src/stages/train.py --cycle 5 --model gat
     deps:
     - path: results/data/base/cycle_4/fold_data.pt
       hash: md5
-      md5: 8ab1ff1288ed890e660cb4605916440d
-      size: 517908
+      md5: bfcbd1192b50ca13abcbbbd80f1fb3f1
+      size: 5882944
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -1254,28 +1266,31 @@ stages:
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: 50fff7535fe3fccf4175848c73ce81ef
-      size: 3835
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/train_utils.py
       hash: md5
-      md5: a3f1a94d8cfb90c5f390495ad5d9970b
-      size: 11294
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
     params:
       params.yaml:
-        models.gcn:
-          hidden_channels: 128
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
           n_layers: 3
-          dropout: 0.4
+          n_heads: 5
+          dropout: 0.1
           batch_norm: true
-          improved: true
-          normalize: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
         train:
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0005
           max_grad_norm: 1.0
           weight_decay_adam_optimizer: 0.0005
           factor_learning_rate_scheduler: 0.5
@@ -1285,20 +1300,20 @@ stages:
     outs:
     - path: results/trained/cycle_5
       hash: md5
-      md5: f4b2ca20d42826f5f54db31bf369716b.dir
-      size: 2286544
+      md5: 011311b4b36ecf4515a5193028501d23.dir
+      size: 2406544
       nfiles: 4
   evaluate_cycle_5:
-    cmd: python src/stages/evaluate.py --cycle 5 --model gcn
+    cmd: python src/stages/evaluate.py --cycle 5 --model gat
     deps:
     - path: results/data/base/cycle_4/test_data.pt
       hash: md5
-      md5: 5da2fa040d37f0b58b1ee90bcaaac821
-      size: 509596
+      md5: 2b49cb313688b79b2871ddecfbe9d623
+      size: 176670
     - path: results/trained/cycle_5/model.pt
       hash: md5
-      md5: e18b97f8d2ee01496db51a2ce514eddc
-      size: 414663
+      md5: 31d4cf57660de32ee30ee8707d4b0e51
+      size: 1092890
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -1306,24 +1321,24 @@ stages:
       nfiles: 10
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 112d0e5736f8a91d609196126a8dbdc8
-      size: 4267
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
     - path: src/utilities/eval_utils.py
       hash: md5
-      md5: b792dd6e919555c9a58dddceebd3acb8
-      size: 14584
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: isotonic
+          calibration_method: dirichlet
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
           verbose: true
           factor_learning_rate_scheduler: 0.4
@@ -1334,26 +1349,28 @@ stages:
           reg_mu: 0.01
           eps: 1e-08
           seed: 40
-        models.gcn:
-          hidden_channels: 128
+        models.gat:
+          hidden_channels: 64
           n_layers: 3
-          dropout: 0.4
+          n_heads: 5
+          dropout: 0.1
           batch_norm: true
-          improved: true
-          normalize: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
     outs:
     - path: results/evaluation/cycle_5
       hash: md5
-      md5: 1507ba5a5eac3bed936136305cb6c653.dir
-      size: 388732
-      nfiles: 4
+      md5: cf5cfd7f781c63e3ef8b3073cbe44bfe.dir
+      size: 477195
+      nfiles: 6
   generate_pred_data_cycle_5:
     cmd: python src/stages/generate_pred_data.py --cycle 5
     deps:
     - path: results/data/base/cycle_4/base_data.pt
       hash: md5
-      md5: 48d30bc702df37d7485962748c318365
-      size: 655514
+      md5: 20b59de81276d1154e1c3ea5a605b03b
+      size: 8433754
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -1361,20 +1378,20 @@ stages:
       nfiles: 10
     - path: src/stages/generate_pred_data.py
       hash: md5
-      md5: ca3b5286f2078c189b94e8a25434c225
-      size: 3783
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ef35e945a2960eedaa1c8d17fce115a
-      size: 32134
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         data.pred:
@@ -1384,23 +1401,23 @@ stages:
     outs:
     - path: results/data/prediction/cycle_5/pred_data.pt
       hash: md5
-      md5: 757e7cb58a6476296213536b9a36fad7
-      size: 31578
+      md5: d9aa76223d36781f999dee43dd06d1f7
+      size: 120538
   predict_cycle_5:
-    cmd: python src/stages/predict.py --cycle 5 --model gcn
+    cmd: python src/stages/predict.py --cycle 5 --model gat
     deps:
     - path: results/data/prediction/cycle_5/pred_data.pt
       hash: md5
-      md5: 757e7cb58a6476296213536b9a36fad7
-      size: 31578
+      md5: d9aa76223d36781f999dee43dd06d1f7
+      size: 120538
     - path: results/evaluation/cycle_5/calibrator.pt
       hash: md5
-      md5: fff23e0ea8ef2a94a01b12b72a504c57
-      size: 14371
+      md5: 3ff263ddf8a0823bd13150452987c660
+      size: 4265
     - path: results/trained/cycle_5/model.pt
       hash: md5
-      md5: e18b97f8d2ee01496db51a2ce514eddc
-      size: 414663
+      md5: 31d4cf57660de32ee30ee8707d4b0e51
+      size: 1092890
     - path: src/models/
       hash: md5
       md5: 65e103299243a348a19abf295110d172.dir
@@ -1408,42 +1425,44 @@ stages:
       nfiles: 10
     - path: src/stages/predict.py
       hash: md5
-      md5: 94c955c11dd0a5e6947827998fa5e46b
-      size: 3656
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
-        models.gcn:
-          hidden_channels: 128
+        models.gat:
+          hidden_channels: 64
           n_layers: 3
-          dropout: 0.4
+          n_heads: 5
+          dropout: 0.1
           batch_norm: true
-          improved: true
-          normalize: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
     outs:
     - path: results/prediction/cycle_5
       hash: md5
-      md5: f9681f7cef5b75ef5769cb802afc8193.dir
-      size: 190355
+      md5: 448de0b273eae2cefb95a635b07a203f.dir
+      size: 188934
       nfiles: 4
   analyze_drift_cycle_5:
     cmd: python src/stages/analyze_drift.py --cycle 5
     deps:
     - path: results/data/base/cycle_4/base_data.pt
       hash: md5
-      md5: 48d30bc702df37d7485962748c318365
-      size: 655514
+      md5: 20b59de81276d1154e1c3ea5a605b03b
+      size: 8433754
     - path: results/data/prediction/cycle_5/pred_data.pt
       hash: md5
-      md5: 757e7cb58a6476296213536b9a36fad7
-      size: 31578
+      md5: d9aa76223d36781f999dee43dd06d1f7
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
@@ -1454,8 +1473,8 @@ stages:
       size: 30054
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         analyze_drift:
@@ -1472,34 +1491,35 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_5
       hash: md5
-      md5: c428516b890044736693571465e55c34.dir
-      size: 2655688
+      md5: fb287440612c81373924215a454f8653.dir
+      size: 2394884
       nfiles: 5
   prepare_next_cycle_data_5:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 5
     deps:
     - path: results/data/base/cycle_4/base_data.pt
       hash: md5
-      md5: 48d30bc702df37d7485962748c318365
-      size: 655514
+      md5: 20b59de81276d1154e1c3ea5a605b03b
+      size: 8433754
     - path: results/data/prediction/cycle_5/pred_data.pt
       hash: md5
-      md5: 757e7cb58a6476296213536b9a36fad7
-      size: 31578
+      md5: d9aa76223d36781f999dee43dd06d1f7
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
-      md5: 654db906e5c0003b289cb29a875b3134
-      size: 6266
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ef35e945a2960eedaa1c8d17fce115a
-      size: 32134
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: df5a501468aab1e80e7b19c8eae07ec5
-      size: 1281
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
@@ -1510,116 +1530,115 @@ stages:
           class_names:
           threshold_binary: 0.5
           min_samples_per_class: 50
-          connection_radius: 200
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
           n_splits: 3
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 5
           n_hotspots_random: false
-          seed: 14
+          seed: 6546
     outs:
     - path: results/data/base/cycle_5/base_data.pt
       hash: md5
-      md5: 266e7566ac260d333d9e4882843ccbe7
-      size: 779354
+      md5: 4751f7166f1346ee93e2bd29cff71bc0
+      size: 10329242
     - path: results/data/base/cycle_5/fold_data.pt
       hash: md5
-      md5: ab96b8f7b25cc70148264d0c5154175c
-      size: 617812
+      md5: fd9aceb1b2c0409ca991c983cddfea43
+      size: 7180800
     - path: results/data/base/cycle_5/test_data.pt
       hash: md5
-      md5: 13c4b5a468c81f5aab6a3ae4adb02014
-      size: 608732
+      md5: 767c92c2a900aa17383b720e2436e847
+      size: 217566
   train_cycle_6:
     cmd: python src/stages/train.py --cycle 6 --model gat
     deps:
     - path: results/data/base/cycle_5/fold_data.pt
       hash: md5
-      md5: 155f54f7576061580f6da36f036bd359
-      size: 254996
+      md5: fd9aceb1b2c0409ca991c983cddfea43
+      size: 7180800
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: 24071a6a768e42d83cd4745d33f13d3a
-      size: 4491
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/train_utils.py
       hash: md5
-      md5: afe16143e257eafd28b4cc0a565c3f35
-      size: 13252
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
     params:
       params.yaml:
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
         train:
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0005
           max_grad_norm: 1.0
           weight_decay_adam_optimizer: 0.0005
           factor_learning_rate_scheduler: 0.5
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
-          strategy: from_scratch
-          warmup_epochs: 50
-          freeze_early_layers: true
     outs:
     - path: results/trained/cycle_6
       hash: md5
-      md5: 93f15c0676b5e7d5d07ff40a0fdcc3e4.dir
-      size: 2462547
+      md5: 9b53cad973a34c81c05cff518032001e.dir
+      size: 2431424
       nfiles: 4
   evaluate_cycle_6:
     cmd: python src/stages/evaluate.py --cycle 6 --model gat
     deps:
     - path: results/data/base/cycle_5/test_data.pt
       hash: md5
-      md5: 05fd7b6e67807a9f7f10177a58ff5327
-      size: 244636
+      md5: 767c92c2a900aa17383b720e2436e847
+      size: 217566
     - path: results/trained/cycle_6/model.pt
       hash: md5
-      md5: 7d7c5e8985a95c5acc8c7c083999a261
-      size: 544179
+      md5: 6e5babcaeeeef7ead20386ebb8477bf9
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 0f0f34e1dd575e65fe4848452c8e2b96
-      size: 4159
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
     - path: src/utilities/eval_utils.py
       hash: md5
-      md5: b792dd6e919555c9a58dddceebd3acb8
-      size: 14584
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
           verbose: true
           factor_learning_rate_scheduler: 0.4
@@ -1634,46 +1653,45 @@ stages:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/evaluation/cycle_6
       hash: md5
-      md5: d73520c960ca4d339c5c0f42d03172a5.dir
-      size: 445152
+      md5: fb1981f39e5e45748e392631d786b8b4.dir
+      size: 431203
       nfiles: 6
   generate_pred_data_cycle_6:
     cmd: python src/stages/generate_pred_data.py --cycle 6
     deps:
     - path: results/data/base/cycle_5/base_data.pt
       hash: md5
-      md5: 7188b210ae05a18a9e67e73342235da7
-      size: 314268
+      md5: 4751f7166f1346ee93e2bd29cff71bc0
+      size: 10329242
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/generate_pred_data.py
       hash: md5
-      md5: 79c04fe7b2b3e33112ca7da1851c24a5
-      size: 3448
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         data.pred:
@@ -1683,69 +1701,68 @@ stages:
     outs:
     - path: results/data/prediction/cycle_6/pred_data.pt
       hash: md5
-      md5: 7478057d0be8a20760dddc6d718938c0
-      size: 23196
+      md5: 5f07236efc2fb19045109115b4a1b70b
+      size: 120538
   predict_cycle_6:
     cmd: python src/stages/predict.py --cycle 6 --model gat
     deps:
     - path: results/data/prediction/cycle_6/pred_data.pt
       hash: md5
-      md5: 7478057d0be8a20760dddc6d718938c0
-      size: 23196
+      md5: 5f07236efc2fb19045109115b4a1b70b
+      size: 120538
     - path: results/evaluation/cycle_6/calibrator.pt
       hash: md5
-      md5: 12448b18efa6a62edf6d67630bcd0221
-      size: 5032
+      md5: f2f17fcd8aa2df288cbd92a880e7ee41
+      size: 4521
     - path: results/trained/cycle_6/model.pt
       hash: md5
-      md5: 7d7c5e8985a95c5acc8c7c083999a261
-      size: 544179
+      md5: 6e5babcaeeeef7ead20386ebb8477bf9
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/predict.py
       hash: md5
-      md5: ed557e88372c95196337a1d42005b5da
-      size: 3547
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/prediction/cycle_6
       hash: md5
-      md5: 43a59ffe0a6a893235672fd9beb0b922.dir
-      size: 193233
+      md5: 1b0b5cda362b63780777c0ad1952a556.dir
+      size: 183536
       nfiles: 4
   analyze_drift_cycle_6:
     cmd: python src/stages/analyze_drift.py --cycle 6
     deps:
     - path: results/data/base/cycle_5/base_data.pt
       hash: md5
-      md5: 7188b210ae05a18a9e67e73342235da7
-      size: 314268
+      md5: 4751f7166f1346ee93e2bd29cff71bc0
+      size: 10329242
     - path: results/data/prediction/cycle_6/pred_data.pt
       hash: md5
-      md5: 7478057d0be8a20760dddc6d718938c0
-      size: 23196
+      md5: 5f07236efc2fb19045109115b4a1b70b
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
@@ -1756,8 +1773,8 @@ stages:
       size: 30054
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         analyze_drift:
@@ -1774,155 +1791,154 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_6
       hash: md5
-      md5: 1271e7b0d03d2cbec7618d1b25f1b3c1.dir
-      size: 4711956
+      md5: d4ad47e6c1aa46ff8d14bfda228bfba7.dir
+      size: 2512155
       nfiles: 5
   prepare_next_cycle_data_6:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 6
     deps:
     - path: results/data/base/cycle_5/base_data.pt
       hash: md5
-      md5: 7188b210ae05a18a9e67e73342235da7
-      size: 314268
+      md5: 4751f7166f1346ee93e2bd29cff71bc0
+      size: 10329242
     - path: results/data/prediction/cycle_6/pred_data.pt
       hash: md5
-      md5: 7478057d0be8a20760dddc6d718938c0
-      size: 23196
+      md5: 5f07236efc2fb19045109115b4a1b70b
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
-      md5: acad52c7a9fab1eb3d4e3c23a3e4f980
-      size: 5795
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
           n_samples: 1000
           spacing: 10
           n_features: 5
-          n_classes: 5
+          n_classes: 4
           class_names:
           threshold_binary: 0.5
-          min_samples_per_class: 100
-          connection_radius: 100
-          add_self_loops: true
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
           n_splits: 3
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 5
           n_hotspots_random: false
-          seed: 4353
+          seed: 6546
     outs:
     - path: results/data/base/cycle_6/base_data.pt
       hash: md5
-      md5: 91d94cf1799f817f36c35fbe144fa100
-      size: 348316
+      md5: c8d389e751b7e084943e2803e96beb2c
+      size: 12416794
     - path: results/data/base/cycle_6/fold_data.pt
       hash: md5
-      md5: f429f9e366856b73148e9e247ee5e196
-      size: 283860
+      md5: 90b2f83fc6568339d7d39a98abb924ea
+      size: 8636544
     - path: results/data/base/cycle_6/test_data.pt
       hash: md5
-      md5: 19ebc2b1f20cfc27423f063ac22cc619
-      size: 272732
+      md5: 215bf2cfbeb7957a1f114e638760f2fa
+      size: 258718
   train_cycle_7:
     cmd: python src/stages/train.py --cycle 7 --model gat
     deps:
     - path: results/data/base/cycle_6/fold_data.pt
       hash: md5
-      md5: f429f9e366856b73148e9e247ee5e196
-      size: 283860
+      md5: 90b2f83fc6568339d7d39a98abb924ea
+      size: 8636544
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: 24071a6a768e42d83cd4745d33f13d3a
-      size: 4491
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/train_utils.py
       hash: md5
-      md5: afe16143e257eafd28b4cc0a565c3f35
-      size: 13252
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
     params:
       params.yaml:
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
         train:
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0005
           max_grad_norm: 1.0
           weight_decay_adam_optimizer: 0.0005
           factor_learning_rate_scheduler: 0.5
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
-          strategy: from_scratch
-          warmup_epochs: 50
-          freeze_early_layers: true
     outs:
     - path: results/trained/cycle_7
       hash: md5
-      md5: 6de543fbcb77e2c29f7738a0a3da8992.dir
-      size: 2466934
+      md5: be572b40ba9e7404bf1821570d33ac2a.dir
+      size: 2510584
       nfiles: 4
   evaluate_cycle_7:
     cmd: python src/stages/evaluate.py --cycle 7 --model gat
     deps:
     - path: results/data/base/cycle_6/test_data.pt
       hash: md5
-      md5: 19ebc2b1f20cfc27423f063ac22cc619
-      size: 272732
+      md5: 215bf2cfbeb7957a1f114e638760f2fa
+      size: 258718
     - path: results/trained/cycle_7/model.pt
       hash: md5
-      md5: 58b1f0dba525dd8544c79a7846870818
-      size: 544179
+      md5: e03ddd7a29cd1db75b8be642d707069a
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 0f0f34e1dd575e65fe4848452c8e2b96
-      size: 4159
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
     - path: src/utilities/eval_utils.py
       hash: md5
-      md5: b792dd6e919555c9a58dddceebd3acb8
-      size: 14584
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
           verbose: true
           factor_learning_rate_scheduler: 0.4
@@ -1937,46 +1953,45 @@ stages:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/evaluation/cycle_7
       hash: md5
-      md5: 706d937b1b02d65696ff0d91f72346cf.dir
-      size: 465932
+      md5: 5ffd85b9420a88fc148a16664d1b9dfc.dir
+      size: 441541
       nfiles: 6
   generate_pred_data_cycle_7:
     cmd: python src/stages/generate_pred_data.py --cycle 7
     deps:
     - path: results/data/base/cycle_6/base_data.pt
       hash: md5
-      md5: 91d94cf1799f817f36c35fbe144fa100
-      size: 348316
+      md5: c8d389e751b7e084943e2803e96beb2c
+      size: 12416794
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/generate_pred_data.py
       hash: md5
-      md5: 79c04fe7b2b3e33112ca7da1851c24a5
-      size: 3448
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         data.pred:
@@ -1986,69 +2001,68 @@ stages:
     outs:
     - path: results/data/prediction/cycle_7/pred_data.pt
       hash: md5
-      md5: d42732e6cb63e035664aab46bc2013f5
-      size: 23068
+      md5: 68094d6982378bd8834057e2af14c35f
+      size: 120538
   predict_cycle_7:
     cmd: python src/stages/predict.py --cycle 7 --model gat
     deps:
     - path: results/data/prediction/cycle_7/pred_data.pt
       hash: md5
-      md5: d42732e6cb63e035664aab46bc2013f5
-      size: 23068
+      md5: 68094d6982378bd8834057e2af14c35f
+      size: 120538
     - path: results/evaluation/cycle_7/calibrator.pt
       hash: md5
-      md5: 8fbf28e535cd147b77639f10a1372e38
-      size: 5288
+      md5: d38a682195dc29fb4604dc51af3dd749
+      size: 4777
     - path: results/trained/cycle_7/model.pt
       hash: md5
-      md5: 58b1f0dba525dd8544c79a7846870818
-      size: 544179
+      md5: e03ddd7a29cd1db75b8be642d707069a
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/predict.py
       hash: md5
-      md5: ed557e88372c95196337a1d42005b5da
-      size: 3547
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/prediction/cycle_7
       hash: md5
-      md5: 6748b2563f93fecb3db557254cc50ed6.dir
-      size: 205839
+      md5: 040fac88b7d25e666e5d044711464973.dir
+      size: 192439
       nfiles: 4
   analyze_drift_cycle_7:
     cmd: python src/stages/analyze_drift.py --cycle 7
     deps:
     - path: results/data/base/cycle_6/base_data.pt
       hash: md5
-      md5: 91d94cf1799f817f36c35fbe144fa100
-      size: 348316
+      md5: c8d389e751b7e084943e2803e96beb2c
+      size: 12416794
     - path: results/data/prediction/cycle_7/pred_data.pt
       hash: md5
-      md5: d42732e6cb63e035664aab46bc2013f5
-      size: 23068
+      md5: 68094d6982378bd8834057e2af14c35f
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
@@ -2059,8 +2073,8 @@ stages:
       size: 30054
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         analyze_drift:
@@ -2077,155 +2091,154 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_7
       hash: md5
-      md5: 93e15a8dd0e1fbfd3b4b0a416f467e19.dir
-      size: 4791483
+      md5: 756891ed4942a2bd368312ca40d7cdcf.dir
+      size: 2341540
       nfiles: 5
   prepare_next_cycle_data_7:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 7
     deps:
     - path: results/data/base/cycle_6/base_data.pt
       hash: md5
-      md5: 91d94cf1799f817f36c35fbe144fa100
-      size: 348316
+      md5: c8d389e751b7e084943e2803e96beb2c
+      size: 12416794
     - path: results/data/prediction/cycle_7/pred_data.pt
       hash: md5
-      md5: d42732e6cb63e035664aab46bc2013f5
-      size: 23068
+      md5: 68094d6982378bd8834057e2af14c35f
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
-      md5: acad52c7a9fab1eb3d4e3c23a3e4f980
-      size: 5795
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
           n_samples: 1000
           spacing: 10
           n_features: 5
-          n_classes: 5
+          n_classes: 4
           class_names:
           threshold_binary: 0.5
-          min_samples_per_class: 100
-          connection_radius: 100
-          add_self_loops: true
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
           n_splits: 3
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 5
           n_hotspots_random: false
-          seed: 4353
+          seed: 6546
     outs:
     - path: results/data/base/cycle_7/base_data.pt
       hash: md5
-      md5: 6a0e3d715c6b3252f928d063b65d7504
-      size: 382108
+      md5: d90b11f8877a838fce274b7078ca4b75
+      size: 14696282
     - path: results/data/base/cycle_7/fold_data.pt
       hash: md5
-      md5: 3018cd731dd1f22d4651aa24f78b7ba8
-      size: 312340
+      md5: 2abdd768553d3924fa3cdad83919ef7e
+      size: 10174080
     - path: results/data/base/cycle_7/test_data.pt
       hash: md5
-      md5: de4a7a48dc458e7a15a2c272e4c74952
-      size: 300444
+      md5: 4a425aaf572d0bcd4873bfdec3aa17b8
+      size: 304670
   train_cycle_8:
     cmd: python src/stages/train.py --cycle 8 --model gat
     deps:
     - path: results/data/base/cycle_7/fold_data.pt
       hash: md5
-      md5: 3018cd731dd1f22d4651aa24f78b7ba8
-      size: 312340
+      md5: 2abdd768553d3924fa3cdad83919ef7e
+      size: 10174080
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: 24071a6a768e42d83cd4745d33f13d3a
-      size: 4491
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/train_utils.py
       hash: md5
-      md5: afe16143e257eafd28b4cc0a565c3f35
-      size: 13252
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
     params:
       params.yaml:
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
         train:
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0005
           max_grad_norm: 1.0
           weight_decay_adam_optimizer: 0.0005
           factor_learning_rate_scheduler: 0.5
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
-          strategy: from_scratch
-          warmup_epochs: 50
-          freeze_early_layers: true
     outs:
     - path: results/trained/cycle_8
       hash: md5
-      md5: b6e08baac72434b7be24a712feef8f7c.dir
-      size: 2363906
+      md5: 57f7528e1ceacc4924c386758508347c.dir
+      size: 2363790
       nfiles: 4
   evaluate_cycle_8:
     cmd: python src/stages/evaluate.py --cycle 8 --model gat
     deps:
     - path: results/data/base/cycle_7/test_data.pt
       hash: md5
-      md5: de4a7a48dc458e7a15a2c272e4c74952
-      size: 300444
+      md5: 4a425aaf572d0bcd4873bfdec3aa17b8
+      size: 304670
     - path: results/trained/cycle_8/model.pt
       hash: md5
-      md5: 1a3fcf1632e54d75e1c449fa4a118fda
-      size: 544179
+      md5: 418eb4a1bec773c306c0e453a5a9345f
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 0f0f34e1dd575e65fe4848452c8e2b96
-      size: 4159
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
     - path: src/utilities/eval_utils.py
       hash: md5
-      md5: b792dd6e919555c9a58dddceebd3acb8
-      size: 14584
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
           verbose: true
           factor_learning_rate_scheduler: 0.4
@@ -2240,46 +2253,45 @@ stages:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/evaluation/cycle_8
       hash: md5
-      md5: 90f10de07ea4dc84a668eefa00169191.dir
-      size: 454724
+      md5: 97275aea978f6fa62555c1b730ebf5bf.dir
+      size: 445074
       nfiles: 6
   generate_pred_data_cycle_8:
     cmd: python src/stages/generate_pred_data.py --cycle 8
     deps:
     - path: results/data/base/cycle_7/base_data.pt
       hash: md5
-      md5: 6a0e3d715c6b3252f928d063b65d7504
-      size: 382108
+      md5: d90b11f8877a838fce274b7078ca4b75
+      size: 14696282
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/generate_pred_data.py
       hash: md5
-      md5: 79c04fe7b2b3e33112ca7da1851c24a5
-      size: 3448
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         data.pred:
@@ -2289,69 +2301,68 @@ stages:
     outs:
     - path: results/data/prediction/cycle_8/pred_data.pt
       hash: md5
-      md5: a5c2a2fe4054aef6db857b49bfbd51d1
-      size: 23516
+      md5: 695a8b9d547af45daec58b64a4f23dcf
+      size: 120538
   predict_cycle_8:
     cmd: python src/stages/predict.py --cycle 8 --model gat
     deps:
     - path: results/data/prediction/cycle_8/pred_data.pt
       hash: md5
-      md5: a5c2a2fe4054aef6db857b49bfbd51d1
-      size: 23516
+      md5: 695a8b9d547af45daec58b64a4f23dcf
+      size: 120538
     - path: results/evaluation/cycle_8/calibrator.pt
       hash: md5
-      md5: df8b7c2199dad6c16545b863f9b7cf4f
-      size: 5544
+      md5: 10567a2067d63d087362efd535646a3f
+      size: 4969
     - path: results/trained/cycle_8/model.pt
       hash: md5
-      md5: 1a3fcf1632e54d75e1c449fa4a118fda
-      size: 544179
+      md5: 418eb4a1bec773c306c0e453a5a9345f
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/predict.py
       hash: md5
-      md5: ed557e88372c95196337a1d42005b5da
-      size: 3547
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/prediction/cycle_8
       hash: md5
-      md5: 62454f9981a316e8cec3b9d913326931.dir
-      size: 193088
+      md5: 40a709b95c70a646d240a065d78dcc48.dir
+      size: 186341
       nfiles: 4
   analyze_drift_cycle_8:
     cmd: python src/stages/analyze_drift.py --cycle 8
     deps:
     - path: results/data/base/cycle_7/base_data.pt
       hash: md5
-      md5: 6a0e3d715c6b3252f928d063b65d7504
-      size: 382108
+      md5: d90b11f8877a838fce274b7078ca4b75
+      size: 14696282
     - path: results/data/prediction/cycle_8/pred_data.pt
       hash: md5
-      md5: a5c2a2fe4054aef6db857b49bfbd51d1
-      size: 23516
+      md5: 695a8b9d547af45daec58b64a4f23dcf
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
@@ -2362,8 +2373,8 @@ stages:
       size: 30054
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         analyze_drift:
@@ -2380,155 +2391,154 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_8
       hash: md5
-      md5: 69b726371633ae51e14b47b30f5a46ab.dir
-      size: 4919200
+      md5: 0cf6ff141b8d1f6d043cbacaf59ca749.dir
+      size: 2791230
       nfiles: 5
   prepare_next_cycle_data_8:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 8
     deps:
     - path: results/data/base/cycle_7/base_data.pt
       hash: md5
-      md5: 6a0e3d715c6b3252f928d063b65d7504
-      size: 382108
+      md5: d90b11f8877a838fce274b7078ca4b75
+      size: 14696282
     - path: results/data/prediction/cycle_8/pred_data.pt
       hash: md5
-      md5: a5c2a2fe4054aef6db857b49bfbd51d1
-      size: 23516
+      md5: 695a8b9d547af45daec58b64a4f23dcf
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
-      md5: acad52c7a9fab1eb3d4e3c23a3e4f980
-      size: 5795
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
           n_samples: 1000
           spacing: 10
           n_features: 5
-          n_classes: 5
+          n_classes: 4
           class_names:
           threshold_binary: 0.5
-          min_samples_per_class: 100
-          connection_radius: 100
-          add_self_loops: true
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
           n_splits: 3
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 5
           n_hotspots_random: false
-          seed: 4353
+          seed: 6546
     outs:
     - path: results/data/base/cycle_8/base_data.pt
       hash: md5
-      md5: 0447d6e7a6d51209f925e199a28756c8
-      size: 419036
+      md5: 108a28889f402784e9a342ce1627e4ad
+      size: 17167834
     - path: results/data/base/cycle_8/fold_data.pt
       hash: md5
-      md5: bf0dc1968815bf76bfaf336c8d8753ce
-      size: 344084
+      md5: 548ede9db09c260670ed482e59b912cb
+      size: 11901632
     - path: results/data/base/cycle_8/test_data.pt
       hash: md5
-      md5: f4c0b74f0fe23dd8cd6a97af503a7650
-      size: 331420
+      md5: 87c56ad8e5148fd07baa3390cdc1e13c
+      size: 363358
   train_cycle_9:
     cmd: python src/stages/train.py --cycle 9 --model gat
     deps:
     - path: results/data/base/cycle_8/fold_data.pt
       hash: md5
-      md5: bf0dc1968815bf76bfaf336c8d8753ce
-      size: 344084
+      md5: 548ede9db09c260670ed482e59b912cb
+      size: 11901632
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: 24071a6a768e42d83cd4745d33f13d3a
-      size: 4491
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/train_utils.py
       hash: md5
-      md5: afe16143e257eafd28b4cc0a565c3f35
-      size: 13252
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
     params:
       params.yaml:
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
         train:
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0005
           max_grad_norm: 1.0
           weight_decay_adam_optimizer: 0.0005
           factor_learning_rate_scheduler: 0.5
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
-          strategy: from_scratch
-          warmup_epochs: 50
-          freeze_early_layers: true
     outs:
     - path: results/trained/cycle_9
       hash: md5
-      md5: c30f1685f930ea99a10bd83378e392e0.dir
-      size: 2505298
+      md5: 80dc1d60c76fba6753054054fbac971f.dir
+      size: 2402065
       nfiles: 4
   evaluate_cycle_9:
     cmd: python src/stages/evaluate.py --cycle 9 --model gat
     deps:
     - path: results/data/base/cycle_8/test_data.pt
       hash: md5
-      md5: f4c0b74f0fe23dd8cd6a97af503a7650
-      size: 331420
+      md5: 87c56ad8e5148fd07baa3390cdc1e13c
+      size: 363358
     - path: results/trained/cycle_9/model.pt
       hash: md5
-      md5: 9a2f9a50466e4d78d4316b4d0abb8a86
-      size: 544179
+      md5: c1ceaa66cbeeba352e74e137bc70bfad
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 0f0f34e1dd575e65fe4848452c8e2b96
-      size: 4159
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
     - path: src/utilities/eval_utils.py
       hash: md5
-      md5: b792dd6e919555c9a58dddceebd3acb8
-      size: 14584
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
           verbose: true
           factor_learning_rate_scheduler: 0.4
@@ -2543,46 +2553,45 @@ stages:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/evaluation/cycle_9
       hash: md5
-      md5: 7a7a224eadae525b71951935e2e39f26.dir
-      size: 451529
+      md5: cae7ddba3c34d685739a7eca44a2a3ca.dir
+      size: 447409
       nfiles: 6
   generate_pred_data_cycle_9:
     cmd: python src/stages/generate_pred_data.py --cycle 9
     deps:
     - path: results/data/base/cycle_8/base_data.pt
       hash: md5
-      md5: 0447d6e7a6d51209f925e199a28756c8
-      size: 419036
+      md5: 108a28889f402784e9a342ce1627e4ad
+      size: 17167834
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/generate_pred_data.py
       hash: md5
-      md5: 79c04fe7b2b3e33112ca7da1851c24a5
-      size: 3448
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         data.pred:
@@ -2592,69 +2601,68 @@ stages:
     outs:
     - path: results/data/prediction/cycle_9/pred_data.pt
       hash: md5
-      md5: 20598ac57526d164a82576f73d158e43
-      size: 23516
+      md5: 8ea59f6c0b787f2f4db41959e47d0f92
+      size: 120538
   predict_cycle_9:
     cmd: python src/stages/predict.py --cycle 9 --model gat
     deps:
     - path: results/data/prediction/cycle_9/pred_data.pt
       hash: md5
-      md5: 20598ac57526d164a82576f73d158e43
-      size: 23516
+      md5: 8ea59f6c0b787f2f4db41959e47d0f92
+      size: 120538
     - path: results/evaluation/cycle_9/calibrator.pt
       hash: md5
-      md5: 753c94e6ca10e19f16f1559eeeacc84b
-      size: 5736
+      md5: aa74b969bfdc00a8becfe1a60f7b74ef
+      size: 5225
     - path: results/trained/cycle_9/model.pt
       hash: md5
-      md5: 9a2f9a50466e4d78d4316b4d0abb8a86
-      size: 544179
+      md5: c1ceaa66cbeeba352e74e137bc70bfad
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/predict.py
       hash: md5
-      md5: ed557e88372c95196337a1d42005b5da
-      size: 3547
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/prediction/cycle_9
       hash: md5
-      md5: 5e32dff550aa1539ddb62c7c6accf29f.dir
-      size: 196021
+      md5: 705a67be51d5b305f95f76892ebbec0c.dir
+      size: 183456
       nfiles: 4
   analyze_drift_cycle_9:
     cmd: python src/stages/analyze_drift.py --cycle 9
     deps:
     - path: results/data/base/cycle_8/base_data.pt
       hash: md5
-      md5: 0447d6e7a6d51209f925e199a28756c8
-      size: 419036
+      md5: 108a28889f402784e9a342ce1627e4ad
+      size: 17167834
     - path: results/data/prediction/cycle_9/pred_data.pt
       hash: md5
-      md5: 20598ac57526d164a82576f73d158e43
-      size: 23516
+      md5: 8ea59f6c0b787f2f4db41959e47d0f92
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
@@ -2665,8 +2673,8 @@ stages:
       size: 30054
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         analyze_drift:
@@ -2683,155 +2691,154 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_9
       hash: md5
-      md5: ecc034e1bd21de39e55a18418fded034.dir
-      size: 4957899
+      md5: 6354b1e87880f77ebe007ab7c2871406.dir
+      size: 2923329
       nfiles: 5
   prepare_next_cycle_data_9:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 9
     deps:
     - path: results/data/base/cycle_8/base_data.pt
       hash: md5
-      md5: 0447d6e7a6d51209f925e199a28756c8
-      size: 419036
+      md5: 108a28889f402784e9a342ce1627e4ad
+      size: 17167834
     - path: results/data/prediction/cycle_9/pred_data.pt
       hash: md5
-      md5: 20598ac57526d164a82576f73d158e43
-      size: 23516
+      md5: 8ea59f6c0b787f2f4db41959e47d0f92
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
-      md5: acad52c7a9fab1eb3d4e3c23a3e4f980
-      size: 5795
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
           n_samples: 1000
           spacing: 10
           n_features: 5
-          n_classes: 5
+          n_classes: 4
           class_names:
           threshold_binary: 0.5
-          min_samples_per_class: 100
-          connection_radius: 100
-          add_self_loops: true
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
           n_splits: 3
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 5
           n_hotspots_random: false
-          seed: 4353
+          seed: 6546
     outs:
     - path: results/data/base/cycle_9/base_data.pt
       hash: md5
-      md5: 910e55aa8bf077d3bbf102d49ce057cb
-      size: 459868
+      md5: 1acb87cb2554cc36d7101b8c8e1edb8e
+      size: 19831322
     - path: results/data/base/cycle_9/fold_data.pt
       hash: md5
-      md5: 382025b36ef57718af6244eadbd8d65b
-      size: 379604
+      md5: 7adc5e2e166bc9bb0e987c0a4dd9fe09
+      size: 13798720
     - path: results/data/base/cycle_9/test_data.pt
       hash: md5
-      md5: 53546163a5db41cb5a1017613f7d67fa
-      size: 366172
+      md5: f213b306259f0cfa32331c01d1b9cef2
+      size: 393438
   train_cycle_10:
     cmd: python src/stages/train.py --cycle 10 --model gat
     deps:
     - path: results/data/base/cycle_9/fold_data.pt
       hash: md5
-      md5: 382025b36ef57718af6244eadbd8d65b
-      size: 379604
+      md5: 7adc5e2e166bc9bb0e987c0a4dd9fe09
+      size: 13798720
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/train.py
       hash: md5
-      md5: 24071a6a768e42d83cd4745d33f13d3a
-      size: 4491
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/train_utils.py
       hash: md5
-      md5: afe16143e257eafd28b4cc0a565c3f35
-      size: 13252
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
     params:
       params.yaml:
+        add_self_loops: true
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
         train:
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0005
           max_grad_norm: 1.0
           weight_decay_adam_optimizer: 0.0005
           factor_learning_rate_scheduler: 0.5
           patience_learning_rate_scheduler: 20
           patience_early_stopping: 50
           min_delta_early_stopping: 0.001
-          strategy: from_scratch
-          warmup_epochs: 50
-          freeze_early_layers: true
     outs:
     - path: results/trained/cycle_10
       hash: md5
-      md5: 763b99903076068c331413f17de218f8.dir
-      size: 2469552
+      md5: 9aa7fbdb7b54eecbe6aafa687b62ddd4.dir
+      size: 2443809
       nfiles: 4
   evaluate_cycle_10:
     cmd: python src/stages/evaluate.py --cycle 10 --model gat
     deps:
     - path: results/data/base/cycle_9/test_data.pt
       hash: md5
-      md5: 53546163a5db41cb5a1017613f7d67fa
-      size: 366172
+      md5: f213b306259f0cfa32331c01d1b9cef2
+      size: 393438
     - path: results/trained/cycle_10/model.pt
       hash: md5
-      md5: 5ad86ebd6d5319c0eccf593e1eeed43e
-      size: 544179
+      md5: 9d15c3883406c764e80658af313e5f77
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/evaluate.py
       hash: md5
-      md5: 0f0f34e1dd575e65fe4848452c8e2b96
-      size: 4159
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
     - path: src/utilities/eval_utils.py
       hash: md5
-      md5: b792dd6e919555c9a58dddceebd3acb8
-      size: 14584
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         evaluate:
           initial_temperature: 1.2
           n_bins: 10
-          calibration_method: beta
+          calibration_method: dirichlet
           n_epochs: 1000
-          lr: 0.001
+          lr: 0.0001
           weight_decay_adam_optimizer: 0.0005
           verbose: true
           factor_learning_rate_scheduler: 0.4
@@ -2846,46 +2853,45 @@ stages:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/evaluation/cycle_10
       hash: md5
-      md5: 3e5cf5a189ae059b0b5025d8d90a49aa.dir
-      size: 450201
+      md5: 241e84f6be801a0ba4157269352bf663.dir
+      size: 439706
       nfiles: 6
   generate_pred_data_cycle_10:
     cmd: python src/stages/generate_pred_data.py --cycle 10
     deps:
     - path: results/data/base/cycle_9/base_data.pt
       hash: md5
-      md5: 910e55aa8bf077d3bbf102d49ce057cb
-      size: 459868
+      md5: 1acb87cb2554cc36d7101b8c8e1edb8e
+      size: 19831322
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/generate_pred_data.py
       hash: md5
-      md5: 79c04fe7b2b3e33112ca7da1851c24a5
-      size: 3448
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         data.pred:
@@ -2895,69 +2901,68 @@ stages:
     outs:
     - path: results/data/prediction/cycle_10/pred_data.pt
       hash: md5
-      md5: 688918f310fd635713ad67e6de0745b2
-      size: 23388
+      md5: 0ce5bdff09f99c73bdbacc0216aa5112
+      size: 120538
   predict_cycle_10:
     cmd: python src/stages/predict.py --cycle 10 --model gat
     deps:
     - path: results/data/prediction/cycle_10/pred_data.pt
       hash: md5
-      md5: 688918f310fd635713ad67e6de0745b2
-      size: 23388
+      md5: 0ce5bdff09f99c73bdbacc0216aa5112
+      size: 120538
     - path: results/evaluation/cycle_10/calibrator.pt
       hash: md5
-      md5: b6012f3a05db0a27a435160c21cf2a98
-      size: 5992
+      md5: b9fccc1aeff8014909eadfd573ce0664
+      size: 5481
     - path: results/trained/cycle_10/model.pt
       hash: md5
-      md5: 5ad86ebd6d5319c0eccf593e1eeed43e
-      size: 544179
+      md5: 9d15c3883406c764e80658af313e5f77
+      size: 1092890
     - path: src/models/
       hash: md5
-      md5: 56e968d4bbd9713c067859e31b91f2a1.dir
-      size: 25022
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
       nfiles: 10
     - path: src/stages/predict.py
       hash: md5
-      md5: ed557e88372c95196337a1d42005b5da
-      size: 3547
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     - path: src/utilities/pred_utils.py
       hash: md5
-      md5: 07ae3cdb221ed9e1acb80413ba43d617
-      size: 3748
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
     params:
       params.yaml:
         models.gat:
           hidden_channels: 64
           n_layers: 3
           n_heads: 5
-          dropout: 0.3
+          dropout: 0.1
           batch_norm: true
           negative_slope: 0.2
-          add_self_loops: true
           bias: true
-          residual: false
+          residual: true
     outs:
     - path: results/prediction/cycle_10
       hash: md5
-      md5: 1d86abe660933f532ac0c075dce3963a.dir
-      size: 202382
+      md5: 62483bd49b8b48d2e03dcdc3ac60def3.dir
+      size: 190515
       nfiles: 4
   analyze_drift_cycle_10:
     cmd: python src/stages/analyze_drift.py --cycle 10
     deps:
     - path: results/data/base/cycle_9/base_data.pt
       hash: md5
-      md5: 910e55aa8bf077d3bbf102d49ce057cb
-      size: 459868
+      md5: 1acb87cb2554cc36d7101b8c8e1edb8e
+      size: 19831322
     - path: results/data/prediction/cycle_10/pred_data.pt
       hash: md5
-      md5: 688918f310fd635713ad67e6de0745b2
-      size: 23388
+      md5: 0ce5bdff09f99c73bdbacc0216aa5112
+      size: 120538
     - path: src/stages/analyze_drift.py
       hash: md5
       md5: bc9b9a13f4ba5df3dc11319fde218c41
@@ -2968,8 +2973,8 @@ stages:
       size: 30054
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
         analyze_drift:
@@ -2986,92 +2991,94 @@ stages:
     outs:
     - path: results/drift_analysis/cycle_10
       hash: md5
-      md5: 617ce2e20cca5d1208714c57a310181d.dir
-      size: 5089997
+      md5: e20cca103ebc6d06fc8241963bfe2eb3.dir
+      size: 2856585
       nfiles: 5
   prepare_next_cycle_data_10:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 10
     deps:
     - path: results/data/base/cycle_9/base_data.pt
       hash: md5
-      md5: 910e55aa8bf077d3bbf102d49ce057cb
-      size: 459868
+      md5: 1acb87cb2554cc36d7101b8c8e1edb8e
+      size: 19831322
     - path: results/data/prediction/cycle_10/pred_data.pt
       hash: md5
-      md5: 688918f310fd635713ad67e6de0745b2
-      size: 23388
+      md5: 0ce5bdff09f99c73bdbacc0216aa5112
+      size: 120538
     - path: src/stages/prepare_next_cycle_data.py
       hash: md5
-      md5: acad52c7a9fab1eb3d4e3c23a3e4f980
-      size: 5795
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
     - path: src/utilities/data_utils.py
       hash: md5
-      md5: 3ca0e8f2916f7ea0ea61550f56bdfd87
-      size: 28197
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
     - path: src/utilities/general_utils.py
       hash: md5
-      md5: 31772752b53623d8a83bcf95efa923e3
-      size: 1244
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
     params:
       params.yaml:
+        add_self_loops: true
         data.base:
           radius: 2500
           depth: -500
           n_samples: 1000
           spacing: 10
           n_features: 5
-          n_classes: 5
+          n_classes: 4
           class_names:
           threshold_binary: 0.5
-          min_samples_per_class: 100
-          connection_radius: 100
-          add_self_loops: true
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
           n_splits: 3
           test_size: 0.3
           calib_size: 0.5
           n_hotspots: 5
           n_hotspots_random: false
-          seed: 4353
+          seed: 6546
     outs:
     - path: results/data/base/cycle_10/base_data.pt
       hash: md5
-      md5: 8bfc18824ca0179a5f6b90be4660f450
-      size: 499804
+      md5: c832dfb4c060bd299aa7457b3f7a427b
+      size: 22686874
     - path: results/data/base/cycle_10/fold_data.pt
       hash: md5
-      md5: 57cdf0ec43799fabbcbcaaa74bec466c
-      size: 414356
+      md5: 87459005ee352cb6fbfffe414c9a2722
+      size: 15632320
     - path: results/data/base/cycle_10/test_data.pt
       hash: md5
-      md5: 53c306047dd438c78a69ecb53f3a585d
-      size: 400156
+      md5: 9e46ca95fe1301c972822dfe0127e6f0
+      size: 455198
   analyze_cycles_performance:
     cmd: python src/stages/analyze_cycles_performance.py
     deps:
     - path: results/evaluation/cycle_1/metrics.json
       hash: md5
-      md5: c08e02e17ec6ebfdd17ead626e97f52e
-      size: 405
+      md5: e87cd9a47b50da4e812a802fc7bed035
+      size: 408
     - path: results/evaluation/cycle_2/metrics.json
       hash: md5
-      md5: 58e545ec0bf0282f30d6f0820dcead60
-      size: 406
+      md5: 9c12baf6d6a93430a3bc38d60157c78e
+      size: 407
     - path: results/evaluation/cycle_3/metrics.json
       hash: md5
-      md5: e158541ea885c5d737b40dbe1172f3b6
-      size: 407
+      md5: 4ffc18d4b089d40977d249cbf954afe1
+      size: 409
     - path: results/prediction/cycle_1/metrics.json
       hash: md5
-      md5: 37a100f8299ede38c04a8e02e3c8466e
-      size: 94
+      md5: efd715f0c0e77fb821a8e19c4face075
+      size: 95
     - path: results/prediction/cycle_2/metrics.json
       hash: md5
-      md5: 5a1eec5781c02fd5c3279e603965fc87
-      size: 96
+      md5: 3f4d75a3d8203631c6f069f6012c1c80
+      size: 98
     - path: results/prediction/cycle_3/metrics.json
       hash: md5
-      md5: 9b78c7a89e1d9191572a25c25bc750be
-      size: 86
+      md5: 88c252b48dc076ca2c5dfa579c5d9bb6
+      size: 65
     - path: src/stages/analyze_cycles_performance.py
       hash: md5
       md5: b67d3e28be3a904a288069636b3c9a38
@@ -3080,8 +3087,3011 @@ stages:
       hash: md5
       md5: acdb644333b06780acbcaa706fcd075e
       size: 3022
+    params:
+      params.yaml:
+        cycles: 3
     outs:
     - path: results/cycles_performance_analysis/cycles_performance.png
       hash: md5
-      md5: 4e6f7aaebcab11762fa68e136663facd
-      size: 273149
+      md5: 02ea92626ebc6df686d1de878ad5bee0
+      size: 182901
+  train_cycle_11:
+    cmd: python src/stages/train.py --cycle 11 --model gat
+    deps:
+    - path: results/data/base/cycle_10/fold_data.pt
+      hash: md5
+      md5: 87459005ee352cb6fbfffe414c9a2722
+      size: 15632320
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_11
+      hash: md5
+      md5: 03be3f24b321378d4cc747856d711f2e.dir
+      size: 2382796
+      nfiles: 4
+  evaluate_cycle_11:
+    cmd: python src/stages/evaluate.py --cycle 11 --model gat
+    deps:
+    - path: results/data/base/cycle_10/test_data.pt
+      hash: md5
+      md5: 9e46ca95fe1301c972822dfe0127e6f0
+      size: 455198
+    - path: results/trained/cycle_11/model.pt
+      hash: md5
+      md5: 8e3239ebaddb69274796006a0b2e246d
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_11
+      hash: md5
+      md5: f80153265142e3aacea9110cce29149b.dir
+      size: 434725
+      nfiles: 6
+  generate_pred_data_cycle_11:
+    cmd: python src/stages/generate_pred_data.py --cycle 11
+    deps:
+    - path: results/data/base/cycle_10/base_data.pt
+      hash: md5
+      md5: c832dfb4c060bd299aa7457b3f7a427b
+      size: 22686874
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_11/pred_data.pt
+      hash: md5
+      md5: 05d1d8ac8c6cb181259bead276a5db23
+      size: 120538
+  predict_cycle_11:
+    cmd: python src/stages/predict.py --cycle 11 --model gat
+    deps:
+    - path: results/data/prediction/cycle_11/pred_data.pt
+      hash: md5
+      md5: 05d1d8ac8c6cb181259bead276a5db23
+      size: 120538
+    - path: results/evaluation/cycle_11/calibrator.pt
+      hash: md5
+      md5: 6d770484945799832a5f1f28bd8e18f1
+      size: 5737
+    - path: results/trained/cycle_11/model.pt
+      hash: md5
+      md5: 8e3239ebaddb69274796006a0b2e246d
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_11
+      hash: md5
+      md5: d883ee9d7082596a5d6df1d8fe4b6f49.dir
+      size: 187101
+      nfiles: 4
+  analyze_drift_cycle_11:
+    cmd: python src/stages/analyze_drift.py --cycle 11
+    deps:
+    - path: results/data/base/cycle_10/base_data.pt
+      hash: md5
+      md5: c832dfb4c060bd299aa7457b3f7a427b
+      size: 22686874
+    - path: results/data/prediction/cycle_11/pred_data.pt
+      hash: md5
+      md5: 05d1d8ac8c6cb181259bead276a5db23
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_11
+      hash: md5
+      md5: 39b8467177bec8f4e644f2f0069c0125.dir
+      size: 3309634
+      nfiles: 5
+  prepare_next_cycle_data_11:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 11
+    deps:
+    - path: results/data/base/cycle_10/base_data.pt
+      hash: md5
+      md5: c832dfb4c060bd299aa7457b3f7a427b
+      size: 22686874
+    - path: results/data/prediction/cycle_11/pred_data.pt
+      hash: md5
+      md5: 05d1d8ac8c6cb181259bead276a5db23
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_11/base_data.pt
+      hash: md5
+      md5: 9eafe26cf32be017e345cd579aacccc3
+      size: 25734362
+    - path: results/data/base/cycle_11/fold_data.pt
+      hash: md5
+      md5: c46acc870ae700425ad1ac334128b3c8
+      size: 17751232
+    - path: results/data/base/cycle_11/test_data.pt
+      hash: md5
+      md5: 1d088220eb31c9d89379dcb91cab29ff
+      size: 512606
+  train_cycle_12:
+    cmd: python src/stages/train.py --cycle 12 --model gat
+    deps:
+    - path: results/data/base/cycle_11/fold_data.pt
+      hash: md5
+      md5: c46acc870ae700425ad1ac334128b3c8
+      size: 17751232
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_12
+      hash: md5
+      md5: f1c05ccfc171240ebd3e91298968544d.dir
+      size: 2481103
+      nfiles: 4
+  evaluate_cycle_12:
+    cmd: python src/stages/evaluate.py --cycle 12 --model gat
+    deps:
+    - path: results/data/base/cycle_11/test_data.pt
+      hash: md5
+      md5: 1d088220eb31c9d89379dcb91cab29ff
+      size: 512606
+    - path: results/trained/cycle_12/model.pt
+      hash: md5
+      md5: e76d4f8b952bcee2fa61a49fe70847a5
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_12
+      hash: md5
+      md5: 434d32c35bd7e8fa78e7489431226246.dir
+      size: 437733
+      nfiles: 6
+  generate_pred_data_cycle_12:
+    cmd: python src/stages/generate_pred_data.py --cycle 12
+    deps:
+    - path: results/data/base/cycle_11/base_data.pt
+      hash: md5
+      md5: 9eafe26cf32be017e345cd579aacccc3
+      size: 25734362
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_12/pred_data.pt
+      hash: md5
+      md5: 68c07fad38e524c6b23e17e598973175
+      size: 120538
+  predict_cycle_12:
+    cmd: python src/stages/predict.py --cycle 12 --model gat
+    deps:
+    - path: results/data/prediction/cycle_12/pred_data.pt
+      hash: md5
+      md5: 68c07fad38e524c6b23e17e598973175
+      size: 120538
+    - path: results/evaluation/cycle_12/calibrator.pt
+      hash: md5
+      md5: 45dbc5e7085520a9c067d263295a68d0
+      size: 5929
+    - path: results/trained/cycle_12/model.pt
+      hash: md5
+      md5: e76d4f8b952bcee2fa61a49fe70847a5
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_12
+      hash: md5
+      md5: 1d82dafcb851f4d05e38083b2f058cca.dir
+      size: 187324
+      nfiles: 4
+  analyze_drift_cycle_12:
+    cmd: python src/stages/analyze_drift.py --cycle 12
+    deps:
+    - path: results/data/base/cycle_11/base_data.pt
+      hash: md5
+      md5: 9eafe26cf32be017e345cd579aacccc3
+      size: 25734362
+    - path: results/data/prediction/cycle_12/pred_data.pt
+      hash: md5
+      md5: 68c07fad38e524c6b23e17e598973175
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_12
+      hash: md5
+      md5: 8c7bf6c527d5465554c7b857a0d6bded.dir
+      size: 3237492
+      nfiles: 5
+  prepare_next_cycle_data_12:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 12
+    deps:
+    - path: results/data/base/cycle_11/base_data.pt
+      hash: md5
+      md5: 9eafe26cf32be017e345cd579aacccc3
+      size: 25734362
+    - path: results/data/prediction/cycle_12/pred_data.pt
+      hash: md5
+      md5: 68c07fad38e524c6b23e17e598973175
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_12/base_data.pt
+      hash: md5
+      md5: ffacb24c5623a8a838f727edc25b05f5
+      size: 28973914
+    - path: results/data/base/cycle_12/fold_data.pt
+      hash: md5
+      md5: d4841dc2b353383033d4a5727549a2ae
+      size: 20015616
+    - path: results/data/base/cycle_12/test_data.pt
+      hash: md5
+      md5: b9271de62936d45244e8f61f812c54b4
+      size: 577310
+  train_cycle_13:
+    cmd: python src/stages/train.py --cycle 13 --model gat
+    deps:
+    - path: results/data/base/cycle_12/fold_data.pt
+      hash: md5
+      md5: d4841dc2b353383033d4a5727549a2ae
+      size: 20015616
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_13
+      hash: md5
+      md5: 07b3018227c6fb6b1671103f44eb6b7f.dir
+      size: 2448810
+      nfiles: 4
+  evaluate_cycle_13:
+    cmd: python src/stages/evaluate.py --cycle 13 --model gat
+    deps:
+    - path: results/data/base/cycle_12/test_data.pt
+      hash: md5
+      md5: b9271de62936d45244e8f61f812c54b4
+      size: 577310
+    - path: results/trained/cycle_13/model.pt
+      hash: md5
+      md5: e1cacd3b1418ae6f101ef05822284df6
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_13
+      hash: md5
+      md5: 92eb23803cd6c0e4c68ac59965334d56.dir
+      size: 431228
+      nfiles: 6
+  generate_pred_data_cycle_13:
+    cmd: python src/stages/generate_pred_data.py --cycle 13
+    deps:
+    - path: results/data/base/cycle_12/base_data.pt
+      hash: md5
+      md5: ffacb24c5623a8a838f727edc25b05f5
+      size: 28973914
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_13/pred_data.pt
+      hash: md5
+      md5: c939766cccfa4504f7cf5cd07e75fa81
+      size: 120538
+  predict_cycle_13:
+    cmd: python src/stages/predict.py --cycle 13 --model gat
+    deps:
+    - path: results/data/prediction/cycle_13/pred_data.pt
+      hash: md5
+      md5: c939766cccfa4504f7cf5cd07e75fa81
+      size: 120538
+    - path: results/evaluation/cycle_13/calibrator.pt
+      hash: md5
+      md5: ec8dd30e14c4581f986d319f1bbc2e94
+      size: 6185
+    - path: results/trained/cycle_13/model.pt
+      hash: md5
+      md5: e1cacd3b1418ae6f101ef05822284df6
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_13
+      hash: md5
+      md5: ea2ef647865c0dce89b025129f4d203d.dir
+      size: 186215
+      nfiles: 4
+  analyze_drift_cycle_13:
+    cmd: python src/stages/analyze_drift.py --cycle 13
+    deps:
+    - path: results/data/base/cycle_12/base_data.pt
+      hash: md5
+      md5: ffacb24c5623a8a838f727edc25b05f5
+      size: 28973914
+    - path: results/data/prediction/cycle_13/pred_data.pt
+      hash: md5
+      md5: c939766cccfa4504f7cf5cd07e75fa81
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_13
+      hash: md5
+      md5: c455ccc48e6019d65f8b3afdf70c0439.dir
+      size: 3381468
+      nfiles: 5
+  prepare_next_cycle_data_13:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 13
+    deps:
+    - path: results/data/base/cycle_12/base_data.pt
+      hash: md5
+      md5: ffacb24c5623a8a838f727edc25b05f5
+      size: 28973914
+    - path: results/data/prediction/cycle_13/pred_data.pt
+      hash: md5
+      md5: c939766cccfa4504f7cf5cd07e75fa81
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_13/base_data.pt
+      hash: md5
+      md5: c1b111be3eab24adc5cb7e22053224bb
+      size: 32405402
+    - path: results/data/base/cycle_13/fold_data.pt
+      hash: md5
+      md5: 6dae585bd2d2f16a37b18035eb4eb93a
+      size: 22247424
+    - path: results/data/base/cycle_13/test_data.pt
+      hash: md5
+      md5: 3a70ffb2773aceb82d22997c1e5481f8
+      size: 643294
+  train_cycle_14:
+    cmd: python src/stages/train.py --cycle 14 --model gat
+    deps:
+    - path: results/data/base/cycle_13/fold_data.pt
+      hash: md5
+      md5: 6dae585bd2d2f16a37b18035eb4eb93a
+      size: 22247424
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_14
+      hash: md5
+      md5: ae7269013e4906687ffc9c7209bc1408.dir
+      size: 2441826
+      nfiles: 4
+  evaluate_cycle_14:
+    cmd: python src/stages/evaluate.py --cycle 14 --model gat
+    deps:
+    - path: results/data/base/cycle_13/test_data.pt
+      hash: md5
+      md5: 3a70ffb2773aceb82d22997c1e5481f8
+      size: 643294
+    - path: results/trained/cycle_14/model.pt
+      hash: md5
+      md5: 1b64554dda93893b196b58fdbbb94146
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_14
+      hash: md5
+      md5: 11406fdd921afac01bf190d2883d95c7.dir
+      size: 449905
+      nfiles: 6
+  generate_pred_data_cycle_14:
+    cmd: python src/stages/generate_pred_data.py --cycle 14
+    deps:
+    - path: results/data/base/cycle_13/base_data.pt
+      hash: md5
+      md5: c1b111be3eab24adc5cb7e22053224bb
+      size: 32405402
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_14/pred_data.pt
+      hash: md5
+      md5: 5beb57d578a10c004fb6815926653d6c
+      size: 120538
+  predict_cycle_14:
+    cmd: python src/stages/predict.py --cycle 14 --model gat
+    deps:
+    - path: results/data/prediction/cycle_14/pred_data.pt
+      hash: md5
+      md5: 5beb57d578a10c004fb6815926653d6c
+      size: 120538
+    - path: results/evaluation/cycle_14/calibrator.pt
+      hash: md5
+      md5: fe8f2058a3f592226ad3b4450fd2a8aa
+      size: 6441
+    - path: results/trained/cycle_14/model.pt
+      hash: md5
+      md5: 1b64554dda93893b196b58fdbbb94146
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_14
+      hash: md5
+      md5: 09457984b0b77e537548fcd7ca59a56e.dir
+      size: 191117
+      nfiles: 4
+  analyze_drift_cycle_14:
+    cmd: python src/stages/analyze_drift.py --cycle 14
+    deps:
+    - path: results/data/base/cycle_13/base_data.pt
+      hash: md5
+      md5: c1b111be3eab24adc5cb7e22053224bb
+      size: 32405402
+    - path: results/data/prediction/cycle_14/pred_data.pt
+      hash: md5
+      md5: 5beb57d578a10c004fb6815926653d6c
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_14
+      hash: md5
+      md5: 96f9274937ec3c892355c7d5a7819b5c.dir
+      size: 3412863
+      nfiles: 5
+  prepare_next_cycle_data_14:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 14
+    deps:
+    - path: results/data/base/cycle_13/base_data.pt
+      hash: md5
+      md5: c1b111be3eab24adc5cb7e22053224bb
+      size: 32405402
+    - path: results/data/prediction/cycle_14/pred_data.pt
+      hash: md5
+      md5: 5beb57d578a10c004fb6815926653d6c
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_14/base_data.pt
+      hash: md5
+      md5: 978af6302815da42d7b9faebc6180f1f
+      size: 36028954
+    - path: results/data/base/cycle_14/fold_data.pt
+      hash: md5
+      md5: d5a568b65b0462d828ff268d575cbdbb
+      size: 24810048
+    - path: results/data/base/cycle_14/test_data.pt
+      hash: md5
+      md5: 8696d677c7c8425256ab6c4dfc2704e9
+      size: 714398
+  train_cycle_15:
+    cmd: python src/stages/train.py --cycle 15 --model gat
+    deps:
+    - path: results/data/base/cycle_14/fold_data.pt
+      hash: md5
+      md5: d5a568b65b0462d828ff268d575cbdbb
+      size: 24810048
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_15
+      hash: md5
+      md5: e60d6fb0146499cd9b60424bb6e22f66.dir
+      size: 2503877
+      nfiles: 4
+  evaluate_cycle_15:
+    cmd: python src/stages/evaluate.py --cycle 15 --model gat
+    deps:
+    - path: results/data/base/cycle_14/test_data.pt
+      hash: md5
+      md5: 8696d677c7c8425256ab6c4dfc2704e9
+      size: 714398
+    - path: results/trained/cycle_15/model.pt
+      hash: md5
+      md5: 474cb83db5f843dc35030272efdc5d4a
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_15
+      hash: md5
+      md5: 0aee46a8071cc7120601177e5d3b5bc1.dir
+      size: 457593
+      nfiles: 6
+  generate_pred_data_cycle_15:
+    cmd: python src/stages/generate_pred_data.py --cycle 15
+    deps:
+    - path: results/data/base/cycle_14/base_data.pt
+      hash: md5
+      md5: 978af6302815da42d7b9faebc6180f1f
+      size: 36028954
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_15/pred_data.pt
+      hash: md5
+      md5: 120ed3b969cc73f2f5502d57ab4e0012
+      size: 120538
+  predict_cycle_15:
+    cmd: python src/stages/predict.py --cycle 15 --model gat
+    deps:
+    - path: results/data/prediction/cycle_15/pred_data.pt
+      hash: md5
+      md5: 120ed3b969cc73f2f5502d57ab4e0012
+      size: 120538
+    - path: results/evaluation/cycle_15/calibrator.pt
+      hash: md5
+      md5: 1ec1c32e2ede6cf1a9165f077bc9fed0
+      size: 6697
+    - path: results/trained/cycle_15/model.pt
+      hash: md5
+      md5: 474cb83db5f843dc35030272efdc5d4a
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_15
+      hash: md5
+      md5: 01cfe0ca88b080908fa5c92f522e4381.dir
+      size: 187052
+      nfiles: 4
+  analyze_drift_cycle_15:
+    cmd: python src/stages/analyze_drift.py --cycle 15
+    deps:
+    - path: results/data/base/cycle_14/base_data.pt
+      hash: md5
+      md5: 978af6302815da42d7b9faebc6180f1f
+      size: 36028954
+    - path: results/data/prediction/cycle_15/pred_data.pt
+      hash: md5
+      md5: 120ed3b969cc73f2f5502d57ab4e0012
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_15
+      hash: md5
+      md5: 5c9b0915fd40b499e857d29d7f11adee.dir
+      size: 3192599
+      nfiles: 5
+  prepare_next_cycle_data_15:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 15
+    deps:
+    - path: results/data/base/cycle_14/base_data.pt
+      hash: md5
+      md5: 978af6302815da42d7b9faebc6180f1f
+      size: 36028954
+    - path: results/data/prediction/cycle_15/pred_data.pt
+      hash: md5
+      md5: 120ed3b969cc73f2f5502d57ab4e0012
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_15/base_data.pt
+      hash: md5
+      md5: affe3ad5f8fcbf08f332fa996c586eff
+      size: 39844442
+    - path: results/data/base/cycle_15/fold_data.pt
+      hash: md5
+      md5: e225925c97b0b0670f6b12d44670584d
+      size: 27397184
+    - path: results/data/base/cycle_15/test_data.pt
+      hash: md5
+      md5: fd25de676dae348a56d4e9451bed4813
+      size: 790110
+  train_cycle_16:
+    cmd: python src/stages/train.py --cycle 16 --model gat
+    deps:
+    - path: results/data/base/cycle_15/fold_data.pt
+      hash: md5
+      md5: e225925c97b0b0670f6b12d44670584d
+      size: 27397184
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_16
+      hash: md5
+      md5: 94667c8283730c1a9f412dfc1925a4cf.dir
+      size: 2519314
+      nfiles: 4
+  evaluate_cycle_16:
+    cmd: python src/stages/evaluate.py --cycle 16 --model gat
+    deps:
+    - path: results/data/base/cycle_15/test_data.pt
+      hash: md5
+      md5: fd25de676dae348a56d4e9451bed4813
+      size: 790110
+    - path: results/trained/cycle_16/model.pt
+      hash: md5
+      md5: 8c16cfe1b6490533edababd7b0fcb050
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_16
+      hash: md5
+      md5: 1d185b891d996ca42417b76d6cfa0840.dir
+      size: 454319
+      nfiles: 6
+  generate_pred_data_cycle_16:
+    cmd: python src/stages/generate_pred_data.py --cycle 16
+    deps:
+    - path: results/data/base/cycle_15/base_data.pt
+      hash: md5
+      md5: affe3ad5f8fcbf08f332fa996c586eff
+      size: 39844442
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_16/pred_data.pt
+      hash: md5
+      md5: 97346b0c9a20149a366a61bb4587d5c4
+      size: 120538
+  predict_cycle_16:
+    cmd: python src/stages/predict.py --cycle 16 --model gat
+    deps:
+    - path: results/data/prediction/cycle_16/pred_data.pt
+      hash: md5
+      md5: 97346b0c9a20149a366a61bb4587d5c4
+      size: 120538
+    - path: results/evaluation/cycle_16/calibrator.pt
+      hash: md5
+      md5: 765d57ab135fb9a1ba41bc4593584e55
+      size: 6889
+    - path: results/trained/cycle_16/model.pt
+      hash: md5
+      md5: 8c16cfe1b6490533edababd7b0fcb050
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_16
+      hash: md5
+      md5: 515331eb64adad6b03925d1a98ef862a.dir
+      size: 193675
+      nfiles: 4
+  analyze_drift_cycle_16:
+    cmd: python src/stages/analyze_drift.py --cycle 16
+    deps:
+    - path: results/data/base/cycle_15/base_data.pt
+      hash: md5
+      md5: affe3ad5f8fcbf08f332fa996c586eff
+      size: 39844442
+    - path: results/data/prediction/cycle_16/pred_data.pt
+      hash: md5
+      md5: 97346b0c9a20149a366a61bb4587d5c4
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_16
+      hash: md5
+      md5: aed2ac55893abb8b27a06261602d0a8a.dir
+      size: 3447038
+      nfiles: 5
+  prepare_next_cycle_data_16:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 16
+    deps:
+    - path: results/data/base/cycle_15/base_data.pt
+      hash: md5
+      md5: affe3ad5f8fcbf08f332fa996c586eff
+      size: 39844442
+    - path: results/data/prediction/cycle_16/pred_data.pt
+      hash: md5
+      md5: 97346b0c9a20149a366a61bb4587d5c4
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_16/base_data.pt
+      hash: md5
+      md5: de9818bc8451de8f548a1d5530e37721
+      size: 43851994
+    - path: results/data/base/cycle_16/fold_data.pt
+      hash: md5
+      md5: f518ed8a0c667310b51dac61351739cd
+      size: 30141376
+    - path: results/data/base/cycle_16/test_data.pt
+      hash: md5
+      md5: e070e4dedc2201e79f0d0d283ce6cf1a
+      size: 863518
+  train_cycle_17:
+    cmd: python src/stages/train.py --cycle 17 --model gat
+    deps:
+    - path: results/data/base/cycle_16/fold_data.pt
+      hash: md5
+      md5: f518ed8a0c667310b51dac61351739cd
+      size: 30141376
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_17
+      hash: md5
+      md5: 71852aa9cb985db0f0851e9ca68aa486.dir
+      size: 2461998
+      nfiles: 4
+  evaluate_cycle_17:
+    cmd: python src/stages/evaluate.py --cycle 17 --model gat
+    deps:
+    - path: results/data/base/cycle_16/test_data.pt
+      hash: md5
+      md5: e070e4dedc2201e79f0d0d283ce6cf1a
+      size: 863518
+    - path: results/trained/cycle_17/model.pt
+      hash: md5
+      md5: 9aeba26faa01986c436aaa6bb58640ce
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_17
+      hash: md5
+      md5: be764c6e929cf4e322c09cd5d643b299.dir
+      size: 444501
+      nfiles: 6
+  generate_pred_data_cycle_17:
+    cmd: python src/stages/generate_pred_data.py --cycle 17
+    deps:
+    - path: results/data/base/cycle_16/base_data.pt
+      hash: md5
+      md5: de9818bc8451de8f548a1d5530e37721
+      size: 43851994
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_17/pred_data.pt
+      hash: md5
+      md5: 1470a8f20f96d54248b25d4585c46051
+      size: 120538
+  predict_cycle_17:
+    cmd: python src/stages/predict.py --cycle 17 --model gat
+    deps:
+    - path: results/data/prediction/cycle_17/pred_data.pt
+      hash: md5
+      md5: 1470a8f20f96d54248b25d4585c46051
+      size: 120538
+    - path: results/evaluation/cycle_17/calibrator.pt
+      hash: md5
+      md5: a084c24e13ce6c375cc4a8fe50548578
+      size: 7145
+    - path: results/trained/cycle_17/model.pt
+      hash: md5
+      md5: 9aeba26faa01986c436aaa6bb58640ce
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_17
+      hash: md5
+      md5: 5ce746aafc815344473c065d255a60c5.dir
+      size: 193362
+      nfiles: 4
+  analyze_drift_cycle_17:
+    cmd: python src/stages/analyze_drift.py --cycle 17
+    deps:
+    - path: results/data/base/cycle_16/base_data.pt
+      hash: md5
+      md5: de9818bc8451de8f548a1d5530e37721
+      size: 43851994
+    - path: results/data/prediction/cycle_17/pred_data.pt
+      hash: md5
+      md5: 1470a8f20f96d54248b25d4585c46051
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_17
+      hash: md5
+      md5: 3f11cdc62f4ef495ec6741df5fc61f56.dir
+      size: 3425868
+      nfiles: 5
+  prepare_next_cycle_data_17:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 17
+    deps:
+    - path: results/data/base/cycle_16/base_data.pt
+      hash: md5
+      md5: de9818bc8451de8f548a1d5530e37721
+      size: 43851994
+    - path: results/data/prediction/cycle_17/pred_data.pt
+      hash: md5
+      md5: 1470a8f20f96d54248b25d4585c46051
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_17/base_data.pt
+      hash: md5
+      md5: d5e3566998c4ec6437c31f87d063d487
+      size: 48051482
+    - path: results/data/base/cycle_17/fold_data.pt
+      hash: md5
+      md5: ec3de2c7fd0761ab0e0459be144c904a
+      size: 32936640
+    - path: results/data/base/cycle_17/test_data.pt
+      hash: md5
+      md5: 050318420c413c99eb2aef6b9f2b9e13
+      size: 954014
+  train_cycle_18:
+    cmd: python src/stages/train.py --cycle 18 --model gat
+    deps:
+    - path: results/data/base/cycle_17/fold_data.pt
+      hash: md5
+      md5: ec3de2c7fd0761ab0e0459be144c904a
+      size: 32936640
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_18
+      hash: md5
+      md5: 825a158379eb60fd1a07680b7503c46d.dir
+      size: 2419277
+      nfiles: 4
+  evaluate_cycle_18:
+    cmd: python src/stages/evaluate.py --cycle 18 --model gat
+    deps:
+    - path: results/data/base/cycle_17/test_data.pt
+      hash: md5
+      md5: 050318420c413c99eb2aef6b9f2b9e13
+      size: 954014
+    - path: results/trained/cycle_18/model.pt
+      hash: md5
+      md5: e6ec5d7de903e41e67bae9a588e9752c
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_18
+      hash: md5
+      md5: 3f702421d56759350c6ce4064cf4ccfa.dir
+      size: 439645
+      nfiles: 6
+  generate_pred_data_cycle_18:
+    cmd: python src/stages/generate_pred_data.py --cycle 18
+    deps:
+    - path: results/data/base/cycle_17/base_data.pt
+      hash: md5
+      md5: d5e3566998c4ec6437c31f87d063d487
+      size: 48051482
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_18/pred_data.pt
+      hash: md5
+      md5: 93e1fec94c038ec2cbd1d7ab0d97ee33
+      size: 120538
+  predict_cycle_18:
+    cmd: python src/stages/predict.py --cycle 18 --model gat
+    deps:
+    - path: results/data/prediction/cycle_18/pred_data.pt
+      hash: md5
+      md5: 93e1fec94c038ec2cbd1d7ab0d97ee33
+      size: 120538
+    - path: results/evaluation/cycle_18/calibrator.pt
+      hash: md5
+      md5: 07538c114f2192d5a77b70b819906554
+      size: 7401
+    - path: results/trained/cycle_18/model.pt
+      hash: md5
+      md5: e6ec5d7de903e41e67bae9a588e9752c
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_18
+      hash: md5
+      md5: 5b7e3725240cef07bc78625eb673e4ed.dir
+      size: 192223
+      nfiles: 4
+  analyze_drift_cycle_18:
+    cmd: python src/stages/analyze_drift.py --cycle 18
+    deps:
+    - path: results/data/base/cycle_17/base_data.pt
+      hash: md5
+      md5: d5e3566998c4ec6437c31f87d063d487
+      size: 48051482
+    - path: results/data/prediction/cycle_18/pred_data.pt
+      hash: md5
+      md5: 93e1fec94c038ec2cbd1d7ab0d97ee33
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_18
+      hash: md5
+      md5: 3ac31a71cacc61188486a9bbdecf3f9c.dir
+      size: 3465497
+      nfiles: 5
+  prepare_next_cycle_data_18:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 18
+    deps:
+    - path: results/data/base/cycle_17/base_data.pt
+      hash: md5
+      md5: d5e3566998c4ec6437c31f87d063d487
+      size: 48051482
+    - path: results/data/prediction/cycle_18/pred_data.pt
+      hash: md5
+      md5: 93e1fec94c038ec2cbd1d7ab0d97ee33
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_18/base_data.pt
+      hash: md5
+      md5: e017822b07fe4c49c7177bbb06c4703a
+      size: 52443034
+    - path: results/data/base/cycle_18/fold_data.pt
+      hash: md5
+      md5: 72b18f363597f0c37645e8b0012221dc
+      size: 35943360
+    - path: results/data/base/cycle_18/test_data.pt
+      hash: md5
+      md5: b0966da0de61d6096dd9e55f4d89175a
+      size: 1048606
+  train_cycle_19:
+    cmd: python src/stages/train.py --cycle 19 --model gat
+    deps:
+    - path: results/data/base/cycle_18/fold_data.pt
+      hash: md5
+      md5: 72b18f363597f0c37645e8b0012221dc
+      size: 35943360
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_19
+      hash: md5
+      md5: 50b3b7302935fbfd477ca57ba6006e96.dir
+      size: 2354956
+      nfiles: 4
+  evaluate_cycle_19:
+    cmd: python src/stages/evaluate.py --cycle 19 --model gat
+    deps:
+    - path: results/data/base/cycle_18/test_data.pt
+      hash: md5
+      md5: b0966da0de61d6096dd9e55f4d89175a
+      size: 1048606
+    - path: results/trained/cycle_19/model.pt
+      hash: md5
+      md5: 1d060097cf4ed9416ab8b0e8247ba107
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_19
+      hash: md5
+      md5: 7f2993ef64787fd8b8b9f42be4cdf065.dir
+      size: 449713
+      nfiles: 6
+  generate_pred_data_cycle_19:
+    cmd: python src/stages/generate_pred_data.py --cycle 19
+    deps:
+    - path: results/data/base/cycle_18/base_data.pt
+      hash: md5
+      md5: e017822b07fe4c49c7177bbb06c4703a
+      size: 52443034
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_19/pred_data.pt
+      hash: md5
+      md5: 679c032bcc865f3bda3a4dea1ca5380a
+      size: 120538
+  predict_cycle_19:
+    cmd: python src/stages/predict.py --cycle 19 --model gat
+    deps:
+    - path: results/data/prediction/cycle_19/pred_data.pt
+      hash: md5
+      md5: 679c032bcc865f3bda3a4dea1ca5380a
+      size: 120538
+    - path: results/evaluation/cycle_19/calibrator.pt
+      hash: md5
+      md5: bd69a2561ce045dde84510c2b6a771f6
+      size: 7657
+    - path: results/trained/cycle_19/model.pt
+      hash: md5
+      md5: 1d060097cf4ed9416ab8b0e8247ba107
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_19
+      hash: md5
+      md5: 27f5891ab447098578d8df04fa44e983.dir
+      size: 189244
+      nfiles: 4
+  analyze_drift_cycle_19:
+    cmd: python src/stages/analyze_drift.py --cycle 19
+    deps:
+    - path: results/data/base/cycle_18/base_data.pt
+      hash: md5
+      md5: e017822b07fe4c49c7177bbb06c4703a
+      size: 52443034
+    - path: results/data/prediction/cycle_19/pred_data.pt
+      hash: md5
+      md5: 679c032bcc865f3bda3a4dea1ca5380a
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_19
+      hash: md5
+      md5: 37ca415150a3d2563abf600dc680b36e.dir
+      size: 3226966
+      nfiles: 5
+  prepare_next_cycle_data_19:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 19
+    deps:
+    - path: results/data/base/cycle_18/base_data.pt
+      hash: md5
+      md5: e017822b07fe4c49c7177bbb06c4703a
+      size: 52443034
+    - path: results/data/prediction/cycle_19/pred_data.pt
+      hash: md5
+      md5: 679c032bcc865f3bda3a4dea1ca5380a
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_19/base_data.pt
+      hash: md5
+      md5: b4589e254be37b6c6a56a0a99424246e
+      size: 57026522
+    - path: results/data/base/cycle_19/fold_data.pt
+      hash: md5
+      md5: 535ab60b157d738065c4ddc99bbd23fb
+      size: 39188992
+    - path: results/data/base/cycle_19/test_data.pt
+      hash: md5
+      md5: 1c9d14522707860e5ff904245bdfd2d3
+      size: 1121950
+  train_cycle_20:
+    cmd: python src/stages/train.py --cycle 20 --model gat
+    deps:
+    - path: results/data/base/cycle_19/fold_data.pt
+      hash: md5
+      md5: 535ab60b157d738065c4ddc99bbd23fb
+      size: 39188992
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/train.py
+      hash: md5
+      md5: 3ae7e292308e446365f544bba1fdc256
+      size: 3666
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/train_utils.py
+      hash: md5
+      md5: d3f375293980b5a56980eb515da4e1e8
+      size: 11309
+    params:
+      params.yaml:
+        add_self_loops: true
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+        train:
+          n_epochs: 1000
+          lr: 0.0005
+          max_grad_norm: 1.0
+          weight_decay_adam_optimizer: 0.0005
+          factor_learning_rate_scheduler: 0.5
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 50
+          min_delta_early_stopping: 0.001
+    outs:
+    - path: results/trained/cycle_20
+      hash: md5
+      md5: fca2240449c1df58e7324f85d7bc1238.dir
+      size: 2412989
+      nfiles: 4
+  evaluate_cycle_20:
+    cmd: python src/stages/evaluate.py --cycle 20 --model gat
+    deps:
+    - path: results/data/base/cycle_19/test_data.pt
+      hash: md5
+      md5: 1c9d14522707860e5ff904245bdfd2d3
+      size: 1121950
+    - path: results/trained/cycle_20/model.pt
+      hash: md5
+      md5: 22063ccfd00fa69a6abcf27d87c29d91
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/evaluate.py
+      hash: md5
+      md5: 657c016055b45987fde2814f609cfaf2
+      size: 4242
+    - path: src/utilities/eval_utils.py
+      hash: md5
+      md5: be44ff6120ee3e3a52774dacac975b9b
+      size: 14657
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        evaluate:
+          initial_temperature: 1.2
+          n_bins: 10
+          calibration_method: dirichlet
+          n_epochs: 1000
+          lr: 0.0001
+          weight_decay_adam_optimizer: 0.0005
+          verbose: true
+          factor_learning_rate_scheduler: 0.4
+          patience_learning_rate_scheduler: 20
+          patience_early_stopping: 100
+          min_delta_early_stopping: 0.001
+          reg_lambda: 0.01
+          reg_mu: 0.01
+          eps: 1e-08
+          seed: 40
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/evaluation/cycle_20
+      hash: md5
+      md5: 7bffa99b718c81165365e5ae6a9e7b20.dir
+      size: 441483
+      nfiles: 6
+  generate_pred_data_cycle_20:
+    cmd: python src/stages/generate_pred_data.py --cycle 20
+    deps:
+    - path: results/data/base/cycle_19/base_data.pt
+      hash: md5
+      md5: b4589e254be37b6c6a56a0a99424246e
+      size: 57026522
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/generate_pred_data.py
+      hash: md5
+      md5: 5a2719e8099c3f99d4cb4a94bd07fef0
+      size: 3921
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        data.pred:
+          n_samples: 200
+          min_samples_per_class:
+          seed:
+    outs:
+    - path: results/data/prediction/cycle_20/pred_data.pt
+      hash: md5
+      md5: 52e6e6a88c26cd3efef0e84bfb11f368
+      size: 120538
+  predict_cycle_20:
+    cmd: python src/stages/predict.py --cycle 20 --model gat
+    deps:
+    - path: results/data/prediction/cycle_20/pred_data.pt
+      hash: md5
+      md5: 52e6e6a88c26cd3efef0e84bfb11f368
+      size: 120538
+    - path: results/evaluation/cycle_20/calibrator.pt
+      hash: md5
+      md5: 16b8ac125461438407917a1516a602ca
+      size: 7849
+    - path: results/trained/cycle_20/model.pt
+      hash: md5
+      md5: 22063ccfd00fa69a6abcf27d87c29d91
+      size: 1092890
+    - path: src/models/
+      hash: md5
+      md5: 65e103299243a348a19abf295110d172.dir
+      size: 26668
+      nfiles: 10
+    - path: src/stages/predict.py
+      hash: md5
+      md5: ae9bf371e6f2299c8349050b22901d6c
+      size: 3505
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    - path: src/utilities/pred_utils.py
+      hash: md5
+      md5: 29fb7644ac2c741e966e6e73832ff106
+      size: 3745
+    params:
+      params.yaml:
+        models.gat:
+          hidden_channels: 64
+          n_layers: 3
+          n_heads: 5
+          dropout: 0.1
+          batch_norm: true
+          negative_slope: 0.2
+          bias: true
+          residual: true
+    outs:
+    - path: results/prediction/cycle_20
+      hash: md5
+      md5: f47a3925a9a8ed9fdb99974f018d9797.dir
+      size: 187617
+      nfiles: 4
+  analyze_drift_cycle_20:
+    cmd: python src/stages/analyze_drift.py --cycle 20
+    deps:
+    - path: results/data/base/cycle_19/base_data.pt
+      hash: md5
+      md5: b4589e254be37b6c6a56a0a99424246e
+      size: 57026522
+    - path: results/data/prediction/cycle_20/pred_data.pt
+      hash: md5
+      md5: 52e6e6a88c26cd3efef0e84bfb11f368
+      size: 120538
+    - path: src/stages/analyze_drift.py
+      hash: md5
+      md5: bc9b9a13f4ba5df3dc11319fde218c41
+      size: 3323
+    - path: src/utilities/drift_detection_utils.py
+      hash: md5
+      md5: 7e23fac31afdf9a6cd21ad7474a66e87
+      size: 30054
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        analyze_drift:
+          n_permutations: 1000
+          use_max_sliced_wasserstein:
+          n_projections: 100
+          use_sinkhorn_wasserstein:
+          sinkhorn_wasserstein_reg: 0.1
+          gamma:
+          early_stopping:
+            enabled: true
+            confidence_threshold: 0.01
+            min_permutations: 100
+    outs:
+    - path: results/drift_analysis/cycle_20
+      hash: md5
+      md5: 4cc553023888f73c230e0a8f32bd7d6d.dir
+      size: 3496026
+      nfiles: 5
+  prepare_next_cycle_data_20:
+    cmd: python src/stages/prepare_next_cycle_data.py --cycle 20
+    deps:
+    - path: results/data/base/cycle_19/base_data.pt
+      hash: md5
+      md5: b4589e254be37b6c6a56a0a99424246e
+      size: 57026522
+    - path: results/data/prediction/cycle_20/pred_data.pt
+      hash: md5
+      md5: 52e6e6a88c26cd3efef0e84bfb11f368
+      size: 120538
+    - path: src/stages/prepare_next_cycle_data.py
+      hash: md5
+      md5: 355f0267811931b5e429e3265aa0a001
+      size: 6821
+    - path: src/utilities/data_utils.py
+      hash: md5
+      md5: 363982f4f1dff01da720eb098a3f22fd
+      size: 47173
+    - path: src/utilities/general_utils.py
+      hash: md5
+      md5: b47bc717702c4f7f12edd8c0eaf137fb
+      size: 1631
+    params:
+      params.yaml:
+        add_self_loops: true
+        data.base:
+          radius: 2500
+          depth: -500
+          n_samples: 1000
+          spacing: 10
+          n_features: 5
+          n_classes: 4
+          class_names:
+          threshold_binary: 0.5
+          min_samples_per_class: 50
+          k_nearest:
+          connection_radius:
+          distance_percentile: 5
+          n_splits: 3
+          test_size: 0.3
+          calib_size: 0.5
+          n_hotspots: 5
+          n_hotspots_random: false
+          seed: 6546
+    outs:
+    - path: results/data/base/cycle_20/base_data.pt
+      hash: md5
+      md5: 121e3defb0e819db0e5e6bdf27ae40ca
+      size: 61802074
+    - path: results/data/base/cycle_20/fold_data.pt
+      hash: md5
+      md5: 87ff569468a86ab1784ae30af2c36dec
+      size: 42338816
+    - path: results/data/base/cycle_20/test_data.pt
+      hash: md5
+      md5: 12c49b818d6116694fe3693bc8d7b13d
+      size: 1198430

@@ -28,6 +28,7 @@ def generate_performance_analysis_stage(cycles):
                 "src/utilities/cycles_performance_utils.py",
                 *metrics_files,
             ],
+            "params": ["cycles"],
             "outs": ["results/cycles_performance_analysis/cycles_performance.png"],
         }
     }
@@ -39,10 +40,19 @@ def generate_fine_grained_dvc_yaml():
     cycles = range(params["cycles"] + 1)[1:]  # Skip cycle 0 (bootstrap)
     model = params["default_model"]
 
+    # Add cleanup command to bootstrap stage
+    cleanup_cmd = " && ".join(
+        [
+            "rm -rf results/*",  # Clear all results first
+            f"find results -type d -name 'cycle_*' | grep -E 'cycle_[0-9]+$' | awk -F'cycle_' '{{if ($2 > {params['cycles']}) system(\"rm -rf \"$0)}}'",
+            "python src/stages/generate_base_data.py --cycle 0",  # Original bootstrap command
+        ]
+    )
+
     stages = {
         "stages": {
             "bootstrap": {
-                "cmd": "rm -rf results/* && python src/stages/generate_base_data.py --cycle 0",
+                "cmd": cleanup_cmd,
                 "deps": [
                     "src/stages/generate_base_data.py",
                     "src/utilities/data_utils.py",

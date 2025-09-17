@@ -133,10 +133,10 @@ def data_tab():
     st.subheader("Generated Data")
     data_path = Path(f"results/data/base/cycle_{cycle_num}")
     if data_path.exists():
-        show_html_files(data_path)
         plot_files = list(data_path.glob("*.png"))
         for plot in plot_files:
             st.image(str(plot))
+        show_html_files(data_path)
     else:
         st.warning(f"Base data for cycle {cycle_num} not found.")
 
@@ -209,7 +209,11 @@ def prediction_tab():
     st.subheader("Prediction Results")
     pred_path = Path(f"results/prediction/cycle_{cycle_num}")
     if pred_path.exists():
-        for img_file in pred_path.glob("*.png"):
+        img_files = sorted(
+            pred_path.glob("*.png"),
+            key=lambda x: "0" if x.name == "confusion_matrix.png" else "1",
+        )
+        for img_file in img_files:
             st.image(str(img_file))
         csv_file = pred_path / "predictions.csv"
         if csv_file.exists():

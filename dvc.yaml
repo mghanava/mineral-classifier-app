@@ -1,6 +1,8 @@
 stages:
   bootstrap:
-    cmd: rm -rf results/* && python src/stages/generate_base_data.py --cycle 0
+    cmd: rm -rf results/* && find results -type d -name 'cycle_*' | grep -E 'cycle_[0-9]+$'
+      | awk -F'cycle_' '{if ($2 > 3) system("rm -rf "$0)}' && python src/stages/generate_base_data.py
+      --cycle 0
     deps:
     - src/stages/generate_base_data.py
     - src/utilities/data_utils.py
@@ -269,5 +271,7 @@ stages:
     - results/prediction/cycle_2/metrics.json
     - results/evaluation/cycle_3/metrics.json
     - results/prediction/cycle_3/metrics.json
+    params:
+    - cycles
     outs:
     - results/cycles_performance_analysis/cycles_performance.png
