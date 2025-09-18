@@ -1,3 +1,10 @@
+"""DVC Pipeline Dashboard interface for ML workflow management.
+
+This module provides a Streamlit-based web interface to manage and monitor
+a DVC pipeline for machine learning workflows, including data generation,
+model training, evaluation, prediction, and drift analysis.
+"""
+
 import json
 import subprocess
 from pathlib import Path
@@ -36,6 +43,8 @@ def run_command(command):
     output = ""
     output_placeholder = st.empty()
     while True:
+        if process.stdout is None:
+            break
         line = process.stdout.readline()
         if not line:
             break
@@ -64,6 +73,7 @@ def show_html_files(base_path):
 
 
 def params_tab():
+    """Display and edit parameters from params.yaml and provide options to run the DVC pipeline."""
     st.header("Parameters")
     st.write(
         "View and edit `params.yaml`. After saving changes, you can regenerate the DVC pipeline and run it from here."
@@ -108,7 +118,7 @@ def params_tab():
             "This will regenerate `dvc.yaml` based on the saved parameters and execute the entire pipeline."
         )
         if st.button("Generate `dvc.yaml` and Run Full Pipeline"):
-            run_command(["python", "generate_dvc.py"])
+            run_command(["python", "setup_dvc.py"])
             run_command(["dvc", "repro"])
 
     except FileNotFoundError:
@@ -116,6 +126,11 @@ def params_tab():
 
 
 def data_tab():
+    """Display and manage data generation for different cycles in the DVC pipeline dashboard.
+
+    This tab allows users to view generated base data for each cycle and run the bootstrap stage
+    to generate initial data (cycle 0).
+    """
     st.header("Data Generation")
     st.write("View the generated base data for each cycle.")
 
@@ -142,6 +157,11 @@ def data_tab():
 
 
 def train_tab():
+    """Display and manage model training for different cycles in the DVC pipeline dashboard.
+
+    This tab allows users to run the training stage for each cycle and view the training results,
+    including any generated plots.
+    """
     st.header("Training")
     st.write("This stage trains the model for each cycle.")
 
@@ -163,6 +183,11 @@ def train_tab():
 
 
 def evaluation_tab():
+    """Display and manage model evaluation for different cycles in the DVC pipeline dashboard.
+
+    This tab allows users to run the evaluation stage for each cycle and view the evaluation results,
+    including metrics and generated plots.
+    """
     st.header("Evaluation")
     st.write("This stage evaluates the trained model for each cycle.")
 
@@ -192,6 +217,11 @@ def evaluation_tab():
 
 
 def prediction_tab():
+    """Display and manage predictions for different cycles in the DVC pipeline dashboard.
+
+    This tab allows users to run the prediction stage for each cycle and view the results,
+    including visualizations and predicted values.
+    """
     st.header("Prediction")
     st.write("This stage runs predictions on new data for each cycle.")
 
@@ -223,6 +253,11 @@ def prediction_tab():
 
 
 def drift_analysis_tab():
+    """Display and manage drift analysis for different cycles in the DVC pipeline dashboard.
+
+    This tab allows users to run the drift analysis stage for each cycle and view the results,
+    including visualizations and statistical measures of data drift between training and prediction data.
+    """
     st.header("Drift Analysis")
     st.write(
         "This stage analyzes data drift between the base data used to train model and the unseen prediction data for each cycle."
@@ -254,6 +289,11 @@ def drift_analysis_tab():
 
 
 def performance_tab():
+    """Display and manage performance analysis across all cycles in the DVC pipeline dashboard.
+
+    This tab allows users to run the performance analysis stage and view the results,
+    including visualizations of model performance across different cycles.
+    """
     st.header("Cycles Performance Analysis")
     st.write("This stage analyzes the performance across all cycles.")
 
@@ -269,6 +309,12 @@ def performance_tab():
 
 
 def app():
+    """Initialize and run the DVC Pipeline Dashboard Streamlit application.
+
+    This function sets up the main application layout and manages different tabs
+    for parameters, data generation, training, evaluation, prediction, drift analysis,
+    and performance monitoring.
+    """
     st.set_page_config(layout="wide")
     st.title("DVC Pipeline Dashboard")
 

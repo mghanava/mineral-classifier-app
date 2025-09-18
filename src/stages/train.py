@@ -1,3 +1,10 @@
+"""Training module for GNN models in different cycles.
+
+This module provides functionality to train GNN models in a cycle-based approach,
+including loading data, training models with cross-validation, and saving the best
+performing model.
+"""
+
 import argparse
 import os
 
@@ -48,7 +55,9 @@ def run_training(paths, params, model_name, cycle_num):
     output_path = ensure_directory_exists(paths["output"])
 
     # Load training data from previous cycle
-    fold_data = load_data(os.path.join(paths["base_data"], "fold_data.pt"))
+    fold_data = load_data(
+        os.path.join(paths["base_data"], "fold_data.pt"), "Train-Validation Fold"
+    )
 
     # Initialize model
     model = get_model(model_name, model_params)

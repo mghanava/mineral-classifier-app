@@ -7,7 +7,6 @@ import argparse
 import os
 
 import torch
-from torch_geometric.data import Data
 
 from src.utilities.data_utils import (
     construct_graph,
@@ -18,13 +17,16 @@ from src.utilities.data_utils import (
 from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
+    load_data,
     load_params,
+    save_data,
 )
 
 
 def get_cycle_paths(cycle_num):
     """Generate all paths for a specific cycle with directory creation."""
     return {
+        "bootstrap_data": "results/data/base/cycle_0",
         "base_data": f"results/data/base/cycle_{cycle_num - 1}",
         "output": f"results/data/prediction/cycle_{cycle_num}",
     }
@@ -43,16 +45,24 @@ def prepare_pred_data(paths: dict, params: dict):
     base_params["add_self_loops"] = params.get("add_self_loops", True)
     pred_params = params["data"]["pred"]
 
+    bootstrap_path = paths["bootstrap_data"]
     base_path = paths["base_data"]
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 
-    exisiting_coordinates = torch.load(
-        os.path.join(base_path, "base_data.pt"), weights_only=False
+    # Load exisiting coordinates from previous cycle and hotspots and prototypes from bootstrap
+    exisiting_coordinates = load_data(
+        os.path.join(base_path, "base_data.pt"), "Base"
     ).coordinates.numpy()
+    previous_hotspots = load_data(
+        os.path.join(bootstrap_path, "hotspots.npy"), "Hotspots", load_numpy=True
+    )
+    previous_prototypes = load_data(
+        os.path.join(bootstrap_path, "prototypes.npy"), "Prototypes", load_numpy=True
+    )
 
     # Generate new data
-    coordinates, features, labels = generate_mineral_data(
+    coordinates, features, labels, _, _ = generate_mineral_data(
         radius=base_params["radius"],
         depth=base_params["depth"],
         n_samples=pred_params["n_samples"],
@@ -62,8 +72,12 @@ def prepare_pred_data(paths: dict, params: dict):
         n_classes=base_params["n_classes"],
         threshold_binary=base_params["threshold_binary"],
         min_samples_per_class=pred_params["min_samples_per_class"],
-        n_hotspots=base_params["n_hotspots"],
-        n_hotspots_random=base_params["n_hotspots_random"],
+        n_hotspots_max=base_params["n_hotspots_max"],
+        previous_hotspots=previous_hotspots,
+        previous_prototypes=previous_prototypes,
+        mineral_noise_level=pred_params.get("mineral_noise_level", 0.01),
+        exp_decay_factor=pred_params.get("exp_decay_factor", 1.0),
+        feature_noise_level=pred_params.get("feature_noise_level", 0.01),
         seed=pred_params["seed"],
     )
 
@@ -87,12 +101,7 @@ def prepare_pred_data(paths: dict, params: dict):
         make_edge_weight=params["data"].get("make_edge_weight", True),
         make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
-    if type(pred_data) is Data and pred_data.x is not None:
-        output_file = os.path.join(output_path, "pred_data.pt")
-        torch.save(pred_data, output_file)
-        print(
-            f"✓ Prediction data with {pred_data.x.shape[0]} samples saved to {output_file}."
-        )
+    save_data(pred_data, os.path.join(output_path, "pred_data.pt"), "Prediction")
 
 
 def main():

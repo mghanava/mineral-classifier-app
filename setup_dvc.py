@@ -63,6 +63,7 @@ def generate_fine_grained_dvc_yaml():
                     "results/data/base/cycle_0/base_data.pt",
                     "results/data/base/cycle_0/fold_data.pt",
                     "results/data/base/cycle_0/test_data.pt",
+                    "results/data/base/cycle_0/calib_data.pt",
                 ],
             }
         }
@@ -180,6 +181,7 @@ def generate_fine_grained_dvc_yaml():
                 f"results/data/base/cycle_{cycle}/base_data.pt",
                 f"results/data/base/cycle_{cycle}/fold_data.pt",
                 f"results/data/base/cycle_{cycle}/test_data.pt",
+                f"results/data/base/cycle_{cycle}/calib_data.pt",
             ],
         }
     # Add performance analysis stage

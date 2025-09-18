@@ -14,6 +14,7 @@ from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
     load_data,
+    load_model_weights,
     load_params,
 )
 from src.utilities.pred_utils import prediction
@@ -52,16 +53,15 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     model_params["add_self_loops"] = params.get("add_self_loops", True)
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
-    # Load trained model
-    model_path = os.path.join(paths["model"], "model.pt")
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model not found at {model_path}")
 
+    # Load trained model
     model = get_model(model_name, model_params)
-    model.load_state_dict(torch.load(model_path, weights_only=True))
+    load_model_weights(model, os.path.join(paths["model"], "model.pt"))
 
     # Load prediction data
-    pred_data = load_data(os.path.join(paths["prediction_data"], "pred_data.pt"))
+    pred_data = load_data(
+        os.path.join(paths["prediction_data"], "pred_data.pt"), "Prediction"
+    )
 
     # Load calibrator from evaluation
     calibrator_path = os.path.join(paths["evaluation"], "calibrator.pt")

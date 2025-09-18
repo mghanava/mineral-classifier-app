@@ -14,6 +14,7 @@ from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
     load_data,
+    load_model_weights,
     load_params,
 )
 
@@ -52,16 +53,12 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
     # Load test and calibration data from previous cycle
-    test_data = load_data(os.path.join(paths["base"], "test_data.pt"))
-    calib_data = load_data(os.path.join(paths["base"], "calib_data.pt"))
+    test_data = load_data(os.path.join(paths["base"], "test_data.pt"), "Test")
+    calib_data = load_data(os.path.join(paths["base"], "calib_data.pt"), "Calibration")
 
     # Load trained model
-    model_path = os.path.join(paths["model"], "model.pt")
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(f"Model not found at {model_path}")
-
     model = get_model(model_name, model_params)
-    model.load_state_dict(torch.load(model_path, weights_only=True))
+    load_model_weights(model, os.path.join(paths["model"], "model.pt"))
 
     # Run evaluation
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

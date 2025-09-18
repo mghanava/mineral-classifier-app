@@ -6,10 +6,13 @@ This script loads data, performs drift analysis using specified parameters, and 
 import argparse
 import os
 
-import torch
-
 from src.utilities.drift_detection_utils import AnalyzeDrift
-from src.utilities.general_utils import LogTime, ensure_directory_exists, load_params
+from src.utilities.general_utils import (
+    LogTime,
+    ensure_directory_exists,
+    load_data,
+    load_params,
+)
 
 
 def get_cycle_paths(cycle_num):
@@ -40,19 +43,14 @@ def run_analyze_drift(
         If required data files are not found.
 
     """
-    drift_params = params["analyze_drift"]
     output_path = ensure_directory_exists(paths["output"])
-    # Load prediction data (current cycle)
-    pred_data_path = os.path.join(paths["prediction_data"], "pred_data.pt")
-    if not os.path.exists(pred_data_path):
-        raise FileNotFoundError(f"Prediction data not found at {pred_data_path}")
-    pred_data = torch.load(pred_data_path, weights_only=False)
-
+    drift_params = params["analyze_drift"]
     # Load base data (previous cycle)
-    base_data_path = os.path.join(paths["base_data"], "base_data.pt")
-    if not os.path.exists(base_data_path):
-        raise FileNotFoundError(f"Base data not found at {base_data_path}")
-    base_data = torch.load(base_data_path, weights_only=False)
+    base_data = load_data(os.path.join(paths["base_data"], "base_data.pt"), "Base")
+    # Load prediction data (current cycle)
+    pred_data = load_data(
+        os.path.join(paths["prediction_data"], "pred_data.pt"), "Prediction"
+    )
 
     analyzer = AnalyzeDrift(
         base_data=base_data,

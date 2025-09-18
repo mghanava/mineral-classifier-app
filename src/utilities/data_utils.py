@@ -83,18 +83,60 @@ def _create_hotspots(
     depth: float,
     x_range: tuple[float, float],
     y_range: tuple[float, float],
-    n_hotspots: int = 10,
-    n_hotspots_random: bool = True,
+    n_hotspots_max: int = 10,
+    previous_hotspots: np.ndarray | None = None,
     rng: np.random.Generator = np.random.default_rng(42),
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Create mineralization hotspots with optional continuity from previous data.
+
+    Parameters
+    ----------
+    depth : float
+        Maximum depth for hotspot placement
+    x_range : tuple[float, float]
+        Range for x coordinates
+    y_range : tuple[float, float]
+        Range for y coordinates
+    n_hotspots_max : int
+        Number of hotspots to generate
+    previous_hotspots : np.ndarray, optional
+        Previous hotspot locations to maintain continuity
+    rng : np.random.Generator
+        Random number generator
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        Hotspot locations and their strengths
+
+    """
     # In a mineral exploration context, hotspot strengths represent the maximum concentration or intensity of gold at each "source" location in the simulated area. Not all gold deposits are created equal - some have higher  mineral content than others. Values greater than 1.0 represent "high-grade" hotspots that can potentially yield gold values above the baseline (before applying distance decay). Values below 1.0 represent "lower-grade" hotspots that will produce somewhat weaker signals. The range isn't centered at 1.0 (it's 0.7-1.2) to create a slight positive skew, which is common in real mineral deposits
-    if n_hotspots is not None and n_hotspots_random:
-        n_hotspots = int(rng.integers(1, n_hotspots))
-    hotspot_strengths = rng.uniform(0.7, 1.2, n_hotspots)
+    n_hotspots = int(rng.integers(1, n_hotspots_max + 1))
+    # Initialize hotspots array
     hotspots = np.zeros((n_hotspots, 3))
-    hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
-    hotspots[:, 1] = rng.uniform(y_range[0], y_range[1], n_hotspots)
-    hotspots[:, 2] = rng.uniform(depth, 0, n_hotspots)
+
+    # Reuse some previous hotspots for spatial continuity if provided
+    if previous_hotspots is not None and len(previous_hotspots) > 0:
+        n_keep = n_hotspots // 2  # Keep half of previous hotspots
+        n_keep = min(
+            n_keep, len(previous_hotspots)
+        )  # Make sure we don't exceed available hotspots
+        hotspots[:n_keep] = previous_hotspots[:n_keep]
+
+        # Generate new hotspots for remaining spots
+        new_hotspots = n_hotspots - n_keep
+        hotspots[n_keep:, 0] = rng.uniform(x_range[0], x_range[1], new_hotspots)
+        hotspots[n_keep:, 1] = rng.uniform(y_range[0], y_range[1], new_hotspots)
+        hotspots[n_keep:, 2] = rng.uniform(depth, 0, new_hotspots)
+    else:
+        # Generate all new hotspots
+        hotspots[:, 0] = rng.uniform(x_range[0], x_range[1], n_hotspots)
+        hotspots[:, 1] = rng.uniform(y_range[0], y_range[1], n_hotspots)
+        hotspots[:, 2] = rng.uniform(depth, 0, n_hotspots)
+
+    # Generate hotspot strengths (mineralization intensities)
+    hotspot_strengths = rng.uniform(0.7, 1.2, n_hotspots)
+
     return hotspots, hotspot_strengths
 
 
@@ -103,6 +145,8 @@ def _calculate_gold_values(
     coordinates: np.ndarray,
     hotspots: np.ndarray,
     hotspot_strengths: np.ndarray,
+    noise_level=0.05,
+    exp_decay_factor=0.005,
     rng: np.random.Generator = np.random.default_rng(42),
 ) -> np.ndarray:
     # Reshape for broadcasting: coordinates (n_samples, 3), hotspots (n_hotspots, 3)
@@ -122,8 +166,6 @@ def _calculate_gold_values(
     closest_strengths = hotspot_strengths[min_indices]
 
     # Calculate gold values using exponential decay with distance
-    noise_level = rng.uniform(0.01, 0.1)
-    exp_decay_factor = rng.uniform(0.001, 0.01)
     gold_values = closest_strengths * np.exp(-min_distances * exp_decay_factor)
     gold_values += rng.normal(0, noise_level, size=n_samples)
 
@@ -198,12 +240,19 @@ def _generate_features(
     labels: np.ndarray,
     n_classes: int,
     n_features: int,
+    noise_level=0.2,
+    previous_prototypes=None,
     rng: np.random.Generator = np.random.default_rng(42),
 ):
-    # Random prototype vectors (feature spaces) for each class
-    prototypes = rng.uniform(-2, 2, size=(n_classes, n_features))
+    if previous_prototypes is not None:
+        # Slightly perturb previous prototypes instead of generating new ones
+        prototypes = previous_prototypes + rng.normal(
+            0, noise_level / 2, size=previous_prototypes.shape
+        )
+    else:
+        # Random prototype vectors (feature spaces) for each class
+        prototypes = rng.uniform(-2, 2, size=(n_classes, n_features))
     features = np.zeros((n_total_samples, n_features))
-    noise_level = 0.2
     # For each sample, copy its class prototype and add Gaussian noise
     features = np.array(
         [
@@ -212,7 +261,7 @@ def _generate_features(
         ]
     )
 
-    return features
+    return features, prototypes
 
 
 def generate_mineral_data(
@@ -221,24 +270,32 @@ def generate_mineral_data(
     n_samples: int = 1000,
     spacing: float = 10,
     existing_points: np.ndarray | None = None,
-    n_features: int = 10,
-    n_classes: int = 5,
+    n_features: int = 5,
+    n_classes: int = 2,
     threshold_binary: float = 0.3,
-    min_samples_per_class: int | None = 15,
-    n_hotspots: int = 10,
-    n_hotspots_random: bool = True,
+    min_samples_per_class: int | None = 50,
+    n_hotspots_max: int = 10,
+    previous_hotspots: np.ndarray | None = None,
+    previous_prototypes: np.ndarray | None = None,
+    mineral_noise_level: float = 0.05,
+    exp_decay_factor: float = 0.005,
+    feature_noise_level: float = 0.2,
     seed: int | None = None,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Generate synthetic mineral exploration data with realistic features.
 
     Parameters
     ----------
+    radius : float
+        Radius of the circular area in which points will be generated
+    depth : float
+        Max ranges for depth coordinates (usually negative)
     n_samples : int
         Number of drill core samples to generate
     spacing : float
         Average distance between samples in meters
-    depth : float
-        Max ranges for depth coordinates (usually negative)
+    existing_points : np.ndarray, optional
+        Array of existing point coordinates to avoid when generating new points
     n_features : int
         Number of features to generate
     n_classes : int
@@ -249,14 +306,18 @@ def generate_mineral_data(
         Threshold for binary classification
     min_samples_per_class : int, optional
         Minimum number of samples required for each class. If None, no minimum is enforced.
-    x_range: tuple[float, float], optional
-        Range for x coordinates (Easting). If None, defaults to (0, area_size)
-    y_range: tuple[float, float], optional
-        Range for y coordinates (Northing). If None, defaults to (0, area_size)
-    n_hotspots : int
+    n_hotspots_max : int
         Number of mineralization hotspots to generate in the area.
-    n_hotspots_random : bool
-        If True, randomly select the number of hotspots up to n_hotspots.
+    previous_hotspots : np.ndarray, optional
+        Previous hotspot locations to maintain spatial continuity
+    previous_prototypes : np.ndarray, optional
+        Previous feature prototypes to maintain feature space continuity
+    mineral_noise_level : float
+        Noise level for gold value generation (default: 0.05)
+    exp_decay_factor : float
+        Decay factor for gold value distance falloff (default: 0.005)
+    feature_noise_level : float
+        Noise level for feature generation (default: 0.2)
     seed : int
         Random seed for reproducibility
 
@@ -279,17 +340,31 @@ def generate_mineral_data(
     y_range = coordinates[:, 1].min(), coordinates[:, 1].max()
     # 2. Create mineralization hotspots and their strengths (mineralization centers)
     hotspots, hotspot_strengths = _create_hotspots(
-        depth, x_range, y_range, n_hotspots, n_hotspots_random, rng
+        depth, x_range, y_range, n_hotspots_max, previous_hotspots, rng
     )
     # 3. Calculate gold values based on distance to nearest hotspot
     gold_values = _calculate_gold_values(
-        n_samples, coordinates, hotspots, hotspot_strengths, rng=rng
+        n_samples,
+        coordinates,
+        hotspots,
+        hotspot_strengths,
+        mineral_noise_level,
+        exp_decay_factor,
+        rng=rng,
     )
     # 4. Convert to categorical labels
     labels = _assign_labels(gold_values, n_classes, threshold_binary)
     # 5. Generate features for all samples
     n_total_samples = n_samples
-    features = _generate_features(n_samples, labels, n_classes, n_features, rng)
+    features, prototypes = _generate_features(
+        n_samples,
+        labels,
+        n_classes,
+        n_features,
+        feature_noise_level,
+        previous_prototypes,
+        rng,
+    )
     # (Optional) 6. Check if we have the minimum number of samples per class and redistribute if needed
     if min_samples_per_class is not None:
         labels, coordinates, gold_values = _change_label_distribution(
@@ -305,15 +380,21 @@ def generate_mineral_data(
         )
         # Regenerate features after changing label distribution
         n_total_samples = len(coordinates)
-        features = _generate_features(
-            n_total_samples, labels, n_classes, n_features, rng
+        features, prototypes = _generate_features(
+            n_total_samples,
+            labels,
+            n_classes,
+            n_features,
+            feature_noise_level,
+            previous_prototypes,
+            rng,
         )
     # Print summary of generated data
     print("Label distribution:")
     for i in range(n_classes):
         count = np.sum(labels == i)
         print(f"Class {i}: {count} points ({count / n_total_samples * 100:.2f}%)")
-    return coordinates, features, labels
+    return coordinates, features, labels, hotspots, prototypes
 
 
 def visualize_graph(
@@ -343,7 +424,7 @@ def visualize_graph(
     # Create color map for different classes
     classes = np.unique(labels)
     unique_classes = len(classes)
-    cmap = get_cmap("rainbow")
+    cmap = get_cmap("Set1")
     colors = cmap(np.linspace(0, 1, unique_classes))
     color_map = {
         i: f"rgb({int(255 * c[0])},{int(255 * c[1])},{int(255 * c[2])})"
@@ -442,130 +523,6 @@ def scale_data(data: np.ndarray, scaler: ScalerType) -> np.ndarray:
     return scaler.fit_transform(data)
 
 
-# def _filter_edges_for_nodes(edge_index, edge_attr, allowed_nodes):
-#     """Keep only edges between nodes in allowed_nodes set.
-
-#     Args:
-#         edge_index: Edge connectivity [2, num_edges]
-#         edge_attr: Edge attributes [num_edges, num_features] or None
-#         allowed_nodes: torch.Tensor of node indices to keep
-
-#     Returns:
-#         filtered_edge_index, filtered_edge_attr
-
-#     """
-#     # Create mask for edges where both source and target are in allowed_nodes
-#     mask = torch.isin(edge_index[0], allowed_nodes) & torch.isin(
-#         edge_index[1], allowed_nodes
-#     )
-
-#     filtered_edge_index = edge_index[:, mask]
-#     filtered_edge_attr = edge_attr[mask] if edge_attr is not None else None
-
-#     return filtered_edge_index, filtered_edge_attr
-
-
-# def _split_graph(
-#     x: torch.Tensor,
-#     y: torch.Tensor,
-#     edge_index: torch.Tensor,
-#     edge_attr: torch.Tensor,
-#     n_splits: int,
-#     test_size: float | None,
-#     calib_size: float | None,
-#     seed: int | None,
-# ):
-#     features = x.numpy()
-#     labels = y.numpy()
-#     n_nodes = len(labels)
-
-#     # First split into train+val and test
-#     train_val_idx, temp_idx = train_test_split(
-#         np.arange(n_nodes),
-#         test_size=test_size,
-#         stratify=labels,
-#         random_state=seed,
-#     )
-
-#     # Initialize stratified k-fold on the train+val data
-#     if n_splits is None:
-#         raise ValueError("n_splits must be specified when should_split is True.")
-
-#     skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
-
-#     # Create a list to store Data objects for each fold
-#     fold_data = []
-
-#     # Generate folds from the train+val data
-#     for fold_idx, (train_idx, val_idx) in enumerate(
-#         skf.split(features[train_val_idx], labels[train_val_idx])
-#     ):
-#         # Map the fold indices back to original indices
-#         train_idx = train_val_idx[train_idx]
-#         val_idx = train_val_idx[val_idx]
-
-#         # Combine train and val indices for this fold
-#         fold_nodes = torch.tensor(np.concatenate([train_idx, val_idx]))
-
-#         # Filter edges to only include those between nodes in this fold
-#         fold_edge_index, fold_edge_attr = _filter_edges_for_nodes(
-#             edge_index, edge_attr, fold_nodes
-#         )
-
-#         # Create boolean masks for this fold
-#         train_mask = torch.zeros(n_nodes, dtype=torch.bool)
-#         val_mask = torch.zeros(n_nodes, dtype=torch.bool)
-#         train_mask[train_idx] = True
-#         val_mask[val_idx] = True
-
-#         # Create PyG Data object for this fold (train/val only)
-#         data = Data(
-#             x=x,
-#             y=y,
-#             edge_index=fold_edge_index,
-#             edge_attr=fold_edge_attr,
-#             train_mask=train_mask,
-#             val_mask=val_mask,
-#             fold=fold_idx,
-#         )
-
-#         fold_data.append(data)
-
-#     # Handle test data splitting
-#     test_idx, calib_idx = train_test_split(
-#         temp_idx,
-#         test_size=calib_size,
-#         stratify=labels[temp_idx],
-#         random_state=seed,
-#     )
-
-#     # Combine test and calib indices
-#     test_calib_nodes = torch.tensor(np.concatenate([test_idx, calib_idx]))
-
-#     # Filter edges to only include those between test/calib nodes
-#     test_edge_index, test_edge_attr = _filter_edges_for_nodes(
-#         edge_index, edge_attr, test_calib_nodes
-#     )
-
-#     # Create separate test Data object
-#     test_mask = torch.zeros(n_nodes, dtype=torch.bool)
-#     test_mask[test_idx] = True
-#     # Create separate calibration Data object
-#     calib_mask = torch.zeros(n_nodes, dtype=torch.bool)
-#     calib_mask[calib_idx] = True
-
-#     test_data = Data(
-#         x=x,
-#         y=y,
-#         edge_index=test_edge_index,
-#         edge_attr=test_edge_attr,
-#         test_mask=test_mask,
-#         calib_mask=calib_mask,
-#     )
-
-#     return fold_data, test_data
-
-
 def _split_graph_no_leakage(
     x: torch.Tensor,
     y: torch.Tensor,
@@ -575,11 +532,24 @@ def _split_graph_no_leakage(
     test_size: float | None,
     calib_size: float | None,
     seed: int | None,
-):
+) -> tuple[list[tuple[Data, Data]], Data, Data]:
     """Split graph data without leakage through nodes or edges.
 
     Args:
-        method: Either "subgraph" (recommended) or "mask_edges"
+        x: Node feature matrix of shape [num_nodes, num_features]
+        y: Node labels of shape [num_nodes]
+        edge_index: Graph connectivity in COO format of shape [2, num_edges]
+        edge_attr: Edge feature matrix of shape [num_edges, num_edge_features]
+        n_splits (int, optional): Number of folds for cross-validation splitting
+        test_size (float, optional): Fraction of data to use for testing (between 0 and 1)
+        calib_size (float, optional): Fraction of data to use for calibration (between 0 and 1)
+        seed (int, optional): Random seed for reproducibility
+
+    Returns:
+        tuple: (fold_data, test_data, calib_data) where:
+            - fold_data is a list of (train_data, val_data) tuples for each fold
+            - test_data is a Data object containing the test set
+            - calib_data is a Data object containing the calibration set
 
     """
     features = x.numpy()
@@ -663,7 +633,7 @@ def construct_graph(
     k_nearest: int | None = None,
     connection_radius: float | None = None,
     distance_percentile: float | None = None,
-    add_self_loops: bool = False,
+    add_self_loops: bool = True,
     n_splits: int | None = None,
     test_size: float | None = None,
     calib_size: float | None = None,
@@ -679,13 +649,18 @@ def construct_graph(
         coordinates (array-like): Coordinate points for constructing the graph
         features (array-like): Node features
         labels (array-like): Node labels for stratification
-        connection_radius (float): Distance threshold to consider interconnected nodes
+        k_nearest (int, optional): Number of nearest neighbors to connect for each node
+        connection_radius (float, optional): Distance threshold to consider interconnected nodes
+        distance_percentile (float, optional): Percentile of distances to use as connection threshold
+        add_self_loops (bool): Whether to add self-loops to the graph (default: True)
         n_splits (int): Number of folds for cross-validation
         test_size (float): Proportion of data to use as test set (e.g., 0.2 for 20%)
         calib_size (float): Proportion of data to use as calibration set (e.g., 0.5 for 50%)
         seed (int): Random seed for reproducibility
         scaler (ScalerType): Scaler to use for feature scaling (default: RobustScaler)
         should_split (bool): Whether to perform train/val/test split (default: True, if False, only returns the base graph without splits)
+        make_edge_weight (bool): Whether to compute edge weights (default: True)
+        make_edge_weight_method (str, optional): Method to normalize edge weights ('minmax', 'standard', 'softmax', or 'log')
 
     Returns:
         If should_split is True:
@@ -792,12 +767,17 @@ def prepare_edge_data(
     add_self_loops: bool = False,
     make_edge_weight: bool = False,
     make_edge_weight_method: str | None = None,
-):
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None]:
     """Prepare edge connectivity and attributes for a graph neural network from coordinate data. This function computes pairwise distances between points and creates edge connections based on a distance threshold, making the resulting graph undirected. It also generates edge attributes including both raw distances and inverse distances.
 
     Args:
         coordinates (numpy.ndarray): Array of point coordinates with shape [num_nodes, num_dimensions]
-        connection_radius (float): Distance to consider interconnected nodes and create edges. Defaults to 150.0.
+        k_nearest (int, optional): Number of nearest neighbors to connect for each node
+        connection_radius (float, optional): Distance threshold to consider interconnected nodes
+        distance_percentile (float, optional): Percentile of distances to use as connection threshold
+        add_self_loops (bool): Whether to add self-loops to the graph (default: True)
+        make_edge_weight (bool): Whether to compute edge weights (default: True)
+        make_edge_weight_method (str, optional): Method to normalize edge weights ('minmax', 'standard', 'softmax', or 'log')
 
     Returns:
         tuple: Contains:
@@ -923,9 +903,13 @@ def export_all_graphs_to_html(
 
     Args:
         fold_data (list[Data]): List of PyG Data objects for each fold (train/val splits).
-        test_data (Data): PyG Data object for the test (and optionally calibration) set.
+        test_data (Data): PyG Data object for the test set.
+        calib_data (Data): PyG Data object for the calibration set.
         coordinates (np.ndarray): Array of node coordinates.
-        connection_radius (float): Distance threshold for connecting nodes in the graph.
+        k_nearest (int, optional): Number of nearest neighbors to connect for each node
+        connection_radius (float, optional): Distance threshold to consider interconnected nodes
+        distance_percentile (float, optional): Percentile of distances to use as connection threshold
+        add_self_loops (bool): Whether to add self-loops to the graph (default: True).
         labels_map (dict[int, str]): Mapping from label indices to label names.
         save_path (str): Directory path to save the exported HTML files.
 
@@ -987,7 +971,22 @@ def export_all_graphs_to_html(
     )
 
 
-def no_coordinate_overlap(coords1: torch.Tensor, coords2: torch.Tensor):
+def no_coordinate_overlap(coords1: torch.Tensor, coords2: torch.Tensor) -> bool:
+    """Check if there is no coordinate overlap between two sets of coordinates.
+
+    Parameters
+    ----------
+    coords1 : torch.Tensor
+        First set of coordinates to compare
+    coords2 : torch.Tensor
+        Second set of coordinates to compare
+
+    Returns
+    -------
+    bool
+        True if there is no overlap between coordinates, False otherwise
+
+    """
     # Compare all pairs using broadcasting
     matches = torch.all(
         coords1[:, None] == coords2, dim=2
@@ -1003,6 +1002,27 @@ def analyze_feature_discrimination(
     class_names: list,
     scaler: ScalerType = RobustScaler(),
 ):
+    """Analyze and visualize feature discrimination using t-SNE and silhouette scores.
+
+    Parameters
+    ----------
+    features : array-like
+        Feature matrix to analyze
+    labels : array-like
+        Target labels for each sample
+    save_path : str
+        Path to save the visualization plot
+    class_names : list
+        List of class names for the legend
+    scaler : ScalerType, optional
+        Scaler to use for feature normalization, by default RobustScaler()
+
+    Returns
+    -------
+    None
+        Saves the visualization plot to the specified path
+
+    """
     features_scaled = scale_data(data=features, scaler=scaler)
     silhouette = silhouette_score(features_scaled, labels)
 
@@ -1013,40 +1033,40 @@ def analyze_feature_discrimination(
     )
 
     perplexities = [5, 30, 50, 100]
-    cmap = get_cmap("viridis")
-    # colors = cmap(np.linspace(0, 1, unique_classes))
+    cmap = get_cmap("Set1")
+    colors = cmap(np.linspace(0, 1, len(class_names)))
+
     for i, perplexity in enumerate(perplexities):
         row, col = i // 2, i % 2
         tsne = TSNE(
             n_components=2, random_state=42, perplexity=perplexity, max_iter=1000
         )
         features_tsne = tsne.fit_transform(features_scaled)
-
+        # Create scatter plot with discrete colors
         axes[row, col].scatter(
             features_tsne[:, 0],
             features_tsne[:, 1],
-            c=labels,
-            cmap=cmap,
+            c=[colors[label] for label in labels],  # Map each label to its color,
             alpha=0.7,
             s=30,
         )
         axes[row, col].set_title(f"t-SNE (perplexity={perplexity})")
         axes[row, col].set_xlabel("t-SNE 1")
         axes[row, col].set_ylabel("t-SNE 2")
+
         # Create legend
-        legend_elements = []
-        for class_idx, class_name in enumerate(class_names):
-            legend_elements.append(
-                Line2D(
-                    [0],
-                    [0],
-                    marker="o",
-                    color="w",
-                    markerfacecolor=cmap(class_idx / len(class_names)),
-                    markersize=8,
-                    label=class_name,
-                )
+        legend_elements = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor=colors[i],
+                markersize=8,
+                label=class_name,
             )
+            for i, class_name in enumerate(class_names)
+        ]
 
         axes[row, col].legend(
             handles=legend_elements,
@@ -1060,7 +1080,22 @@ def analyze_feature_discrimination(
         pyplot.savefig(save_path, bbox_inches="tight", dpi=300)
 
 
-def scaler_setup(params: dict):
+def scaler_setup(params: dict) -> ScalerType:
+    """Create and configure a scaler instance based on the provided parameters.
+
+    Parameters
+    ----------
+    params : dict
+        Dictionary containing scaler configuration with keys:
+        - data.scaler_type: Type of scaler to use ('RobustScaler', 'StandardScaler', 'MinMaxScaler')
+        - data.scaler_params: Optional parameters for scaler initialization
+
+    Returns
+    -------
+    ScalerType
+        Configured scaler instance ready for data scaling
+
+    """
     SCALER_MAP = {
         "RobustScaler": RobustScaler,
         "StandardScaler": StandardScaler,
@@ -1101,184 +1136,6 @@ def normalize_edge_weight(edge_attr, make_edge_weight_method: str | None = "minm
         return torch.log1p(weights)
 
     return weights
-
-
-# def diagnose_data_leakage(fold_data, test_data):
-#     """Comprehensive data leakage detection for graph splits.
-
-#     Args:
-#         fold_data: List of Data objects (one per fold)
-#         test_data: Single Data object for test/calib
-
-#     Returns:
-#         dict: Diagnostic results
-
-#     """
-#     results = {
-#         "node_overlap": {},
-#         "edge_leakage": {},
-#         "connectivity_stats": {},
-#         "feature_stats": {},
-#     }
-
-#     n_nodes = fold_data[0].x.shape[0]
-
-#     # 1. Check for node overlap between splits
-#     print("=== NODE OVERLAP ANALYSIS ===")
-
-#     # Get all node sets
-#     all_train_nodes = []
-#     all_val_nodes = []
-#     test_nodes = test_data.test_mask.nonzero().flatten().numpy()
-#     calib_nodes = (
-#         test_data.calib_mask.nonzero().flatten().numpy()
-#         if hasattr(test_data, "calib_mask")
-#         else np.array([])
-#     )
-
-#     for i, fold in enumerate(fold_data):
-#         train_nodes = fold.train_mask.nonzero().flatten().numpy()
-#         val_nodes = fold.val_mask.nonzero().flatten().numpy()
-#         all_train_nodes.extend(train_nodes)
-#         all_val_nodes.extend(val_nodes)
-
-#         # Check within-fold overlap
-#         overlap = set(train_nodes) & set(val_nodes)
-#         if overlap:
-#             print(
-#                 f"❌ LEAKAGE: Fold {i} has {len(overlap)} overlapping train/val nodes"
-#             )
-#             results["node_overlap"][f"fold_{i}_internal"] = len(overlap)
-#         else:
-#             print(
-#                 f"✅ Fold {i}: No train/val overlap ({len(train_nodes)} train, {len(val_nodes)} val)"
-#             )
-
-#     # Check cross-fold overlap
-#     all_train_nodes = np.array(all_train_nodes)
-#     all_val_nodes = np.array(all_val_nodes)
-
-#     cross_fold_overlap = set(all_train_nodes) & set(all_val_nodes)
-#     if cross_fold_overlap:
-#         print(
-#             f"❌ LEAKAGE: {len(cross_fold_overlap)} nodes appear in both train and val across folds"
-#         )
-#         results["node_overlap"]["cross_fold"] = len(cross_fold_overlap)
-
-#     # Check train/val vs test overlap
-#     train_val_nodes = np.concatenate([all_train_nodes, all_val_nodes])
-#     test_overlap = set(train_val_nodes) & set(test_nodes)
-#     if test_overlap:
-#         print(
-#             f"❌ LEAKAGE: {len(test_overlap)} nodes appear in both train/val and test"
-#         )
-#         results["node_overlap"]["train_val_test"] = len(test_overlap)
-
-#     if calib_nodes.size > 0:
-#         calib_overlap = set(train_val_nodes) & set(calib_nodes)
-#         if calib_overlap:
-#             print(
-#                 f"❌ LEAKAGE: {len(calib_overlap)} nodes appear in both train/val and calib"
-#             )
-#             results["node_overlap"]["train_val_calib"] = len(calib_overlap)
-
-#     # 2. Check for edge leakage
-#     print("\n=== EDGE LEAKAGE ANALYSIS ===")
-
-#     for i, fold in enumerate(fold_data):
-#         fold_train_nodes = set(fold.train_mask.nonzero().flatten().numpy())
-#         fold_val_nodes = set(fold.val_mask.nonzero().flatten().numpy())
-#         fold_all_nodes = fold_train_nodes | fold_val_nodes
-
-#         # Check if edges connect to nodes outside this fold
-#         edge_index = fold.edge_index.numpy()
-#         source_nodes = set(edge_index[0])
-#         target_nodes = set(edge_index[1])
-#         all_edge_nodes = source_nodes | target_nodes
-
-#         outside_nodes = all_edge_nodes - fold_all_nodes
-#         if outside_nodes:
-#             print(
-#                 f"❌ LEAKAGE: Fold {i} has edges connecting to {len(outside_nodes)} nodes outside the fold"
-#             )
-#             results["edge_leakage"][f"fold_{i}"] = len(outside_nodes)
-#         else:
-#             print(f"✅ Fold {i}: All edges contained within fold nodes")
-
-#     # Check test data edge leakage
-#     test_all_nodes = set(test_nodes) | set(calib_nodes)
-#     test_edge_index = test_data.edge_index.numpy()
-#     test_source_nodes = set(test_edge_index[0])
-#     test_target_nodes = set(test_edge_index[1])
-#     test_all_edge_nodes = test_source_nodes | test_target_nodes
-
-#     test_outside_nodes = test_all_edge_nodes - test_all_nodes
-#     if test_outside_nodes:
-#         print(
-#             f"❌ LEAKAGE: Test data has edges connecting to {len(test_outside_nodes)} nodes outside test/calib"
-#         )
-#         results["edge_leakage"]["test"] = len(test_outside_nodes)
-#     else:
-#         print("✅ Test data: All edges contained within test/calib nodes")
-
-#     # 3. Connectivity statistics
-#     print("\n=== CONNECTIVITY STATISTICS ===")
-
-#     for i, fold in enumerate(fold_data):
-#         n_edges = fold.edge_index.shape[1]
-#         n_nodes_in_fold = fold.train_mask.sum() + fold.val_mask.sum()
-#         density = _calculate_network_density(n_edges, n_nodes_in_fold)
-
-#         print(
-#             f"Fold {i}: {n_nodes_in_fold} nodes, {n_edges} edges, density: {density:.4f}"
-#         )
-#         results["connectivity_stats"][f"fold_{i}"] = {
-#             "nodes": int(n_nodes_in_fold),
-#             "edges": n_edges,
-#             "density": density,
-#         }
-
-#     test_n_nodes = len(test_nodes) + len(calib_nodes)
-#     test_n_edges = test_data.edge_index.shape[1]
-#     test_density = _calculate_network_density(test_n_edges, test_n_nodes)
-#     print(
-#         f"Test: {test_n_nodes} nodes, {test_n_edges} edges, density: {test_density:.4f}"
-#     )
-
-#     return results
-
-
-# def check_isolated_components(fold_data, test_data):
-#     """Check for isolated nodes or components that might cause training issues."""
-#     print("\n=== CONNECTIVITY ANALYSIS ===")
-
-#     def count_isolated_nodes(edge_index, node_mask):
-#         nodes_in_mask = node_mask.nonzero().flatten().numpy()
-#         nodes_with_edges = set(edge_index.flatten().numpy())
-#         isolated = set(nodes_in_mask) - nodes_with_edges
-#         return len(isolated)
-
-#     for i, data in enumerate(fold_data):
-#         train_data, val_data = data
-#         train_isolated = count_isolated_nodes(train_data.edge_index, fold.train_mask)
-#         val_isolated = count_isolated_nodes(val_data.edge_index, fold.val_mask)
-
-#         if train_isolated > 0 or val_isolated > 0:
-#             print(
-#                 f"⚠️  Fold {i}: {train_isolated} isolated train nodes, {val_isolated} isolated val nodes"
-#             )
-#         else:
-#             print(f"✅ Fold {i}: No isolated nodes")
-
-#     test_isolated = count_isolated_nodes(test_data.edge_index, test_data.test_mask)
-#     calib_isolated = count_isolated_nodes(test_data.edge_index, test_data.calib_mask)
-#     if test_isolated > 0 or calib_isolated > 0:
-#         print(
-#             f"⚠️  Test: {test_isolated} isolated test nodes, {calib_isolated} isolated calib nodes"
-#         )
-#     else:
-#         print("✅ Test: No isolated nodes")
-#         print("✅ Calibration: No isolated nodes")
 
 
 def _calculate_network_density(n_nodes, n_edges):

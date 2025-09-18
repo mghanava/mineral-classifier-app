@@ -1,27 +1,25 @@
 """Module for preparing base data for the next cycle in the pipeline.
 
-This script combines base and prediction data, constructs graphs, exports visualizations,
-and saves processed data for subsequent cycles.
+This script combines base and prediction data, constructs graphs, exports visualizations, and saves processed data for subsequent cycles.
 """
 
 import argparse
 import os
 
 import numpy as np
-import torch
 
 from src.utilities.data_utils import (
     analyze_feature_discrimination,
-    # check_isolated_components,
     construct_graph,
-    # diagnose_data_leakage,
     export_all_graphs_to_html,
     export_graph_to_html,
 )
 from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
+    load_data,
     load_params,
+    save_data,
 )
 
 
@@ -64,18 +62,8 @@ def combine_split_data(
     pred_path = paths["prediction"]
     output_path = ensure_directory_exists(paths["output"])
 
-    # Determine data source
-    base_data_path = os.path.join(base_path, "base_data.pt")
-    if not os.path.exists(base_data_path):
-        raise FileNotFoundError(f"Base data not found: {base_data_path}")
-    print(f"📥 Loading base data from: {base_data_path}")
-    base_data = torch.load(base_data_path, weights_only=False)
-    # Load prediction data
-    pred_data_path = os.path.join(pred_path, "pred_data.pt")
-    if not os.path.exists(pred_data_path):
-        raise FileNotFoundError(f"Prediction data not found: {pred_data_path}")
-    print(f"📥 Loading prediction data from: {pred_data_path}")
-    pred_data = torch.load(pred_data_path, weights_only=False)
+    base_data = load_data(os.path.join(base_path, "base_data.pt"), "Base")
+    pred_data = load_data(os.path.join(pred_path, "pred_data.pt"), "Prediction")
 
     print("📊 Data sizes before combination:")
     print(f"   Base/Previous: {base_data.x.shape[0]} samples")
@@ -88,10 +76,6 @@ def combine_split_data(
     )
     features = np.concatenate((base_data.x, pred_data.x), axis=0)
     labels = np.concatenate((base_data.y, pred_data.y), axis=0)
-
-    if combined_size > 3000:
-        print("🎯 Applying reservoir sampling to connected graph...")
-        pass  # placeholder for reservoir sampling logic
 
     all_data = construct_graph(
         coordinates,
@@ -115,9 +99,6 @@ def combine_split_data(
             "Expected construct_graph to return a tuple when should_split is True."
         )
     base_data, fold_data, test_data, calib_data = all_data
-
-    # diagnose_data_leakage(fold_data, test_data)
-    # check_isolated_components(fold_data, test_data)
 
     # Export visualizations
     print("\nExporting 3D interactive plots of graphs ...")
@@ -154,17 +135,12 @@ def combine_split_data(
     )
 
     # Save data files
-    try:
-        torch.save(base_data, os.path.join(output_path, "base_data.pt"))
-        torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
-        torch.save(test_data, os.path.join(output_path, "test_data.pt"))
-        torch.save(calib_data, os.path.join(output_path, "calib_data.pt"))
-        print(f"✓ All files successfully saved to {paths['output']}.")
-    except Exception as e:
-        print(f"Error saving files: {e}")
-        import traceback
-
-        traceback.print_exc()
+    save_data(base_data, os.path.join(output_path, "base_data.pt"), "Base")
+    save_data(
+        fold_data, os.path.join(output_path, "fold_data.pt"), "Train-Validation Fold"
+    )
+    save_data(test_data, os.path.join(output_path, "test_data.pt"), "Test")
+    save_data(calib_data, os.path.join(output_path, "calib_data.pt"), "Calibration")
 
 
 def main():

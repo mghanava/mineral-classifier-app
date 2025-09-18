@@ -10,8 +10,6 @@ This module provides functionality to:
 import argparse
 import os
 
-import torch
-
 from src.utilities.data_utils import (
     analyze_feature_discrimination,
     construct_graph,
@@ -24,6 +22,7 @@ from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
     load_params,
+    save_data,
 )
 
 
@@ -52,18 +51,20 @@ def prepare_base_data(
     ]
     labels_map = dict(zip(range(len(class_names)), class_names, strict=True))
     # Generate synthetic data
-    coordinates, features, labels = generate_mineral_data(
+    coordinates, features, labels, hotspots, prototypes = generate_mineral_data(
         radius=base_params["radius"],
-        depth=base_params["depth"],
-        spacing=base_params["spacing"],
-        n_samples=base_params["n_samples"],
-        n_features=base_params["n_features"],
-        n_classes=base_params["n_classes"],
-        threshold_binary=base_params["threshold_binary"],
-        min_samples_per_class=base_params["min_samples_per_class"],
-        n_hotspots=base_params["n_hotspots"],
-        n_hotspots_random=base_params["n_hotspots_random"],
-        seed=base_params["seed"],
+        depth=base_params.get("depth", -500),
+        n_samples=base_params.get("n_samples", 1000),
+        spacing=base_params.get("spacing", 10),
+        n_features=base_params.get("n_features", 5),
+        n_classes=base_params.get("n_classes", 2),
+        threshold_binary=base_params.get("threshold_binary", 0.3),
+        min_samples_per_class=base_params.get("min_samples_per_class", 50),
+        n_hotspots_max=base_params.get("n_hotspots_max", 10),
+        mineral_noise_level=base_params.get("mineral_noise_level", 0.05),
+        exp_decay_factor=base_params.get("mineral_noise_level", 0.005),
+        feature_noise_level=base_params.get("feature_noise_level", 0.2),
+        seed=base_params.get("seed", 42),
     )
 
     all_data = construct_graph(
@@ -75,9 +76,9 @@ def prepare_base_data(
         distance_percentile=base_params.get("distance_percentile", None),
         add_self_loops=base_params["add_self_loops"],
         n_splits=base_params["n_splits"],
-        test_size=base_params["test_size"],
-        calib_size=base_params["calib_size"],
-        seed=base_params["seed"],
+        test_size=base_params.get("test_size", None),
+        calib_size=base_params.get("calib_size", None),
+        seed=base_params.get("seed", 42),
         scaler=scaler_setup(params),
         make_edge_weight=params["data"].get("make_edge_weight", True),
         make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
@@ -125,17 +126,16 @@ def prepare_base_data(
     )
 
     # Save the datasets
-    try:
-        torch.save(base_data, os.path.join(output_path, "base_data.pt"))
-        torch.save(fold_data, os.path.join(output_path, "fold_data.pt"))
-        torch.save(test_data, os.path.join(output_path, "test_data.pt"))
-        torch.save(calib_data, os.path.join(output_path, "calib_data.pt"))
-        print(f"All files successfully saved to {output_path}.")
-    except Exception as e:
-        print(f"Error saving files: {e}")
-        import traceback
-
-        traceback.print_exc()
+    save_data(base_data, os.path.join(output_path, "base_data.pt"), "Base")
+    save_data(
+        fold_data, os.path.join(output_path, "fold_data.pt"), "Train-Validation Fold"
+    )
+    save_data(test_data, os.path.join(output_path, "test_data.pt"), "Test")
+    save_data(calib_data, os.path.join(output_path, "calib_data.pt"), "Calibration")
+    save_data(hotspots, os.path.join(output_path, "hotspots.npy"), "Hotspots", True)
+    save_data(
+        prototypes, os.path.join(output_path, "prototypes.npy"), "Prototypes", True
+    )
 
 
 def main():
