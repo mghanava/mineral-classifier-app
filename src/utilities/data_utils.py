@@ -528,6 +528,7 @@ def _split_graph_no_leakage(
     y: torch.Tensor,
     edge_index: torch.Tensor,
     edge_attr: torch.Tensor,
+    edge_weight: torch.Tensor,
     n_splits: int | None,
     test_size: float | None,
     calib_size: float | None,
@@ -540,6 +541,7 @@ def _split_graph_no_leakage(
         y: Node labels of shape [num_nodes]
         edge_index: Graph connectivity in COO format of shape [2, num_edges]
         edge_attr: Edge feature matrix of shape [num_edges, num_edge_features]
+        edge_weight: Edge weight matrix of shape [num_edges]
         n_splits (int, optional): Number of folds for cross-validation splitting
         test_size (float, optional): Fraction of data to use for testing (between 0 and 1)
         calib_size (float, optional): Fraction of data to use for calibration (between 0 and 1)
@@ -587,26 +589,37 @@ def _split_graph_no_leakage(
         val_idx = train_val_idx[val_fold_idx]
         # Create separate subgraphs for train and val
         train_data = _create_subgraph(
-            x, y, edge_index, edge_attr, train_idx, fold_idx, "train"
+            x, y, edge_index, edge_attr, edge_weight, train_idx, fold_idx, "train"
         )
         val_data = _create_subgraph(
-            x, y, edge_index, edge_attr, val_idx, fold_idx, "val"
+            x, y, edge_index, edge_attr, edge_weight, val_idx, fold_idx, "val"
         )
         fold_data.append((train_data, val_data))
     # Create test and calibration data
-    test_data = _create_subgraph(x, y, edge_index, edge_attr, test_idx, None, "test")
-    calib_data = _create_subgraph(x, y, edge_index, edge_attr, calib_idx, None, "calib")
+    test_data = _create_subgraph(
+        x, y, edge_index, edge_attr, edge_weight, test_idx, None, "test"
+    )
+    calib_data = _create_subgraph(
+        x, y, edge_index, edge_attr, edge_weight, calib_idx, None, "calib"
+    )
 
     return fold_data, test_data, calib_data
 
 
-def _create_subgraph(x, y, edge_index, edge_attr, node_indices, fold_idx, split_type):
+def _create_subgraph(
+    x, y, edge_index, edge_attr, edge_weight, node_indices, fold_idx, split_type
+):
     """Create a subgraph containing only specified nodes and their connections."""
     node_indices = torch.tensor(node_indices, dtype=torch.long)
 
     # Extract subgraph with only edges between nodes in node_indices
-    sub_edge_index, sub_edge_attr = subgraph(
-        node_indices, edge_index, edge_attr, relabel_nodes=True, num_nodes=x.size(0)
+    sub_edge_index, sub_edge_attr, sub_edge_mask = subgraph(
+        node_indices,
+        edge_index,
+        edge_attr,
+        relabel_nodes=True,
+        num_nodes=x.size(0),
+        return_edge_mask=True,
     )
 
     # Extract node features and labels for the subgraph
@@ -618,6 +631,7 @@ def _create_subgraph(x, y, edge_index, edge_attr, node_indices, fold_idx, split_
         y=sub_y,
         edge_index=sub_edge_index,
         edge_attr=sub_edge_attr,
+        edge_weight=edge_weight[sub_edge_mask] if edge_weight is not None else None,
         original_node_indices=node_indices,  # Keep track of original indices
         fold=fold_idx,
         split_type=split_type,
@@ -641,7 +655,7 @@ def construct_graph(
     scaler: ScalerType | None = RobustScaler(),
     should_split: bool = True,
     make_edge_weight: bool = True,
-    make_edge_weight_method: str | None = None,
+    make_edge_weight_method: str | None = "minmax",
 ) -> tuple[Data, list[tuple[Data, Data]], Data, Data] | Data:
     """Create graphs from geospatial data using distance matrix with a held-out test set.
 
@@ -702,9 +716,17 @@ def construct_graph(
         ),  # store for data drift detection
     )
 
-    if should_split and n_splits is not None:
+    if should_split and n_splits is not None and edge_weight is not None:
         fold_data, test_data, calib_data = _split_graph_no_leakage(
-            x, y, edge_index, edge_attr, n_splits, test_size, calib_size, seed
+            x,
+            y,
+            edge_index,
+            edge_attr,
+            edge_weight,
+            n_splits,
+            test_size,
+            calib_size,
+            seed,
         )
         return base_data, fold_data, test_data, calib_data
     return base_data
@@ -781,10 +803,9 @@ def prepare_edge_data(
 
     Returns:
         tuple: Contains:
-            - edge_index (torch.Tensor): Tensor of shape [2, num_edges] containing source and
-              destination node indices for each edge
-            - edge_attr (torch.Tensor): Tensor of shape [num_edges, 2] containing edge attributes
-              [inverse_distance, raw_distance] for each edge
+            - edge_index (torch.Tensor): Tensor of shape [2, num_edges] containing source and destination node indices for each edge
+            - edge_attr (torch.Tensor): Tensor of shape [num_edges, 2] containing edge attributes [inverse_distance, raw_distance] for each edge
+            - edge_weight (torch.Tensor or None): Tensor of shape [num_edges] containing normalized edge weights, or None if not computed
     Notes:
         - Self-loops are explicitly excluded (nodes cannot connect to themselves)
         - The graph is made undirected by adding reciprocal edges

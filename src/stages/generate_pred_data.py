@@ -10,6 +10,7 @@ import torch
 
 from src.utilities.data_utils import (
     construct_graph,
+    export_graph_to_html,
     generate_mineral_data,
     no_coordinate_overlap,
     scaler_setup,
@@ -102,6 +103,25 @@ def prepare_pred_data(paths: dict, params: dict):
         make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
     save_data(pred_data, os.path.join(output_path, "pred_data.pt"), "Prediction")
+    # export the interactive 3D plots
+    # Handle class names and labels
+    class_names = base_params["class_names"] or [
+        f"Class {i}" for i in range(base_params["n_classes"])
+    ]
+    labels_map = dict(zip(range(len(class_names)), class_names, strict=True))
+    print("\nExporting 3D interactive plots of graphs ...")
+    export_graph_to_html(
+        pred_data,
+        coordinates,
+        None,
+        base_params["k_nearest"],
+        base_params["connection_radius"],
+        base_params["distance_percentile"],
+        base_params["add_self_loops"],
+        output_path,
+        labels_map,
+        dataset_tag="prediction_data",
+    )
 
 
 def main():
