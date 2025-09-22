@@ -2,7 +2,8 @@
 
 This project provides a web-based dashboard for a DVC pipeline that classifies mineral deposits. The dashboard, built with Streamlit, allows users to interact with and visualize the pipeline's stages.
 
-![App Demo GIF](https://raw.githubusercontent.com/mghanava/mineral-deposit-classification/main/docs/app-demo.gif)
+![App Demo GIF](assets/app-demo.gif)
+*Demo showing the interactive dashboard for mineral deposit classification*
 
 ## 🚀 Quickstart Demo
 

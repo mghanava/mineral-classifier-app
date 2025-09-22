@@ -85,6 +85,7 @@ def _create_hotspots(
     y_range: tuple[float, float],
     n_hotspots_max: int = 10,
     previous_hotspots: np.ndarray | None = None,
+    hotspot_drift: float = 0.1,
     rng: np.random.Generator = np.random.default_rng(42),
 ) -> tuple[np.ndarray, np.ndarray]:
     """Create mineralization hotspots with optional continuity from previous data.
@@ -101,6 +102,8 @@ def _create_hotspots(
         Number of hotspots to generate
     previous_hotspots : np.ndarray, optional
         Previous hotspot locations to maintain continuity
+    hotspot_drift : float
+        Small perturbation factor for previous hotspots
     rng : np.random.Generator
         Random number generator
 
@@ -114,14 +117,16 @@ def _create_hotspots(
     n_hotspots = int(rng.integers(1, n_hotspots_max + 1))
     # Initialize hotspots array
     hotspots = np.zeros((n_hotspots, 3))
-
     # Reuse some previous hotspots for spatial continuity if provided
     if previous_hotspots is not None and len(previous_hotspots) > 0:
         n_keep = n_hotspots // 2  # Keep half of previous hotspots
         n_keep = min(
             n_keep, len(previous_hotspots)
         )  # Make sure we don't exceed available hotspots
-        hotspots[:n_keep] = previous_hotspots[:n_keep]
+        # Add small random walk to hotspot positions
+        hotspots[:n_keep] = previous_hotspots[:n_keep] + rng.normal(
+            0, hotspot_drift, (n_keep, 3)
+        )
 
         # Generate new hotspots for remaining spots
         new_hotspots = n_hotspots - n_keep
@@ -277,6 +282,7 @@ def generate_mineral_data(
     n_hotspots_max: int = 10,
     previous_hotspots: np.ndarray | None = None,
     previous_prototypes: np.ndarray | None = None,
+    hotspot_drift: float = 0.1,
     mineral_noise_level: float = 0.05,
     exp_decay_factor: float = 0.005,
     feature_noise_level: float = 0.2,
@@ -312,6 +318,8 @@ def generate_mineral_data(
         Previous hotspot locations to maintain spatial continuity
     previous_prototypes : np.ndarray, optional
         Previous feature prototypes to maintain feature space continuity
+    hotspot_drift : float
+        Small perturbation factor for previous hotspots
     mineral_noise_level : float
         Noise level for gold value generation (default: 0.05)
     exp_decay_factor : float
@@ -340,7 +348,7 @@ def generate_mineral_data(
     y_range = coordinates[:, 1].min(), coordinates[:, 1].max()
     # 2. Create mineralization hotspots and their strengths (mineralization centers)
     hotspots, hotspot_strengths = _create_hotspots(
-        depth, x_range, y_range, n_hotspots_max, previous_hotspots, rng
+        depth, x_range, y_range, n_hotspots_max, previous_hotspots, hotspot_drift, rng
     )
     # 3. Calculate gold values based on distance to nearest hotspot
     gold_values = _calculate_gold_values(

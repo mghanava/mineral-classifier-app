@@ -76,9 +76,10 @@ def prepare_pred_data(paths: dict, params: dict):
         n_hotspots_max=base_params["n_hotspots_max"],
         previous_hotspots=previous_hotspots,
         previous_prototypes=previous_prototypes,
-        mineral_noise_level=pred_params.get("mineral_noise_level", 0.01),
-        exp_decay_factor=pred_params.get("exp_decay_factor", 1.0),
-        feature_noise_level=pred_params.get("feature_noise_level", 0.01),
+        hotspot_drift=base_params.get("hotspot_drift", 0.1),
+        mineral_noise_level=base_params.get("mineral_noise_level", 0.1),
+        exp_decay_factor=base_params.get("exp_decay_factor", 0.01),
+        feature_noise_level=base_params.get("feature_noise_level", 0.5),
         seed=pred_params["seed"],
     )
 

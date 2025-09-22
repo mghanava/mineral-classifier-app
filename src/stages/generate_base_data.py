@@ -60,10 +60,11 @@ def prepare_base_data(
         n_classes=base_params.get("n_classes", 2),
         threshold_binary=base_params.get("threshold_binary", 0.3),
         min_samples_per_class=base_params.get("min_samples_per_class", 50),
-        n_hotspots_max=base_params.get("n_hotspots_max", 10),
-        mineral_noise_level=base_params.get("mineral_noise_level", 0.05),
-        exp_decay_factor=base_params.get("mineral_noise_level", 0.005),
-        feature_noise_level=base_params.get("feature_noise_level", 0.2),
+        n_hotspots_max=base_params.get("n_hotspots_max", 5),
+        hotspot_drift=base_params.get("hotspot_drift", 0.1),
+        mineral_noise_level=base_params.get("mineral_noise_level", 0.1),
+        exp_decay_factor=base_params.get("exp_decay_factor", 0.01),
+        feature_noise_level=base_params.get("feature_noise_level", 0.5),
         seed=base_params.get("seed", 42),
     )
 

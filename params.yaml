@@ -28,10 +28,11 @@ data:
     test_size: 0.3
     calib_size: 0.3
     n_hotspots_max: 5
-    mineral_noise_level: 0.05
-    exp_decay_factor: 0.005
-    feature_noise_level: 0.2
-    seed: 110
+    hotspot_drift: 0.1
+    mineral_noise_level: 0.5
+    exp_decay_factor: 0.05
+    feature_noise_level: 0.8
+    seed: 42
   pred:
     n_samples: 200
     min_samples_per_class:
@@ -83,7 +84,7 @@ evaluate:
   reg_lambda: 1.0e-2
   reg_mu: 1.0e-2
   eps: 1.0e-8
-  seed: 40
+  seed: 42
 
 # Drift detection parameters
 analyze_drift:

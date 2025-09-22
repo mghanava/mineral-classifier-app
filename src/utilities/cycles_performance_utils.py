@@ -73,7 +73,6 @@ def plot_metrics(cycles_data, output_dir: Path):
             ax.set_ylabel("Score")
             ax.grid(True, alpha=0.3)
             ax.legend(bbox_to_anchor=(0.5, -0.15), loc="upper center", ncol=3)
-            ax.set_ylim(0, 1)
             # Set x-axis to show integer ticks
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             # Ensure x-axis limits are slightly padded

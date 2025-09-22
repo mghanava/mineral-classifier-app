@@ -58,9 +58,9 @@ def run_command(command):
     return process.returncode
 
 
-def show_html_files(base_path):
+def show_html_files(path: Path):
     """Display HTML files from a given directory."""
-    html_files = list(base_path.glob("*.html"))
+    html_files = list(path.glob("*.html"))
     if not html_files:
         st.info("No HTML files found in this directory.")
         return
@@ -132,7 +132,7 @@ def data_tab():
     to generate initial data (cycle 0).
     """
     st.header("Data Generation")
-    st.write("View the generated base data for each cycle.")
+    st.write("View the generated base and prediction data for each cycle.")
 
     max_cycles = get_max_cycles()
     cycle_num = st.number_input(
@@ -148,12 +148,20 @@ def data_tab():
     st.subheader("Generated Data")
     data_path = Path(f"results/data/base/cycle_{cycle_num}")
     if data_path.exists():
+        st.markdown("### Base Data (Training, Evaluation, Test, Calibration)")
         plot_files = list(data_path.glob("*.png"))
         for plot in plot_files:
             st.image(str(plot))
         show_html_files(data_path)
     else:
         st.warning(f"Base data for cycle {cycle_num} not found.")
+    if cycle_num > 0:
+        pred_data_path = Path(f"results/data/prediction/cycle_{cycle_num}")
+        if pred_data_path.exists():
+            st.markdown("### Prediction Data")
+            show_html_files(pred_data_path)
+        else:
+            st.warning(f"Prediction data for cycle {cycle_num} not found.")
 
 
 def train_tab():
