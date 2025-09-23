@@ -13,8 +13,8 @@ Follow these steps for a manual setup.
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/mghanava/mineral-deposit-classification.git
-    cd mineral-deposit-classification
+    git clone https://github.com/mghanava/mineral-classifier-app.git
+    cd mineral-classifier-app
     ```
 
 2.  **Build and run the container:**
