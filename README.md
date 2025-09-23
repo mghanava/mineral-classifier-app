@@ -20,7 +20,7 @@ Follow these steps for a manual setup.
 2.  **Build and run the container:**
     Use Docker Compose to build the image and start the service in detached mode:
     ```bash
-    docker-compose up -d --build
+    DOCKER_BUILDKIT=1 docker-compose up -d --build
     ```
 
 ### Usage
