@@ -18,9 +18,16 @@ Follow these steps for a manual setup.
     ```
 
 2.  **Build and run the container:**
-    Use Docker Compose to build the image and start the service in detached mode:
+    A `run.sh` script is provided to simplify the setup process. It builds the container and sets the correct file permissions for DVC to prevent errors.
+
+    First, make the script executable:
     ```bash
-    DOCKER_BUILDKIT=1 docker-compose up -d --build
+    chmod +x run.sh
+    ```
+
+    Now, run the script:
+    ```bash
+    ./run.sh
     ```
 
 ### Usage
@@ -44,6 +51,7 @@ To stop and remove the container and attached volumes, run:
 ```
 ├── app.py                    # The Streamlit dashboard application
 ├── setup_dvc.py              # DVC setup script
+├── run.sh                    # bash file to build and run container
 ├── docker-compose.yaml       # Docker Compose configuration
 ├── Dockerfile                # Dockerfile for the application image
 ├── dvc.yaml                  # DVC pipeline definition
