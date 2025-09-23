@@ -44,6 +44,7 @@ To stop and remove the container and attached volumes, run:
 ```
 ├── app.py                    # The Streamlit dashboard application
 ├── setup_dvc.py              # DVC setup script
+├── entrypoint.sh             # Sets correct user permissions at container startup
 ├── docker-compose.yaml       # Docker Compose configuration
 ├── Dockerfile                # Dockerfile for the application image
 ├── dvc.yaml                  # DVC pipeline definition
