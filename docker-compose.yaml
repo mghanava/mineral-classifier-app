@@ -2,7 +2,11 @@ services:
   mineral_classifier:
     container_name: mineral_classifier_container
     image: my_mineral_classifier:latest
-    build: .
+    build:
+      context: .
+      args:
+        - UID=${UID:-1000}
+        - GID=${GID:-1000}
     runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all

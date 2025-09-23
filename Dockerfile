@@ -27,16 +27,21 @@ FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-runtime
 
 WORKDIR /app
 
+# Arguments for user creation
+ARG UID=1000
+ARG GID=1000
+
 # System runtime deps (only what’s needed at runtime)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd -m -u 1000 appuser \
+# Create non-root user with dynamic UID/GID
+RUN groupadd -g $GID -o appgroup && \
+    useradd -m -u $UID -g $GID -o -s /bin/bash appuser \
     && mkdir -p /app/results /app/.dvc/cache \
-    && chown -R appuser:appuser /app /home/appuser
+    && chown -R appuser:appgroup /app /home/appuser
 
 # Copy wheels from builder and install them.
 # Using --no-deps is fast because all dependencies are already in /wheels.
@@ -45,7 +50,7 @@ RUN pip install --no-cache-dir --no-deps /wheels/* \
     && rm -rf /wheels
 
 # Copy application code from the final state of the builder stage
-COPY --from=builder --chown=appuser:appuser /app /app
+COPY --from=builder --chown=appuser:appgroup /app /app
 
 # Env
 ENV PYTHONPATH=/app
