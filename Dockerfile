@@ -1,69 +1,59 @@
 # Stage 1: Builder
 FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-devel AS builder
+
 WORKDIR /app
 
-# System build deps (builder only) - Combined into single layer
+# System build deps (builder only)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ git \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    && rm -rf /var/lib/apt/lists/*
 
 # ---- Dependencies Layer (cached if unchanged) ----
-# Copy requirements first for better caching
+# Copy only the files needed to build the wheels to leverage caching
 COPY pyproject.toml ./
-
-# Pre-install common heavy dependencies that rarely change
-# This creates a separate cache layer for the most stable dependencies
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --no-deps \
-    torch torchvision torchaudio \
-    numpy pandas scikit-learn \
-    streamlit plotly \
-    && pip cache purge
-
-# Copy source and build project wheels
 COPY src ./src
-RUN --mount=type=cache,target=/root/.cache/pip \
-    --mount=type=cache,target=/root/.cache/setuptools \
-    pip wheel --no-cache-dir --wheel-dir /app/wheels . \
-    && pip cache purge
 
-# Copy remaining files (do this last to avoid cache invalidation)
+# Build wheels for the project and ALL its dependencies.
+# This is the slowest step. It is only re-run if pyproject.toml or src/ changes.
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip wheel --no-cache-dir --wheel-dir /app/wheels .
+
+# ---- Source code (not cached for deps) ----
+# Copy the rest of the project. Changes here won't invalidate the wheel cache.
 COPY . .
 
-# Stage 2: Runtime - Use slimmer base image
-FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-runtime AS runtime
+# Stage 2: Runtime
+FROM pytorch/pytorch:2.6.0-cuda12.6-cudnn9-runtime
+
 WORKDIR /app
 
-# Combined system setup in single layer
+# System runtime deps (only what’s needed at runtime)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && useradd -m -u 1000 appuser \
-    && mkdir -p /app/results \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser \
+    && mkdir -p /app/results /app/.dvc/cache \
     && chown -R appuser:appuser /app /home/appuser
 
-# Install wheels efficiently
+# Copy wheels from builder and install them.
+# Using --no-deps is fast because all dependencies are already in /wheels.
 COPY --from=builder /app/wheels /wheels
 RUN pip install --no-cache-dir --no-deps /wheels/* \
-    && rm -rf /wheels /root/.cache/pip
+    && rm -rf /wheels
 
-# Copy application code and set permissions in one step
+# Copy application code from the final state of the builder stage
 COPY --from=builder --chown=appuser:appuser /app /app
 
-# Set up DVC directories with proper permissions
-RUN mkdir -p /app/.dvc/tmp /app/.dvc/cache /app/.dvc/plots \
-    && chown -R appuser:appuser /app/.dvc \
-    && chmod -R 755 /app/.dvc
-
-# Environment setup
-ENV PYTHONPATH=/app \
-    PIP_NO_CACHE_DIR=1 \
-    PATH="/home/appuser/.local/bin:${PATH}" \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# Env
+ENV PYTHONPATH=/app
+ENV PIP_NO_CACHE_DIR=1
+# Make sure pip-installed CLI tools are found
+ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 USER appuser
 EXPOSE 8501
+
 CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
