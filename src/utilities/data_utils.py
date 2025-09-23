@@ -27,11 +27,40 @@ def _generate_coordinates(
     depth: float,
     n_samples: int,
     spacing: float,
-    existing_points: np.ndarray | None = None,
+    existing_sample_coords: np.ndarray | None = None,
     rng: np.random.Generator = np.random.default_rng(42),
 ) -> np.ndarray:
+    """Generate 3D coordinates for samples within a circular area, ensuring minimum spacing.
+
+    This function generates random 3D coordinates (x, y, z) for a specified number of samples within a cylinder defined by a radius and depth. It uses a KDTree to efficiently check for and enforce a minimum spacing between samples, and can optionally avoid existing sample locations.
+
+    Parameters
+    ----------
+    radius : float
+        The radius of the circular area for generating x, y coordinates.
+    depth : float
+        The maximum depth for generating z coordinates (typically a negative value).
+    n_samples : int
+        The target number of new samples to generate.
+    spacing : float
+        The minimum allowable distance between any two samples in the x-y plane.
+    existing_sample_coords : np.ndarray | None, optional
+        An array of existing sample coordinates (shape: [n_existing, 3]) to consider when enforcing spacing. Defaults to None.
+    rng : np.random.Generator, optional
+        A random number generator instance for reproducibility. Defaults to np.random.default_rng(42).
+
+    Returns
+    -------
+    np.ndarray
+        An array of shape [n_generated, 3] containing the x, y, z coordinates of the newly generated samples. The number of generated samples may be less than n_samples if the space becomes too crowded to meet the spacing constraint.
+
+    """
     # Initialize
-    all_xy = np.empty((0, 2)) if existing_points is None else existing_points[:, :2]
+    all_xy = (
+        np.empty((0, 2))
+        if existing_sample_coords is None
+        else existing_sample_coords[:, :2]
+    )
 
     new_points = []
 
@@ -84,8 +113,8 @@ def _create_hotspots(
     x_range: tuple[float, float],
     y_range: tuple[float, float],
     n_hotspots_max: int = 10,
-    previous_hotspots: np.ndarray | None = None,
-    hotspot_drift: float = 0.1,
+    existing_hotspots: np.ndarray | None = None,
+    hotspot_drift: float | None = 0.1,
     rng: np.random.Generator = np.random.default_rng(42),
 ) -> tuple[np.ndarray, np.ndarray]:
     """Create mineralization hotspots with optional continuity from previous data.
@@ -100,7 +129,7 @@ def _create_hotspots(
         Range for y coordinates
     n_hotspots_max : int
         Number of hotspots to generate
-    previous_hotspots : np.ndarray, optional
+    existing_hotspots : np.ndarray, optional
         Previous hotspot locations to maintain continuity
     hotspot_drift : float
         Small perturbation factor for previous hotspots
@@ -118,13 +147,13 @@ def _create_hotspots(
     # Initialize hotspots array
     hotspots = np.zeros((n_hotspots, 3))
     # Reuse some previous hotspots for spatial continuity if provided
-    if previous_hotspots is not None and len(previous_hotspots) > 0:
+    if existing_hotspots is not None and hotspot_drift is not None:
         n_keep = n_hotspots // 2  # Keep half of previous hotspots
         n_keep = min(
-            n_keep, len(previous_hotspots)
+            n_keep, len(existing_hotspots)
         )  # Make sure we don't exceed available hotspots
         # Add small random walk to hotspot positions
-        hotspots[:n_keep] = previous_hotspots[:n_keep] + rng.normal(
+        hotspots[:n_keep] = existing_hotspots[:n_keep] + rng.normal(
             0, hotspot_drift, (n_keep, 3)
         )
 
@@ -154,6 +183,33 @@ def _calculate_gold_values(
     exp_decay_factor=0.005,
     rng: np.random.Generator = np.random.default_rng(42),
 ) -> np.ndarray:
+    """Calculate gold values based on proximity to mineralization hotspots.
+
+    This function determines a "gold value" for each sample coordinate based on its distance to the nearest mineralization hotspot. The value is influenced by the hotspot's strength and decreases exponentially with distance. Random noise is added, and the final values are scaled to a [0, 1] range.
+
+    Parameters
+    ----------
+    n_samples : int
+        The number of samples for which to calculate gold values.
+    coordinates : np.ndarray
+        An array of shape [n_samples, 3] with the x, y, z coordinates of the samples.
+    hotspots : np.ndarray
+        An array of shape [n_hotspots, 3] with the coordinates of the mineralization hotspots.
+    hotspot_strengths : np.ndarray
+        An array of shape [n_hotspots,] with the strength of each hotspot.
+    noise_level : float, optional
+        The standard deviation of the Gaussian noise to add to the gold values. Defaults to 0.05.
+    exp_decay_factor : float, optional
+        The exponential decay factor for the distance from hotspots. Defaults to 0.005.
+    rng : np.random.Generator, optional
+        A random number generator instance for reproducibility. Defaults to np.random.default_rng(42).
+
+    Returns
+    -------
+    np.ndarray
+        An array of shape [n_samples,] containing the calculated gold values, scaled to the range [0, 1].
+
+    """
     # Reshape for broadcasting: coordinates (n_samples, 3), hotspots (n_hotspots, 3)
     # Result: distances will be (n_samples, n_hotspots)
     distances = np.sqrt(
@@ -186,7 +242,25 @@ def _calculate_gold_values(
 def _assign_labels(
     gold_values: np.ndarray, n_classes: int, threshold_binary: float
 ) -> np.ndarray:
-    """Convert gold values to categorical labels based on the number of classes."""
+    """Convert continuous gold values to discrete class labels.
+
+    This function takes an array of continuous gold values (typically in the range [0, 1]) and assigns a discrete class label to each value. The method of assignment depends on the number of classes.
+
+    Parameters
+    ----------
+    gold_values : np.ndarray
+        An array of continuous gold values to be converted to labels.
+    n_classes : int
+        The total number of desired classes.
+    threshold_binary : float
+        The threshold used for binary classification when n_classes is 2. Gold values greater than or equal to this threshold will be assigned class 1, and others class 0.
+
+    Returns
+    -------
+    np.ndarray
+        An array of integer labels corresponding to the input gold values. The labels will range from 0 to n_classes-1.
+
+    """
     if n_classes == 2:  # Binary classification: gold/no gold
         return (gold_values >= threshold_binary).astype(int)
     else:  # Multi-class classification
@@ -206,6 +280,37 @@ def _change_label_distribution(
     gold_values: np.ndarray,
     rng: np.random.Generator = np.random.default_rng(42),
 ):
+    """Adjust class distribution by adding samples to underrepresented classes.
+
+    This function checks the number of samples in each class and, if any class has fewer samples than `min_samples_per_class`, it generates new synthetic samples for that class to meet the minimum requirement. The new samples are generated with appropriate spatial coordinates and gold values corresponding to their assigned class.
+
+    Parameters
+    ----------
+    labels : np.ndarray
+        The initial array of class labels for the dataset.
+    min_samples_per_class : int
+        The minimum desired number of samples for each class.
+    n_classes : int
+        The total number of classes in the dataset.
+    depth : float
+        The maximum depth for generating z coordinates for new samples.
+    x_range : tuple
+        A tuple (min, max) specifying the range for generating x coordinates.
+    y_range : tuple
+        A tuple (min, max) specifying the range for generating y coordinates.
+    coordinates : np.ndarray
+        The existing array of sample coordinates.
+    gold_values : np.ndarray
+        The existing array of gold values.
+    rng : np.random.Generator, optional
+        A random number generator instance for reproducibility. Defaults to np.random.default_rng(42).
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        A tuple containing the updated labels, coordinates, and gold values. If new samples were added, these arrays will be larger than the input arrays.
+
+    """
     # Calculate class counts and needed samples
     class_counts = np.bincount(labels, minlength=n_classes)
     samples_needed = np.maximum(0, min_samples_per_class - class_counts)
@@ -241,30 +346,233 @@ def _change_label_distribution(
 
 
 def _generate_features(
-    n_total_samples: int,
+    n_samples: int,
     labels: np.ndarray,
+    coordinates: np.ndarray,
+    hotspots: np.ndarray,
+    gold_values: np.ndarray,
     n_classes: int,
     n_features: int,
-    noise_level=0.2,
-    previous_prototypes=None,
+    noise_level: float = 0.2,
+    existing_prototypes: np.ndarray | None = None,
+    prototype_evolution_rate: float | None = 0.3,
+    class_separation: float = 2.0,
+    class_influence: float = 0.3,
+    spatial_weight: float = 0.5,
+    interaction_strength: float = 0.15,
+    correlation_strength: float = 0.2,
+    feature_weight_range: tuple[float, float] = (0.5, 2.0),
+    feature_offset_std: float = 0.3,
     rng: np.random.Generator = np.random.default_rng(42),
-):
-    if previous_prototypes is not None:
-        # Slightly perturb previous prototypes instead of generating new ones
-        prototypes = previous_prototypes + rng.normal(
-            0, noise_level / 2, size=previous_prototypes.shape
+) -> tuple[np.ndarray, np.ndarray]:
+    """Generate realistic synthetic features with spatial, chemical, and class relationships.
+
+    This function creates discriminative features that simulate realistic relationships found in mineral exploration data, including spatial correlations, non-linear chemical relationships, and controlled class separability while maintaining dataset continuity.
+
+    Parameters
+    ----------
+    n_samples : int
+        Total number of samples to generate features for. Must match the length of other input arrays (coordinates, labels, gold_values).
+    labels : np.ndarray of shape (n_total_samples,)
+        Class labels for each sample, typically ranging from 0 to n_classes-1.
+        Used to create class-specific feature patterns and prototypes.
+    coordinates : np.ndarray of shape (n_total_samples, 3)
+        Sample coordinates in 3D space [x, y, z]. Typically represents drill hole locations where z is depth (usually negative values).
+    hotspots : np.ndarray of shape (n_hotspots, 3)
+        Coordinates of mineralization centers or geological features of interest.
+    gold_values : np.ndarray of shape (n_total_samples,)
+        Continuous target values (e.g., gold concentrations) in range [0, 1].
+    n_classes : int
+        Number of distinct classes in the dataset.
+    n_features : int
+        Number of features to generate.
+    noise_level : float, default=0.2
+        Base noise level controlling feature variability.
+    existing_prototypes : np.ndarray of shape (n_classes, n_features), optional
+        Class prototypes from a previous dataset generation cycle.
+    prototype_evolution_rate : float, optional, default=0.3
+        Rate at which prototypes evolve from previous generation.
+    class_separation : float, default=2.0
+        Controls the base separation between class centroids in feature space.
+    class_influence : float, default=0.3
+        Strength of class-specific patterns in feature generation.
+    spatial_weight : float, default=0.5
+        Weight given to spatial components in feature generation.
+    interaction_strength : float, default=0.15
+        Strength of interaction terms between features.
+    correlation_strength : float, default=0.2
+        Strength of correlations between features within classes.
+    feature_weight_range : tuple[float, float], default=(0.5, 2.0)
+        Range for random feature weights in transformations.
+    feature_offset_std : float, default=0.3
+        Standard deviation for random feature offsets.
+    rng : np.random.Generator, default=np.random.default_rng(42)
+        Random number generator for reproducibility.
+
+    Returns
+    -------
+    features : np.ndarray of shape (n_total_samples, n_features)
+        Generated feature matrix with standardized properties.
+    prototypes : np.ndarray of shape (n_classes, n_features)
+        Class prototype vectors for future generations.
+
+    Notes
+    -----
+    The function creates features through several mechanisms:
+    1. Base Transformations of gold values
+    2. Spatial Components and relationships
+    3. Class-specific patterns and prototypes
+    4. Feature Interactions and correlations
+    5. Controlled noise and variability
+
+    Raises
+    ------
+    ValueError
+        If array dimensions are inconsistent.
+    np.linalg.LinAlgError
+        If covariance matrix becomes singular.
+
+    """
+    features = np.zeros((n_samples, n_features))
+
+    # 1. Create base transformations of gold values (non-linear relationships)
+    transformations = [
+        gold_values,  # Linear
+        np.sqrt(gold_values),  # Square root
+        gold_values**2,  # Quadratic
+        np.log1p(gold_values),  # Log transform
+        np.sin(gold_values * np.pi),  # Periodic
+    ]
+
+    # 2. Add spatial components
+    # Distance to nearest hotspot
+    distances = np.sqrt(
+        np.sum(
+            (coordinates[:, np.newaxis, :] - hotspots[np.newaxis, :, :]) ** 2,
+            axis=2,
         )
-    else:
-        # Random prototype vectors (feature spaces) for each class
-        prototypes = rng.uniform(-2, 2, size=(n_classes, n_features))
-    features = np.zeros((n_total_samples, n_features))
-    # For each sample, copy its class prototype and add Gaussian noise
-    features = np.array(
+    )
+    min_distance = np.min(distances, axis=1)
+    max_distance = np.max(min_distance)
+    spatial_proximity = 1 - (min_distance / max_distance)  # Closer = higher value
+
+    # Depth component (normalized)
+    depth_normalized = (coordinates[:, 2] - np.min(coordinates[:, 2])) / (
+        np.max(coordinates[:, 2]) - np.min(coordinates[:, 2]) + 1e-8
+    )
+
+    # Add spatial transformations
+    transformations.extend(
         [
-            prototypes[lbl] + rng.normal(0, noise_level, size=n_features)
-            for lbl in labels
+            spatial_proximity,
+            depth_normalized,
+            spatial_proximity * gold_values,  # Interaction term
         ]
     )
+
+    # 3. Generate features using different transformations with tunable weights/offsets
+    for i in range(n_features):
+        # Select transformation (cycle through available ones)
+        base_transform = transformations[i % len(transformations)]
+
+        # Add tunable random weight and offset
+        weight = rng.uniform(feature_weight_range[0], feature_weight_range[1])
+        offset = rng.normal(0, feature_offset_std)
+
+        features[:, i] = base_transform * weight + offset
+
+    # 4. Create controlled class-specific prototypes
+    if existing_prototypes is not None and prototype_evolution_rate is not None:
+        # Evolve previous prototypes with tunable evolution rate
+        prototypes = existing_prototypes + rng.normal(
+            0, noise_level * prototype_evolution_rate, existing_prototypes.shape
+        )
+    else:
+        # Create new prototypes with controlled separation
+        prototypes = np.zeros((n_classes, n_features))
+        for i in range(n_classes):
+            # Create well-separated prototypes using class_separation parameter
+            angle = 2 * np.pi * i / n_classes  # Distribute classes in circle
+            base_x = class_separation * np.cos(angle)
+            base_y = class_separation * np.sin(angle)
+
+            # Fill remaining dimensions with controlled random values
+            prototype = rng.normal(0, 0.5, n_features)
+            if n_features >= 2:
+                prototype[0] = base_x
+                prototype[1] = base_y
+            else:
+                prototype[0] = class_separation * (i / max(n_classes - 1, 1) * 2 - 1)
+
+            prototypes[i] = prototype
+
+    # 5. Add class-specific adjustments with tunable influence
+    for i in range(n_samples):
+        class_adjustment = prototypes[labels[i]] * class_influence
+        features[i] += class_adjustment
+
+    # 6. Add controlled feature interactions
+    if n_features >= 2:
+        for i in range(0, n_features - 1, 2):
+            # Add interaction between pairs of features
+            interaction = features[:, i] * features[:, i + 1]
+            # Scale interaction to prevent explosion
+            interaction = (
+                interaction / (np.std(interaction) + 1e-8) * interaction_strength
+            )
+            features[:, i] += interaction
+
+    # 7. Add class-specific correlation structure
+    for class_idx in range(n_classes):
+        mask = labels == class_idx
+        if not np.any(mask):
+            continue
+
+        n_class_samples = np.sum(mask)
+
+        # Create controlled covariance matrix with tunable correlation
+        class_correlation = np.eye(n_features) * (1 - correlation_strength)
+        class_correlation += correlation_strength / n_features  # Add off-diagonal terms
+
+        # Generate correlated noise
+        try:
+            correlated_noise = rng.multivariate_normal(
+                mean=np.zeros(n_features),
+                cov=class_correlation * (noise_level**2),
+                size=n_class_samples,
+            )
+            features[mask] += correlated_noise
+        except np.linalg.LinAlgError:
+            # Fallback to independent noise if covariance issues
+            features[mask] += rng.normal(0, noise_level, (n_class_samples, n_features))
+
+    # 8. Weight spatial vs non-spatial features
+    # Apply spatial weighting to relevant features
+    for i in range(n_features):
+        if i < len(transformations) and any(
+            "spatial" in str(type(t)) or "proximity" in str(type(t))
+            for t in [transformations[i % len(transformations)]]
+        ):
+            features[:, i] *= spatial_weight
+        elif i >= 2 and (
+            "spatial_proximity" in locals() or "depth_normalized" in locals()
+        ):  # Spatial features are typically in positions 2+
+            # Weight spatial components
+            features[:, i] = (1 - spatial_weight) * features[:, i] + spatial_weight * (
+                spatial_proximity if "spatial_proximity" in locals() else 0
+            )
+
+    # 9. Add final independent noise layer
+    final_noise = rng.normal(0, noise_level * 0.5, (n_samples, n_features))
+    features += final_noise
+
+    # 9. Normalize features to prevent extreme values
+    for i in range(n_features):
+        feature_std = np.std(features[:, i])
+        if feature_std > 0:
+            features[:, i] = (features[:, i] - np.mean(features[:, i])) / feature_std
+        # Clip extreme outliers
+        features[:, i] = np.clip(features[:, i], -4, 4)
 
     return features, prototypes
 
@@ -274,18 +582,26 @@ def generate_mineral_data(
     depth: float = -500,
     n_samples: int = 1000,
     spacing: float = 10,
-    existing_points: np.ndarray | None = None,
     n_features: int = 5,
     n_classes: int = 2,
     threshold_binary: float = 0.3,
     min_samples_per_class: int | None = 50,
     n_hotspots_max: int = 10,
-    previous_hotspots: np.ndarray | None = None,
-    previous_prototypes: np.ndarray | None = None,
-    hotspot_drift: float = 0.1,
     mineral_noise_level: float = 0.05,
     exp_decay_factor: float = 0.005,
     feature_noise_level: float = 0.2,
+    class_separation: float = 2.0,
+    class_influence: float = 0.3,
+    spatial_weight: float = 0.5,
+    interaction_strength: float = 0.15,
+    correlation_strength: float = 0.2,
+    feature_weight_range: tuple[float, float] = (0.5, 2.0),
+    feature_offset_std: float = 0.3,
+    existing_sample_coords: np.ndarray | None = None,
+    existing_prototypes: np.ndarray | None = None,
+    prototype_evolution_rate: float | None = 0.3,
+    existing_hotspots: np.ndarray | None = None,
+    hotspot_drift: float | None = 0.1,
     seed: int | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Generate synthetic mineral exploration data with realistic features.
@@ -300,8 +616,6 @@ def generate_mineral_data(
         Number of drill core samples to generate
     spacing : float
         Average distance between samples in meters
-    existing_points : np.ndarray, optional
-        Array of existing point coordinates to avoid when generating new points
     n_features : int
         Number of features to generate
     n_classes : int
@@ -314,41 +628,63 @@ def generate_mineral_data(
         Minimum number of samples required for each class. If None, no minimum is enforced.
     n_hotspots_max : int
         Number of mineralization hotspots to generate in the area.
-    previous_hotspots : np.ndarray, optional
-        Previous hotspot locations to maintain spatial continuity
-    previous_prototypes : np.ndarray, optional
-        Previous feature prototypes to maintain feature space continuity
-    hotspot_drift : float
-        Small perturbation factor for previous hotspots
     mineral_noise_level : float
         Noise level for gold value generation (default: 0.05)
     exp_decay_factor : float
         Decay factor for gold value distance falloff (default: 0.005)
     feature_noise_level : float
         Noise level for feature generation (default: 0.2)
-    seed : int
-        Random seed for reproducibility
+    class_separation : float
+        Controls the base separation between class centroids in feature space.
+    class_influence : float
+        Strength of class-specific patterns in feature generation.
+    spatial_weight : float
+        Weight given to spatial components in feature generation.
+    interaction_strength : float
+        Strength of interaction terms between features.
+    correlation_strength : float
+        Strength of correlations between features within classes.
+    feature_weight_range : tuple[float, float]
+        Range for random feature weights in transformations.
+    feature_offset_std : float
+        Standard deviation for random feature offsets.
+    existing_sample_coords : np.ndarray, optional
+        Array of existing point coordinates to avoid when generating new points.
+    existing_prototypes : np.ndarray, optional
+        Previous feature prototypes to maintain feature space continuity.
+    prototype_evolution_rate : float, optional
+        Rate at which prototypes evolve from previous generation.
+    existing_hotspots : np.ndarray, optional
+        Previous hotspot locations to maintain spatial continuity.
+    hotspot_drift : float, optional
+        Small perturbation factor for previous hotspots.
+    seed : int, optional
+        Random seed for reproducibility.
 
     Returns
     -------
     coordinates : ndarray
-        Array of shape (n_samples, 3) containing x, y, z coordinates
+        Array of shape (n_samples, 3) containing x, y, z coordinates.
     features : ndarray
-        Scaled array of shape (n_samples, n_features) containing mineral features
+        Scaled array of shape (n_samples, n_features) containing mineral features.
     labels : ndarray
-        Array of shape (n_samples,) containing gold concentration labels (0-n_classes)
+        Array of shape (n_samples,) containing gold concentration labels (0-n_classes).
+    hotspots : ndarray
+        Array of shape (n_hotspots, 3) containing hotspot coordinates.
+    prototypes : ndarray
+        Array of shape (n_classes, n_features) containing class prototype vectors.
 
     """
     rng = np.random.default_rng(seed)  # Set random seed for reproducibility
     # 1. Generate spatial coordinates with appropriate spacing
     coordinates = _generate_coordinates(
-        radius, depth, n_samples, spacing, existing_points, rng
+        radius, depth, n_samples, spacing, existing_sample_coords, rng
     )
     x_range = coordinates[:, 0].min(), coordinates[:, 0].max()
     y_range = coordinates[:, 1].min(), coordinates[:, 1].max()
     # 2. Create mineralization hotspots and their strengths (mineralization centers)
     hotspots, hotspot_strengths = _create_hotspots(
-        depth, x_range, y_range, n_hotspots_max, previous_hotspots, hotspot_drift, rng
+        depth, x_range, y_range, n_hotspots_max, existing_hotspots, hotspot_drift, rng
     )
     # 3. Calculate gold values based on distance to nearest hotspot
     gold_values = _calculate_gold_values(
@@ -365,12 +701,23 @@ def generate_mineral_data(
     # 5. Generate features for all samples
     n_total_samples = n_samples
     features, prototypes = _generate_features(
-        n_samples,
+        n_total_samples,
         labels,
+        coordinates,
+        hotspots,
+        gold_values,
         n_classes,
         n_features,
         feature_noise_level,
-        previous_prototypes,
+        existing_prototypes,
+        prototype_evolution_rate,
+        class_separation,
+        class_influence,
+        spatial_weight,
+        interaction_strength,
+        correlation_strength,
+        feature_weight_range,
+        feature_offset_std,
         rng,
     )
     # (Optional) 6. Check if we have the minimum number of samples per class and redistribute if needed
@@ -391,10 +738,21 @@ def generate_mineral_data(
         features, prototypes = _generate_features(
             n_total_samples,
             labels,
+            coordinates,
+            hotspots,
+            gold_values,
             n_classes,
             n_features,
             feature_noise_level,
-            previous_prototypes,
+            existing_prototypes,
+            prototype_evolution_rate,
+            class_separation,
+            class_influence,
+            spatial_weight,
+            interaction_strength,
+            correlation_strength,
+            feature_weight_range,
+            feature_offset_std,
             rng,
         )
     # Print summary of generated data

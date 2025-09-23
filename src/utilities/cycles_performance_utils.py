@@ -1,3 +1,10 @@
+"""Utilities for analyzing and visualizing model performance across cycles.
+
+This module provides functions to:
+- Load evaluation and prediction metrics from DVC-managed results directories.
+- Plot key performance indicators (accuracy, F1-score, MCC) over successive cycles to track performance trends.
+"""
+
 import json
 from pathlib import Path
 

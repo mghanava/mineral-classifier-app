@@ -1,5 +1,5 @@
 # Training cycle configuration
-cycles: 2
+cycles: 10
 add_self_loops: true
 default_model: gcn
 # Data generation parameters
@@ -31,8 +31,16 @@ data:
     hotspot_drift: 0.1
     mineral_noise_level: 0.5
     exp_decay_factor: 0.05
-    feature_noise_level: 0.8
-    seed: 42
+    feature_noise_level: 0.3
+    prototype_evolution_rate: 0.25
+    class_separation: 2.0
+    class_influence: 0.3
+    spatial_weight: 0.5
+    interaction_strength: 0.25
+    correlation_strength: 0.25
+    feature_weight_range: [0.7, 1.7]
+    feature_offset_std: 0.2
+    seed: 119
   pred:
     n_samples: 200
     min_samples_per_class:
