@@ -4,11 +4,10 @@ services:
     image: my_mineral_classifier:latest
     build:
       context: .
-      args:
-        - UID=${UID:-1000}
-        - GID=${GID:-1000}
     runtime: nvidia
     environment:
+      - UID=${UID:-1000}
+      - GID=${GID:-1000}
       - NVIDIA_VISIBLE_DEVICES=all
     working_dir: /app
     volumes:
