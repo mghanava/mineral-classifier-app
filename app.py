@@ -5,8 +5,10 @@ a DVC pipeline for machine learning workflows, including data generation,
 model training, evaluation, prediction, and drift analysis.
 """
 
+import difflib
 import json
 import subprocess
+import time
 from pathlib import Path
 
 import pandas as pd
@@ -87,10 +89,10 @@ def show_html_files(path: Path):
 
 
 def params_tab():
-    """Display and edit parameters from params.yaml and provide options to run the DVC pipeline."""
+    """Display and edit parameters from params.yaml with unified edit/preview interface."""
     st.header("Parameters")
     st.write(
-        "View and edit `params.yaml`. After saving changes, you can regenerate the DVC pipeline and run it from here."
+        "View and edit `params.yaml`. Changes are auto-saved every 3 seconds. You can regenerate the DVC pipeline and run it from here."
     )
 
     yaml = YAML()
@@ -98,42 +100,129 @@ def params_tab():
     yaml.indent(mapping=2, sequence=4, offset=2)
     params_file = Path("params.yaml")
 
+    # Initialize session state
+    if "original_params" not in st.session_state:
+        st.session_state.original_params = ""
+    if "last_save_time" not in st.session_state:
+        st.session_state.last_save_time = 0
+    if "auto_save_enabled" not in st.session_state:
+        st.session_state.auto_save_enabled = True
+
     try:
         with open(params_file) as f:
             params_content = f.read()
+            if not st.session_state.original_params:
+                st.session_state.original_params = params_content
 
-        # Editable text area
-        edited_params = st.text_area("`params.yaml`", value=params_content, height=400)
+        # Create columns for layout
+        col1, col2 = st.columns([1, 1])
 
-        if st.button("Save Parameters"):
+        with col1:
+            st.subheader("Edit YAML")
+
+            edited_params = st.text_area(
+                "params.yaml",
+                value=params_content,
+                height=500,
+                label_visibility="collapsed",
+                key="yaml_text_editor",
+            )
+
+            # Auto-save functionality
+            current_time = time.time()
+            if (
+                st.session_state.auto_save_enabled
+                and edited_params != params_content
+                and current_time - st.session_state.last_save_time > 3
+            ):
+                try:
+                    # Validate YAML before saving
+                    yaml.load(edited_params)
+                    with open(params_file, "w") as f:
+                        f.write(edited_params)
+                    st.session_state.last_save_time = current_time
+                    st.success("Auto-saved!", icon="💾")
+                except Exception as e:
+                    st.warning(f"Auto-save failed - invalid YAML: {str(e)[:50]}...")
+
+            # Auto-save toggle (replaces "Save Now" button)
+            st.session_state.auto_save_enabled = st.checkbox(
+                "Enable auto-save (every 3 seconds)",
+                value=st.session_state.auto_save_enabled,
+            )
+
+        with col2:
+            st.subheader("Preview")
+
             try:
-                # Validate YAML format
-                data = yaml.load(edited_params)
-                with open(params_file, "w") as f:
-                    yaml.dump(data, f)
-                st.success(
-                    "`params.yaml` saved successfully. Refresh the page to update cycle limits."
-                )
+                parsed_data = pyyaml.safe_load(edited_params)
+                st.json(parsed_data)
+
+                # Show Diff section (replaces "Formatted YAML")
+                st.subheader("Show Diff")
+                if edited_params != st.session_state.original_params:
+                    # Create and display diff
+                    original_lines = st.session_state.original_params.splitlines()
+                    edited_lines = edited_params.splitlines()
+
+                    diff = list(
+                        difflib.unified_diff(
+                            original_lines,
+                            edited_lines,
+                            fromfile="original",
+                            tofile="current",
+                            lineterm="",
+                            n=3,
+                        )
+                    )
+
+                    if diff:
+                        diff_text = "\n".join(diff)
+                        st.code(diff_text, language="diff")
+                    else:
+                        st.info("No changes detected")
+                else:
+                    st.info("No changes to show")
+
             except Exception as e:
-                st.error(f"Error saving `params.yaml`: {e}")
+                st.error(f"YAML Parse Error: {e}")
+                # Still show the diff section even with parse errors
+                st.subheader("Show Diff")
+                if edited_params != st.session_state.original_params:
+                    original_lines = st.session_state.original_params.splitlines()
+                    edited_lines = edited_params.splitlines()
 
-        try:
-            parsed_data = pyyaml.safe_load(edited_params)
+                    diff = list(
+                        difflib.unified_diff(
+                            original_lines,
+                            edited_lines,
+                            fromfile="original",
+                            tofile="current",
+                            lineterm="",
+                            n=3,
+                        )
+                    )
 
-            st.subheader("Preview (pretty)")
-            st.json(parsed_data)
+                    if diff:
+                        diff_text = "\n".join(diff)
+                        st.code(diff_text, language="diff")
+                    else:
+                        st.info("No changes detected")
+                else:
+                    st.info("No changes to show")
 
-        except Exception as e:
-            st.warning(f"Could not render preview: {e}")
+        # Pipeline execution section
+        st.markdown("---")
+        st.subheader("Run Pipeline")
 
-        # Run pipeline section
-        st.subheader("Run Full Pipeline")
-        st.write(
-            "This will regenerate `dvc.yaml` based on the saved parameters and execute the entire pipeline."
-        )
-        if st.button("Generate `dvc.yaml` and Run Full Pipeline"):
-            run_command(["python", "setup_dvc.py"])
-            run_command(["dvc", "repro"])
+        if st.button("Generate & Run Full Pipeline"):
+            with st.spinner("Running pipeline..."):
+                try:
+                    run_command(["python", "setup_dvc.py"])
+                    run_command(["dvc", "repro"])
+                    st.success("Pipeline completed successfully!")
+                except Exception as e:
+                    st.error(f"Pipeline error: {e}")
 
     except FileNotFoundError:
         st.error("`params.yaml` not found.")
