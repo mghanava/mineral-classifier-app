@@ -1,5 +1,5 @@
 # Training cycle configuration
-cycles: 10
+cycles: 2
 add_self_loops: true
 default_model: gcn
 # Data generation parameters

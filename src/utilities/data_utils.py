@@ -7,6 +7,8 @@ This module provides functions for:
 - Managing data splits for machine learning tasks
 """
 
+from typing import cast
+
 import numpy as np
 import plotly.graph_objects as go
 import torch
@@ -848,6 +850,9 @@ def visualize_graph(
         },
         showlegend=True,
         legend={"yanchor": "top", "y": 0.99, "xanchor": "left", "x": 0.01},
+        margin={"l": 0, "r": 0, "t": 50, "b": 0},
+        autosize=True,
+        height=800,
     )
     # Add legend entries for classes
     class_count = [np.sum(labels == i) for i in classes]
@@ -1232,7 +1237,6 @@ def export_graph_to_html(
     labels_map: dict[int, str],
     dataset_idx: int | None = None,
     dataset_tag: str = "train",
-    filename="graph.html",
 ):
     """Export the graph to an interactive HTML file using Plotly."""
     coordinates = coordinates[node_indices] if node_indices is not None else coordinates
@@ -1265,13 +1269,21 @@ def export_graph_to_html(
         title=title,
     )
     if dataset_idx is not None:
-        filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}.html"
+        base_filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}"
     else:
-        filename = f"{save_path}/{dataset_tag}_graph.html"
+        base_filename = f"{save_path}/{dataset_tag}_graph"
+    assert fig is not None, "Figure creation failed."
+    # Save as HTML (for standalone viewing)
     fig.write_html(
-        filename, full_html=False, include_plotlyjs="cdn", config={"responsive": True}
+        f"{base_filename}.html",
+        full_html=False,
+        include_plotlyjs="cdn",
+        config={"responsive": True},
     )
-    print(f"Graph exported to {filename}.")
+    # Save as JSON (for Streamlit reloading)
+    with open(f"{base_filename}.json", "w") as f:
+        f.write(cast(str, fig.to_json()))
+    print(f"Graph exported as {base_filename}.html and {base_filename}.json.")
 
 
 def export_all_graphs_to_html(

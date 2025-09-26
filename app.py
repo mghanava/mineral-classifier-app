@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 import pandas as pd
+import plotly.io as pio
 import streamlit as st
 import streamlit.components.v1 as components
 import yaml as pyyaml
@@ -59,17 +60,30 @@ def run_command(command):
 
 
 def show_html_files(path: Path):
-    """Display HTML files from a given directory."""
+    """Display Plotly graphs from a given directory, preferring JSON over HTML."""
+    json_files = list(path.glob("*.json"))
     html_files = list(path.glob("*.html"))
-    if not html_files:
-        st.info("No HTML files found in this directory.")
+
+    if not json_files and not html_files:
+        st.info("No graph files found in this directory.")
         return
 
+    # Prefer JSON files
+    for json_file in json_files:
+        with st.expander(f"View {json_file.name}"):
+            with open(json_file) as f:
+                fig = pio.from_json(f.read())
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Fall back to HTML if no JSON
     for html_file in html_files:
-        with st.expander(f"View `{html_file.name}`"):
+        json_version = html_file.with_suffix(".json")
+        if json_version.exists():
+            continue  # already handled
+        with st.expander(f"View {html_file.name}"):
             with open(html_file, encoding="utf-8") as f:
                 html_content = f.read()
-            components.html(html_content, height=800)
+            components.html(html_content, height=800, scrolling=True)
 
 
 def params_tab():
