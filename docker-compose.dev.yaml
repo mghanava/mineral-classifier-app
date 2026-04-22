@@ -1,0 +1,10 @@
+services:
+  mineral_classifier:
+    volumes:
+      - .:/app:rw
+      - /app/.venv
+      - ./results:/app/results
+      - ./.dvc/cache:/app/.dvc/cache
+    environment:
+      - DVC_NO_ANALYTICS=1
+      - PYTHONDONTWRITEBYTECODE=1

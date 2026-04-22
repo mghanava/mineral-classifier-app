@@ -1,11 +1,32 @@
 # Python
 __pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
 
 # IDE
 .vscode/
+.idea/
+.devcontainer/
+
+# Caches
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
 
 # DVC
-.dvc/*
+/results/*
+!/results/.gitkeep
+.dvc/cache
 
-# Data 
-results/*
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db

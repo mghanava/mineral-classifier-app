@@ -4,18 +4,13 @@ services:
     image: my_mineral_classifier:latest
     build:
       context: .
+      dockerfile: Dockerfile
     runtime: nvidia
-    environment:
-      - UID=${UID:-1000}
-      - GID=${GID:-1000}
-      - NVIDIA_VISIBLE_DEVICES=all
-    working_dir: /app
-    volumes:
-      - .:/app:rw
-      - mineral_results:/app/results
-      - dvc_cache:/app/.dvc/cache
     ports:
       - "8501:8501"
+    volumes:
+      - mineral_results:/app/results
+      - dvc_cache:/app/.dvc/cache
     restart: unless-stopped
 
 volumes:

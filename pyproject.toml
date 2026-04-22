@@ -1,7 +1,9 @@
 [build-system]
-requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [project]
 name = "mineral-classifier"
@@ -10,19 +12,36 @@ description = "Machine learning project for mineral classification"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "scikit-learn ==1.6.0",
-    "torch-geometric ==2.6.1",
-    "seaborn ==0.13.2",
-    "plotly ==5.24.1",
-    "streamlit ==1.45.1",
-    "statsmodels ==0.14.4",
-    "ruamel.yaml ==0.18.15",
-    "POT ==0.9.5",
-    "ruff ==0.12.5",
-    "dvc ==3.61.0",
+    "scikit-learn==1.6.0",
+    "torch>=2.6.0",     
+    "torch-geometric==2.6.1",
+    "seaborn==0.13.2",
+    "plotly==5.24.1",
+    "streamlit==1.45.1",
+    "statsmodels==0.14.4",
+    "ruamel.yaml==0.18.15",
+    "POT==0.9.5",
+    "dvc>=3.56, <4.0",
+    "pathspec>=0.12,<0.13",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "ruff==0.12.5",
+    "pre-commit==4.2.0",
+    "pytest==8.3.5",
+]
 
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+
+# ---- Ruff ----
 [tool.ruff]
 exclude = [
     ".bzr",
@@ -57,7 +76,6 @@ indent-width = 4
 target-version = "py311"
 show-fixes = true
 
-
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
@@ -66,25 +84,28 @@ line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = 60
 
-
 [tool.ruff.lint]
 select = [
-    "E",
-    "W",
-    "F",
-    "I",
-    "B",
-    "C4",
-    "UP",
-    "PD",
-    "NPY",
-    "RUF",
-    "D",
-    "SIM",
-    "I",
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "PD",   # pandas-vet
+    "NPY",  # numpy-specific
+    "RUF",  # ruff-specific
+    "D",    # pydocstyle
+    "SIM",  # flake8-simplify
 ]
-extend-select = []
 ignore = ["E501", "B008", "C901", "PD901"]
 fixable = ["ALL"]
 unfixable = []
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+
+# ---- Pytest ----
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
