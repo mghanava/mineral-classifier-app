@@ -475,8 +475,8 @@ class AnalyzeDrift:
         # Box plot
         axes[1].boxplot(
             [X_dists, Y_dists, cross_dists],
-            labels=["Within Train", "Within Pred", "Cross Train-Pred"],
         )
+        axes[1].set_xticklabels(["Within Train", "Within Pred", "Cross Train-Pred"])
         axes[1].set_ylabel("Euclidean Distance")
         axes[1].set_title("Distance Box Plots")
         axes[1].grid(True, alpha=0.3)

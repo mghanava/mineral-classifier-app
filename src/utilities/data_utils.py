@@ -12,8 +12,7 @@ from typing import cast
 import numpy as np
 import plotly.graph_objects as go
 import torch
-from matplotlib import pyplot
-from matplotlib.cm import get_cmap
+from matplotlib import colormaps, pyplot
 from matplotlib.lines import Line2D
 from scipy.spatial import KDTree, distance_matrix
 from sklearn.manifold import TSNE
@@ -792,7 +791,7 @@ def visualize_graph(
     # Create color map for different classes
     classes = np.unique(labels)
     unique_classes = len(classes)
-    cmap = get_cmap("Set1")
+    cmap = colormaps["Set1"]
     colors = cmap(np.linspace(0, 1, unique_classes))
     color_map = {
         i: f"rgb({int(255 * c[0])},{int(255 * c[1])},{int(255 * c[2])})"
@@ -1432,7 +1431,7 @@ def analyze_feature_discrimination(
     )
 
     perplexities = [5, 30, 50, 100]
-    cmap = get_cmap("Set1")
+    cmap = colormaps["Set1"]
     colors = cmap(np.linspace(0, 1, len(class_names)))
 
     for i, perplexity in enumerate(perplexities):
