@@ -12,20 +12,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- Dependencies Layer ----
-COPY pyproject.toml README.md ./
+COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
-# Generate lock file + install dependencies
+# Install dependencies from committed lock file
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv lock && \
-    uv sync --no-install-project --no-dev
+    uv sync --frozen --no-install-project --no-dev
 
 # ---- Full source ----
 COPY . .
 
 # Install the project itself
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev
+    uv sync --frozen --no-dev
 
 
 # Stage 2: Runtime
@@ -39,8 +38,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the entire app with venv from builder
+# Copy the entire app with venv from builder (uv is at /bin/uv in builder)
 COPY --from=builder /app /app
+COPY --from=builder /bin/uv /bin/uvx /bin/
 
 # Create necessary directories
 RUN mkdir -p /app/results /app/.dvc/cache
