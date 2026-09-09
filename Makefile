@@ -17,6 +17,9 @@ logs:  ## Follow container logs
 #  Developers
 # ============================================================
 
+install:  ## Create venv and install all dependencies (including dev)
+	uv sync
+
 dev:  ## Start in development mode (bind mount)
 	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
 
@@ -72,6 +75,7 @@ help:  ## Show this help message
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
+	@echo "  install   Create venv and install all dependencies"
 	@echo "  run       Start the app"
 	@echo "  stop      Stop the app"
 	@echo "  logs      Follow container logs"

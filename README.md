@@ -46,7 +46,7 @@ make clean         # remove everything (containers, volumes, images)
 **Additional requirement:** [uv](https://docs.astral.sh/uv/)
 
 ```bash
-uv sync                # install dev dependencies locally
+make install           # create venv + install all dependencies
 make hooks             # install pre-commit hooks
 make dev               # start in dev mode (bind mount, hot reload)
 ```
