@@ -18,7 +18,7 @@ logs:  ## Follow container logs
 # ============================================================
 
 install:  ## Create venv and install all dependencies (including dev)
-	uv sync
+	uv sync --extra dev
 
 dev:  ## Start in development mode (bind mount)
 	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
