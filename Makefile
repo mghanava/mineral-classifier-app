@@ -63,7 +63,9 @@ track:  ## Track results with DVC (inside container)
 #  Cleanup
 # ============================================================
 
-clean:  ## Remove containers, volumes, and build cache
+clean:  ## Remove containers, volumes, artifacts, and build cache
+	docker compose exec -T mineral_classifier sh -c 'find /app/results /app/.dvc/cache -mindepth 1 ! -name .gitkeep -delete' || \
+	docker run --rm --entrypoint sh -v "$(CURDIR)/results:/results" -v "$(CURDIR)/.dvc/cache:/cache" my_mineral_classifier:latest -c 'find /results -mindepth 1 ! -name .gitkeep -delete; find /cache -mindepth 1 -delete'
 	docker compose down -v --rmi local
 	docker builder prune -f
 
@@ -88,5 +90,5 @@ help:  ## Show this help message
 	@echo "  hooks     Install pre-commit hooks"
 	@echo "  check     Run all pre-commit hooks"
 	@echo "  track     Track results with DVC"
-	@echo "  clean     Remove containers and volumes"
+	@echo "  clean     Remove containers, volumes, artifacts, and build cache"
 	@echo "  help      Show this help message"
