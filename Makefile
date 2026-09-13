@@ -1,4 +1,4 @@
-.PHONY: run stop logs dev rebuild shell lint fmt test hooks check track clean help
+.PHONY: run stop logs dev rebuild shell lint fmt test hooks check track reset clean help
 
 # ============================================================
 #  App Users
@@ -49,8 +49,12 @@ check:  ## Run all pre-commit hooks on all files
 	uv run pre-commit run --all-files
 
 # ============================================================
-#  DVC
+#  DVC / Pipeline
 # ============================================================
+
+reset:  ## Wipe generated results (keep DVC cache) to restart the pipeline fresh
+	docker compose exec -T mineral_classifier sh -c 'rm -rf /app/results/*' || \
+	docker run --rm --entrypoint sh -v "$(CURDIR)/results:/results" my_mineral_classifier:latest -c 'rm -rf /results/*'
 
 track:  ## Track results with DVC (inside container)
 	docker exec -it mineral_classifier_container bash -c "cd /app && dvc add results/"
@@ -90,5 +94,6 @@ help:  ## Show this help message
 	@echo "  hooks     Install pre-commit hooks"
 	@echo "  check     Run all pre-commit hooks"
 	@echo "  track     Track results with DVC"
+	@echo "  reset     Wipe generated results, keep DVC cache"
 	@echo "  clean     Remove containers, volumes, artifacts, and build cache"
 	@echo "  help      Show this help message"
