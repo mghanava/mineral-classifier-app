@@ -67,7 +67,7 @@ models:
 
 # Training parameters
 train:
-  n_epochs: 1000
+  n_epochs: 1500
   lr: 0.0005
   max_grad_norm: 1.0
   weight_decay_adam_optimizer: 5.0e-4

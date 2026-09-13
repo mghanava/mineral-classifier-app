@@ -218,7 +218,7 @@ def params_tab():
         if st.button("Generate & Run Full Pipeline"):
             with st.spinner("Running pipeline..."):
                 try:
-                    run_command(["python", "setup_dvc.py"])
+                    run_command(["python", "scripts/setup_dvc.py"])
                     run_command(["dvc", "repro"])
                     st.success("Pipeline completed successfully!")
                 except Exception as e:

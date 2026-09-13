@@ -1,4 +1,4 @@
-.PHONY: run stop logs dev rebuild shell lint fmt test hooks check track reset clean help
+.PHONY: run stop logs dev rebuild shell lint fmt test hooks check track reset abort clean help
 
 # ============================================================
 #  App Users
@@ -53,8 +53,12 @@ check:  ## Run all pre-commit hooks on all files
 # ============================================================
 
 reset:  ## Wipe generated results (keep DVC cache) to restart the pipeline fresh
-	docker compose exec -T mineral_classifier sh -c 'rm -rf /app/results/*' || \
-	docker run --rm --entrypoint sh -v "$(CURDIR)/results:/results" my_mineral_classifier:latest -c 'rm -rf /results/*'
+	docker compose exec -T mineral_classifier sh -c 'find /app/results -mindepth 1 ! -name .gitkeep -delete' || \
+	docker run --rm --entrypoint sh -v "$(CURDIR)/results:/results" my_mineral_classifier:latest -c 'find /results -mindepth 1 ! -name .gitkeep -delete'
+
+abort:  ## Abort a running DVC pipeline run (keeps the dashboard up)
+	docker cp scripts/abort_pipeline.py mineral_classifier_container:/tmp/abort_pipeline.py
+	docker compose exec -T mineral_classifier python /tmp/abort_pipeline.py
 
 track:  ## Track results with DVC (inside container)
 	docker exec -it mineral_classifier_container bash -c "cd /app && dvc add results/"
@@ -95,5 +99,6 @@ help:  ## Show this help message
 	@echo "  check     Run all pre-commit hooks"
 	@echo "  track     Track results with DVC"
 	@echo "  reset     Wipe generated results, keep DVC cache"
+	@echo "  abort     Stop a running DVC pipeline run"
 	@echo "  clean     Remove containers, volumes, artifacts, and build cache"
 	@echo "  help      Show this help message"

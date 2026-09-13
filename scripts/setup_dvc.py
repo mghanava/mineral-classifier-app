@@ -40,19 +40,15 @@ def generate_fine_grained_dvc_yaml():
     cycles = range(params["cycles"] + 1)[1:]  # Skip cycle 0 (bootstrap)
     model = params["default_model"]
 
-    # Add cleanup command to bootstrap stage
-    cleanup_cmd = " && ".join(
-        [
-            "rm -rf results/*",  # Clear all results first
-            f"find results -type d -name 'cycle_*' | grep -E 'cycle_[0-9]+$' | awk -F'cycle_' '{{if ($2 > {params['cycles']}) system(\"rm -rf \"$0)}}'",
-            "python src/stages/generate_base_data.py --cycle 0",  # Original bootstrap command
-        ]
-    )
+    # Bootstrap stage is pure data generation. No cleanup/reset embedded in the
+    # command: doing so would invalidate bootstrap's DVC cache whenever the
+    # number of cycles changes. Use `make reset` to deliberately wipe results.
+    bootstrap_cmd = "python src/stages/generate_base_data.py --cycle 0"
 
     stages = {
         "stages": {
             "bootstrap": {
-                "cmd": cleanup_cmd,
+                "cmd": bootstrap_cmd,
                 "deps": [
                     "src/stages/generate_base_data.py",
                     "src/utilities/data_utils.py",
