@@ -131,7 +131,7 @@ Eval indexes its configuration even when the method ignores certain options. Par
 
 ## Usability and conditional controls
 
-- **Current dashboard.** `app.params_tab` previews YAML, shows a textual diff, and writes after a syntax check when the three-second autosave threshold is met on a rerun. It lacks semantic and cross-field checks. An explicit **Validate and preview** followed by **Apply** would make it clear which configuration runs. Preserve expert YAML access and report the full resolved file before execution.
+- **Current dashboard.** Parameters supports preset loading, expert YAML editing, semantic validation, resolved YAML and a diff preview. An explicit **Apply configuration** updates the active file. The guided controls below are for the later interface redesign.
 - **Model, graph and scaler.** Use a model selector and show its relevant settings. Show one connectivity selector with one numeric input, mapping inactive slots to null. Graph construction enforces exactly one active rule. Avoid competing loop controls and keep GCN normalization internal. Provide a separate affinity selector (Unit or Inverse quadratic) and show scale only for the latter. Use a scaler selector with its own option set. Preserve current fit populations and graph locality.
 - **Calibration.** Show diagnostics bins for every method. Reveal epoch, optimizer, scheduler and stop controls only for parametric methods, initial temperature only for temperature, and the two penalty controls together only for Dirichlet. Keep inactive legacy values in the resolved file. Multiclass isotonic uses one fitted map per class column and raises an explicit error if normalization is undefined. See [M2.1a verification](#m21a-multiclass-isotonic-verification). M1.7 verified Dirichlet.
 - **Drift.** Offer Exact Wasserstein, Max sliced and Sinkhorn as one selector. Map choices to the two existing flags. For legacy imports with both flags true, surface the current max-sliced precedence and preserve the explicit values unless the user changes selection. Show projection count or regularization only for the corresponding method and multivariate input. Show maximum and minimum permutations together. Warn when the stop is unreachable. Reporting uses an existing fixed p-value cutoff of 0.05; the stop threshold is a different setting. Low budgets give coarse p-value resolution and spatial dependence still limits inference.
@@ -179,7 +179,7 @@ All three inherit the 50-per-class bootstrap floor, RobustScaler, the graph prot
 
 [`src.presets`](../src/presets.py) exposes `list_presets()` for stable identifiers in display order and `load_preset(preset_id)` for an `ExperimentPreset` with metadata and overrides. Unknown identifiers and malformed YAML, duplicate keys, incorrect metadata and non-mapping overrides raise `ValueError` with context.
 
-`apply_preset(preset)` reads fresh canonical defaults and returns an `AppliedPreset` with `configuration` and `validation`. Nonempty nested mappings update the corresponding settings. Explicit null, scalars, lists and empty nested mappings replace the corresponding value. Only scientific overrides enter the resolved configuration. The shared validator handles scientific types, paths, ranges and cross-field conditions. Callers use `validation.is_valid` before consuming the configuration and can render structured errors, warnings and informational findings. Each call returns an independent configuration. Application reads distributed files by repository path and leaves the active configuration and caller's mappings intact.
+`apply_preset(preset)` reads fresh canonical defaults and returns an `AppliedPreset` with `configuration` and `validation`. It delegates to the M2.4 new-experiment resolver and uses the same overlay rules. Only scientific overrides enter the resolved configuration. The shared validator handles scientific types, paths, ranges and cross-field conditions. Callers use `validation.is_valid` before consuming the configuration and can render structured errors, warnings and informational findings. Each call returns an independent configuration. Application reads distributed files by repository path and leaves the active configuration and caller's mappings intact.
 
 ### Versioning and experiment records
 
@@ -206,28 +206,70 @@ The backend performs static validation only. The device utility shares its synta
 
 The proposed stricter policies for learning rates, clipping norms, scheduler factors and patience, minimum deltas, calibration penalties and epoch budgets, drift threshold and early-stop minimum, explicit positive gamma, and simulator blend bounds remain nonblocking where the runtime accepts the values. For example, Adam accepts zero learning rate and sklearn accepts gamma of zero. Zero radius and depth, negative spacing and decay, and unconventional binary thresholds and simulator blends receive contextual warnings. Positive hotspot counts, ordered feature weights and nonnegative Gaussian scales are hard constraints from the generator's numerical calls. Separate checks cover finite values even when their corresponding settings are inactive.
 
-### Future resolver and integration
+## M2.4 Configuration resolution and integration
 
-M2.4 will decide how to load legacy configurations with omitted fallback fields, combine the distributed presets with explicit user overrides, and preview and persist the complete resolved mapping through the CLI and Streamlit. Treat explicit null, zero, false and empty collections as actual values. Replace sequences as units and treat scaler options as a method-owned mapping when changing scalers. Keep preset metadata, effective devices and realized counts outside DVC-tracked YAML. The M2.2 validator has no preset resolution, implicit legacy defaults, persistence, or pipeline integration.
+### Resolver interfaces
+
+| Interface | Behavior |
+| --- | --- |
+| `src.presets.resolve_new_configuration(preset, overrides=None)` | Load canonical defaults, overlay the `ExperimentPreset` from `load_preset(id)`, then apply explicit overrides. |
+| `src.presets.resolve_imported_configuration(imported, overrides=None)` | Copy the imported scientific mapping, fill documented runtime omissions, then apply explicit overrides. |
+| `src.configuration.validate_configuration(configuration)` | Check an already resolved document. Report all missing required keys. |
+| `src.configuration_yaml.parse_configuration_yaml(text, source=...)` and `load_configuration_yaml(path)` | Safely read one YAML document with a string-keyed mapping at the root. |
+| `src.configuration_files.snapshot_configuration(path)` and `preview_configuration(resolved, active=None)` | Capture active bytes and return resolved YAML, validation findings, a semantic unified diff, and any DVC regeneration paths. |
+| `src.configuration_files.persist_configuration(preview, target, overwrite=False)` | Validate the serialized document and atomically publish it to the explicitly selected path. `target` is a snapshot of that path. |
+
+Both resolvers return an independent `AppliedPreset` with `configuration` and `validation`. Keep the full resolved scientific YAML as the authoritative record of the experiment. Preset identifiers, display names and versions remain outside the scientific YAML.
+
+Ordinary nonempty mappings merge recursively. An explicit null, false, zero, empty mapping or sequence replaces the old value. Sequences replace whole values. Both model blocks are required in the result. Unknown fields remain visible to the validator. Set unused connectivity selectors to null explicitly when changing rules. If both Wasserstein flags are true, the existing warning reports max-sliced precedence and leaves both flags intact.
+
+`data.scaler_params` belongs to the selected scaler. Changing `data.scaler_type` without supplying options clears inherited options and uses constructor defaults. Supplying options replaces the entire mapping, including when the scaler stays the same. An empty mapping clears options. Explicit null also means no options and is preserved. Identity scaling uses a null scaler type with empty or null options. Explicit options for the wrong scaler are validation errors. The expert editor holds a complete YAML draft, so when changing a scaler in the editor, remove the old options or set `scaler_params: {}` to use the new constructor defaults.
+
+### Legacy compatibility
+
+Imports use the following existing runtime omissions, independently of distributed defaults. The rules apply inside sections supplied as mappings. A missing section, a null where a mapping is required, or a required key with no compatible fallback needs an explicit correction.
+
+| Omitted setting | Resolution and runtime source |
+| --- | --- |
+| `device` | `auto` in training, evaluation and prediction. |
+| `data.scaler_params` | `null` in training, which passes no options to fitted preprocessing. |
+| Any seed in `data.base`, `data.pred`, `train`, `evaluate` or `analyze_drift` | `42` through the stages' shared seed fallback. The canonical bootstrap configuration uses `110`. Explicit null still requests unseeded execution. |
+| `data.base.test_size` and `calib_size` | `null` in the split consumer. Integer counts and explicit null are preserved. |
+| `data.base.k_nearest`, `connection_radius`, `distance_percentile` | `null` for each omitted inactive selector in the graph protocol. Exactly one selector must be active. |
+| Bootstrap and batch simulator options under `data.base` | Stage fallbacks are `depth: -500`, `spacing: 10`, `threshold_binary: 0.3`, `n_hotspots_max: 5`, `class_separation: 2.0`, `class_influence: 0.3`, `spatial_weight: 0.5`, `interaction_strength: 0.1`, `correlation_strength: 0.2`, `feature_weight_range: [0.5, 2.0]`, `feature_offset_std: 0.3`, `mineral_noise_level: 0.1`, `exp_decay_factor: 0.01`, and `feature_noise_level: 0.5`. Bootstrap additionally uses `n_samples: 1000` and `min_samples_per_class: 50`. Batch uses `hotspot_drift: 0.1` and `prototype_evolution_rate: 0.3`. |
+| `data.pred.n_samples` and `min_samples_per_class` | `200` and `null` in batch generation. |
+| Constructor options within `models.gat` and `models.gcn` | Both use `hidden_channels: 64`, `n_layers: 3`, `dropout: 0.3` and `batch_norm: true`. GAT uses `n_heads: 5`, `negative_slope: 0.2`, `bias: true` and `residual: false`. GCN uses `improved: false` and requires explicit `normalize: true` in the graph protocol. |
+| `analyze_drift.early_stopping` | An empty mapping selects the existing disabled fallback. A nonempty disabled block with omitted thresholds has no per-field fallback. Import reports `unresolved_compatibility` and asks for explicit values or an empty block. |
+
+Feature and class counts, class names, split count, graph self-loop ownership, affinity method and scale, and Wasserstein flags are examples of required settings. Explicit empty class-name lists, zero cycles and both Wasserstein flags are preserved. Pre-graph-protocol edge-weighting keys need manual correction. The YAML reader rejects duplicate keys, multiple documents, non-string keys, anchors, aliases, merge keys and unsupported tags. Scalar decoding follows the existing PyYAML stage loader. Quote values intended as strings when YAML could interpret them as another type.
+
+### CLI and Streamlit
+
+Run the CLI from the repository with the project environment.
+
+```fish
+uv run --frozen --no-sync python -m scripts.configure list
+uv run --frozen --no-sync python -m scripts.configure validate params.yaml
+uv run --frozen --no-sync python -m scripts.configure resolve quick_demo --against params.yaml
+uv run --frozen --no-sync python -m scripts.configure resolve standard --overrides edits.yaml --against params.yaml --output experiment.yaml
+uv run --frozen --no-sync python -m scripts.configure import legacy.yaml --output resolved.yaml
+```
+
+An override file is a partial scientific mapping. For example, `{device: cpu, data: {base: {seed: null}}}` selects CPU and an unseeded bootstrap. `resolve` and `import` print valid resolved YAML to stdout by default. `--against` selects a comparison file. When replacing an existing output with no explicit comparison file, that output is the baseline. Findings and diffs go to stderr. Each finding includes its severity, code and YAML path. Exit status `0` means success, including warnings. Status `1` indicates invalid configuration, YAML or file I/O. Status `2` indicates incorrect arguments. `--output` requests a file write and `--overwrite` authorizes replacing an existing output.
+
+In Parameters, selecting a preset leaves the current session draft intact. **Load preset into draft** explicitly replaces the draft with the chosen preset's full resolved YAML. Edit that YAML or use the draft initialized from the active file. **Validate & Preview** runs compatibility resolution on the draft and shows the complete scientific YAML, findings and differences against the active file. **Apply configuration** writes a valid preview for the current draft to `params.yaml`. A change to the draft or active file requires a current preview. Warnings are permitted. Apply leaves DVC execution to the separate run controls.
+
+Preview and validation are read-only. The diff compares scientific values with stable key ordering and ignores comments and formatting. Persistence writes a temporary file in the destination directory, checks the exact serialized YAML and uses atomic publication. Replacements compare the active bytes to the preview snapshot. App and CLI writers cooperate through a directory lock. An external editor can write independently of that lock. YAML export preserves values and types used by the stages. Comments and presentation are outside the resolved record.
 
 ### DVC boundary
 
-[scripts/setup_dvc.py](../scripts/setup_dvc.py) embeds `cycles` and `default_model` in stage commands and topology, and `data.base.n_splits` controls the enumerated fold visualization outputs. Regenerate definitions when those values change. Bootstrap and Merge track `data.base` and graph settings. Batch tracks those groups plus `data.pred`. Train, Eval and predict track selected model, graph, schema and device. Train additionally tracks `train` and scaler settings; Eval tracks `evaluate`. Drift tracks its block, graph settings and schema. Performance reads declared cycle metrics and uses its generated cycle argument. Retain this tracking and output contract. Group-level tracking can invalidate a stage even when a changed member is inactive for the selected method. See the [DVC integrity audit](dvc_integrity.md).
+[scripts/setup_dvc.py](../scripts/setup_dvc.py) embeds `cycles` and `default_model` in stage commands and topology, and `data.base.n_splits` controls the enumerated fold visualization outputs. The preview reports which of these fields changed. Dashboard full and targeted runs validate the applied file and regenerate definitions before reproduction. They stop if setup fails or the active bytes changed during generation. For direct DVC use, run `uv run --frozen --no-sync python -m scripts.setup_dvc` from the project root after applying topology changes and before `dvc repro`. Bootstrap and Merge track `data.base` and graph settings. Batch tracks those groups plus `data.pred`. Train, Eval and predict track selected model, graph, schema and device. Train additionally tracks `train` and scaler settings; Eval tracks `evaluate`. Drift tracks its block, graph settings and schema. Performance reads declared cycle metrics and uses its generated cycle argument. Retain this tracking and output contract. Group-level tracking can invalidate a stage even when a changed member is inactive for the selected method. See the [DVC integrity audit](dvc_integrity.md).
 
-### Regression plan for later milestones
+### Remaining limitations
 
-- Compare the inventory and serializable schema against every checked-in YAML leaf. Research must resolve to the same values and preserve distinctions between null, false, zero, empty mapping and omission.
-- Test precedence, unknown and misplaced keys, separate method blocks, scalar types, round-trip behavior and preservation of the original file on validation failure. Cover accepted existing constructor options and library null/count split behavior.
-- Test model/device combinations, exclusive graph rules, affine scale compatibility, scaler option isolation, method-specific calibration and drift fields, unreachable budgets and dual-flag compatibility. Check class feasibility using realized labels and ensure the class floor remains active.
-- Generate candidate DVC YAML in temporary directories and compare topology, commands and tracked groups for equal resolved input. Check stage invalidation boundaries and saved seed provenance.
-- In M2.5, smoke-test the resolved Research fixture for scientific equivalence and use reduced production runs for Quick and a budget-appropriate Standard check, with actual CPU/CUDA claims limited to tested configurations.
+Validation is static. Realized partition feasibility, device availability and other data-dependent checks still run in the stages. Basic and Advanced forms belong to the interface redesign. Completing an omitted setting can change DVC's recorded parameter payload even when the effective scientific setting is equivalent. The application checks for changes during pipeline generation. Stage commands subsequently read the live active configuration, so keep that file fixed during a run. Atomic persistence uses local POSIX filesystem operations, as in the supported Linux and Docker environments.
 
-### Open decisions
-
-- Measure Standard's CPU runtime in M2.5 against the initial 3–5 minute design target. Decide whether unreachable stopping controls should warn only or be visually marked inactive in new drafts.
-- Define expert import rules for omitted runtime fallback fields and migration guidance for unknown or misplaced keys. Preserve the static dual-Wasserstein warning and existing precedence.
-- Decide how a future guided selector should explain isotonic zero-mass rows. Selecting a fallback distribution would require a separate methodological decision.
-- Decide when to promote generated class names, seeds, and simulation geometry to the guided workflow, and whether to support a distinct bootstrap-only mode.
+M2.5 covers reduced production runs and preset budget verification, including Standard's CPU runtime and realized calibration populations.
 
 ### M2.1a multiclass isotonic verification
 

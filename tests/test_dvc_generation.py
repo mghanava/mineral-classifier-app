@@ -417,3 +417,28 @@ def test_performance_ignores_legacy_cycles(
     monkeypatch.setattr(analyze_cycles_performance, "plot_metrics", plot)
     analyze_cycles_performance.main()
     assert Path("results/cycles_performance_analysis/cycles_performance.png").is_file()
+
+
+def test_resolved_export_generates_identical_dvc_definition(tmp_path, monkeypatch):
+    """Preserve all generated commands, tracking and outputs for equal settings."""
+    from src.configuration_files import (
+        persist_configuration,
+        preview_configuration,
+        snapshot_configuration,
+    )
+    from src.configuration_yaml import load_configuration_yaml
+    from src.presets import resolve_imported_configuration
+
+    monkeypatch.chdir(tmp_path)
+    source = ROOT / "config" / "defaults.yaml"
+    active = Path("params.yaml")
+    active.write_bytes(source.read_bytes())
+    generate_fine_grained_dvc_yaml()
+    original = Path("dvc.yaml").read_bytes()
+    snapshot = snapshot_configuration(active)
+    resolved = resolve_imported_configuration(load_configuration_yaml(active))
+    preview = preview_configuration(resolved, snapshot)
+    assert not preview.regeneration_paths
+    persist_configuration(preview, snapshot, overwrite=True)
+    generate_fine_grained_dvc_yaml()
+    assert Path("dvc.yaml").read_bytes() == original

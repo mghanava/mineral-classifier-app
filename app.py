@@ -5,33 +5,43 @@ a DVC pipeline for machine learning workflows, including data generation,
 model training, evaluation, prediction, and drift analysis.
 """
 
-import difflib
 import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 import pandas as pd
 import plotly.io as pio
 import streamlit as st
 import streamlit.components.v1 as components
-import yaml as pyyaml
-from ruamel.yaml import YAML
+
+from src.configuration import ValidationResult, validate_configuration
+from src.configuration_files import (
+    persist_configuration,
+    preview_configuration,
+    snapshot_configuration,
+)
+from src.configuration_yaml import (
+    dump_configuration_yaml,
+    load_configuration_yaml,
+    parse_configuration_yaml,
+)
+from src.presets import (
+    apply_preset,
+    list_presets,
+    load_preset,
+    resolve_imported_configuration,
+)
 
 
 def get_max_cycles():
     """Read the number of cycles from params.yaml."""
-    yaml = YAML()
-    params_file = Path("params.yaml")
     try:
-        with open(params_file) as f:
-            params = yaml.load(f)
-            # DVC cycles start from 1, but data might have a cycle 0
-            return params.get("cycles", 10)
-    except (FileNotFoundError, KeyError):
-        return 10  # Default to 10 on error
+        cycles = load_configuration_yaml(Path("params.yaml")).get("cycles")
+        return cycles if type(cycles) is int and cycles >= 0 else 10
+    except ValueError:
+        return 10
 
 
 def run_command(command: list[str], *, announce_success: bool = True) -> int:
@@ -72,7 +82,39 @@ def run_command(command: list[str], *, announce_success: bool = True) -> int:
 
 
 def reproduce(*targets: str, announce_success: bool = True) -> int:
-    """Run DVC with the same Python environment as the dashboard."""
+    """Regenerate DVC definitions from the active file before reproduction."""
+    params_file = Path("params.yaml")
+    try:
+        active = snapshot_configuration(params_file)
+        if active.contents is None:
+            raise ValueError(
+                "Apply a configuration in Parameters to create params.yaml."
+            )
+        validation = validate_configuration(
+            parse_configuration_yaml(active.contents, source="active params.yaml")
+        )
+    except (OSError, ValueError) as error:
+        st.error(str(error))
+        return 1
+    if not validation.is_valid:
+        st.error(
+            "Resolve and apply a valid configuration in Parameters before running DVC."
+        )
+        show_validation(validation)
+        return 1
+    status = run_command(
+        [sys.executable, "-m", "scripts.setup_dvc"], announce_success=False
+    )
+    if status:
+        return status
+    try:
+        if snapshot_configuration(params_file) != active:
+            raise ValueError(
+                "The active configuration changed during DVC generation. Start the run again."
+            )
+    except (OSError, ValueError) as error:
+        st.error(str(error))
+        return 1
     return run_command(
         [sys.executable, "-m", "dvc", "repro", *targets],
         announce_success=announce_success,
@@ -106,144 +148,113 @@ def show_html_files(path: Path):
             components.html(html_content, height=800, scrolling=True)
 
 
+def show_validation(validation: ValidationResult) -> None:
+    """Display all static findings with their paths."""
+    display = {"error": st.error, "warning": st.warning, "info": st.info}
+    for issue in validation.issues:
+        display[issue.severity](f"{issue.path} — {issue.message}")
+
+
 def params_tab():
-    """Display and edit parameters from params.yaml with unified edit/preview interface."""
+    """Edit, preview and explicitly apply a scientific configuration draft."""
     st.header("Parameters")
     st.write(
-        "View and edit `params.yaml`. Changes are auto-saved every 3 seconds. You can regenerate the DVC pipeline and run it from here."
+        "Edit a draft or load a preset. Apply the preview to update the active `params.yaml` used by the pipeline."
     )
-
-    yaml = YAML()
-    yaml.preserve_quotes = True
-    yaml.indent(mapping=2, sequence=4, offset=2)
     params_file = Path("params.yaml")
+    state = st.session_state
+    try:
+        active = snapshot_configuration(params_file)
+    except (OSError, ValueError) as error:
+        st.error(f"Cannot read the active configuration. {error}")
+        return
 
-    # Initialize session state
-    if "original_params" not in st.session_state:
-        st.session_state.original_params = ""
-    if "last_save_time" not in st.session_state:
-        st.session_state.last_save_time = 0
-    if "auto_save_enabled" not in st.session_state:
-        st.session_state.auto_save_enabled = True
+    if "yaml_text_editor" not in state:
+        contents = active.contents if active.contents is not None else b""
+        state.yaml_text_editor = contents.decode("utf-8", errors="replace")
 
     try:
-        with open(params_file) as f:
-            params_content = f.read()
-            if not st.session_state.original_params:
-                st.session_state.original_params = params_content
-
-        # Create columns for layout
-        col1, col2 = st.columns([1, 1])
-
-        with col1:
-            st.subheader("Edit YAML")
-
-            edited_params = st.text_area(
-                "params.yaml",
-                value=params_content,
-                height=500,
-                label_visibility="collapsed",
-                key="yaml_text_editor",
+        presets = [load_preset(preset_id) for preset_id in list_presets()]
+        labels = {preset.id: preset.display_name for preset in presets}
+        selected = st.selectbox(
+            "Experiment preset", labels, format_func=labels.__getitem__
+        )
+        if st.button("Load preset into draft"):
+            resolved = apply_preset(
+                next(preset for preset in presets if preset.id == selected)
             )
+            state.yaml_text_editor = dump_configuration_yaml(resolved.configuration)
+            state.pop("configuration_preview", None)
+    except ValueError as error:
+        st.error(str(error))
 
-            # Auto-save functionality
-            current_time = time.time()
+    editor, results = st.columns(2)
+    with editor:
+        draft = st.text_area("Draft YAML", height=500, key="yaml_text_editor")
+        if st.button("Validate & Preview"):
+            state.pop("configuration_preview", None)
+            try:
+                resolved = resolve_imported_configuration(
+                    parse_configuration_yaml(draft, source="draft YAML")
+                )
+                state.configuration_preview = (
+                    draft,
+                    preview_configuration(resolved, active),
+                )
+            except ValueError as error:
+                st.error(str(error))
+
+    with results:
+        st.subheader("Preview")
+        saved = state.get("configuration_preview")
+        if saved is not None and saved[0] == draft:
+            preview = saved[1]
+            stale = preview.active != active
+            if stale:
+                st.warning(
+                    "The active configuration changed since preview. Preview again before applying."
+                )
+            show_validation(preview.validation)
+            if preview.comparison_warning:
+                st.warning(preview.comparison_warning)
+            if preview.regeneration_paths:
+                paths = ", ".join(preview.regeneration_paths)
+                st.warning(
+                    f"DVC pipeline regeneration is required for changes to {paths}. Dashboard run controls regenerate before reproduction."
+                )
+            with st.expander("Resolved scientific YAML", expanded=True):
+                st.code(preview.yaml, language="yaml")
+            with st.expander("Differences from active configuration", expanded=True):
+                if preview.diff:
+                    st.code(preview.diff, language="diff")
+                else:
+                    st.info("No scientific configuration changes.")
             if (
-                st.session_state.auto_save_enabled
-                and edited_params != params_content
-                and current_time - st.session_state.last_save_time > 3
+                st.button(
+                    "Apply configuration",
+                    disabled=stale or not preview.validation.is_valid,
+                )
+                and not stale
+                and preview.validation.is_valid
             ):
                 try:
-                    # Validate YAML before saving
-                    yaml.load(edited_params)
-                    with open(params_file, "w") as f:
-                        f.write(edited_params)
-                    st.session_state.last_save_time = current_time
-                    st.success("Auto-saved!", icon="💾")
-                except Exception as e:
-                    st.warning(f"Auto-save failed - invalid YAML: {str(e)[:50]}...")
-
-            # Auto-save toggle (replaces "Save Now" button)
-            st.session_state.auto_save_enabled = st.checkbox(
-                "Enable auto-save (every 3 seconds)",
-                value=st.session_state.auto_save_enabled,
+                    persist_configuration(preview, active, overwrite=True)
+                except (OSError, ValueError) as error:
+                    st.error(f"Could not apply the configuration. {error}")
+                else:
+                    state.pop("configuration_preview", None)
+                    st.success("Configuration applied to params.yaml.")
+        else:
+            st.info(
+                "Validate the current draft to preview the resolved settings and changes."
             )
 
-        with col2:
-            st.subheader("Preview")
-
-            try:
-                parsed_data = pyyaml.safe_load(edited_params)
-                st.json(parsed_data)
-
-                # Show Diff section (replaces "Formatted YAML")
-                st.subheader("Show Diff")
-                if edited_params != st.session_state.original_params:
-                    # Create and display diff
-                    original_lines = st.session_state.original_params.splitlines()
-                    edited_lines = edited_params.splitlines()
-
-                    diff = list(
-                        difflib.unified_diff(
-                            original_lines,
-                            edited_lines,
-                            fromfile="original",
-                            tofile="current",
-                            lineterm="",
-                            n=3,
-                        )
-                    )
-
-                    if diff:
-                        diff_text = "\n".join(diff)
-                        st.code(diff_text, language="diff")
-                    else:
-                        st.info("No changes detected")
-                else:
-                    st.info("No changes to show")
-
-            except Exception as e:
-                st.error(f"YAML Parse Error: {e}")
-                # Still show the diff section even with parse errors
-                st.subheader("Show Diff")
-                if edited_params != st.session_state.original_params:
-                    original_lines = st.session_state.original_params.splitlines()
-                    edited_lines = edited_params.splitlines()
-
-                    diff = list(
-                        difflib.unified_diff(
-                            original_lines,
-                            edited_lines,
-                            fromfile="original",
-                            tofile="current",
-                            lineterm="",
-                            n=3,
-                        )
-                    )
-
-                    if diff:
-                        diff_text = "\n".join(diff)
-                        st.code(diff_text, language="diff")
-                    else:
-                        st.info("No changes detected")
-                else:
-                    st.info("No changes to show")
-
-        # Pipeline execution section
-        st.markdown("---")
-        st.subheader("Run Pipeline")
-
-        if st.button("Generate & Run Full Pipeline"):
-            with st.spinner("Running pipeline..."):
-                setup_status = run_command(
-                    [sys.executable, "-m", "scripts.setup_dvc"],
-                    announce_success=False,
-                )
-                if setup_status == 0 and reproduce(announce_success=False) == 0:
-                    st.success("Pipeline completed successfully!")
-
-    except FileNotFoundError:
-        st.error("`params.yaml` not found.")
+    st.subheader("Run Pipeline")
+    st.caption("Pipeline controls use the applied params.yaml.")
+    if st.button("Generate & Run Full Pipeline"):
+        with st.spinner("Running pipeline..."):
+            if reproduce(announce_success=False) == 0:
+                st.success("Pipeline completed successfully!")
 
 
 def data_tab():
@@ -296,9 +307,13 @@ def train_tab():
 
     max_cycles = get_max_cycles()
     cycle_num = st.number_input(
-        "Cycle to run", min_value=1, value=1, max_value=max_cycles, key="train_cycle"
+        "Cycle to run",
+        min_value=1,
+        value=1,
+        max_value=max(1, max_cycles),
+        key="train_cycle",
     )
-    if st.button("Run Training Stage"):
+    if st.button("Run Training Stage", disabled=max_cycles == 0):
         reproduce(f"train_cycle_{cycle_num}")
 
     st.subheader("Training Results")
@@ -325,10 +340,10 @@ def evaluation_tab():
         "Cycle to evaluate",
         min_value=1,
         value=1,
-        max_value=max_cycles,
+        max_value=max(1, max_cycles),
         key="eval_cycle",
     )
-    if st.button("Run Evaluation Stage"):
+    if st.button("Run Evaluation Stage", disabled=max_cycles == 0):
         reproduce(f"evaluate_cycle_{cycle_num}")
 
     st.subheader("Evaluation Results")
@@ -359,10 +374,10 @@ def prediction_tab():
         "Cycle for prediction",
         min_value=1,
         value=1,
-        max_value=max_cycles,
+        max_value=max(1, max_cycles),
         key="pred_cycle",
     )
-    if st.button("Run Prediction Stage"):
+    if st.button("Run Prediction Stage", disabled=max_cycles == 0):
         reproduce(f"predict_cycle_{cycle_num}")
 
     st.subheader("Prediction Results")
@@ -397,10 +412,10 @@ def drift_analysis_tab():
         "Cycle for drift analysis",
         min_value=1,
         value=1,
-        max_value=max_cycles,
+        max_value=max(1, max_cycles),
         key="drift_cycle",
     )
-    if st.button("Run Drift Analysis Stage"):
+    if st.button("Run Drift Analysis Stage", disabled=max_cycles == 0):
         reproduce(f"analyze_drift_cycle_{cycle_num}")
 
     st.subheader("Drift Analysis Results")
@@ -426,7 +441,7 @@ def performance_tab():
     st.header("Cycles Performance Analysis")
     st.write("This stage analyzes the performance across all cycles.")
 
-    if st.button("Run Performance Analysis Stage"):
+    if st.button("Run Performance Analysis Stage", disabled=get_max_cycles() < 2):
         reproduce("analyze_cycles_performance")
 
     st.subheader("Performance Plot")

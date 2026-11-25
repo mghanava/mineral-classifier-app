@@ -199,3 +199,172 @@ def test_malformed_scientific_overrides_use_the_shared_validator():
         ("train", "invalid_type"),
     }
     assert preset.overrides == before
+
+
+def test_resolve_new_order_and_independent_nested_values():
+    """Layer explicit edits over a preset and preserve unedited defaults."""
+    overrides = {
+        "cycles": 0,
+        "data": {"base": {"class_names": [], "feature_weight_range": [1, 2]}},
+        "models": {"gcn": {"batch_norm": False}},
+    }
+    original = deepcopy(overrides)
+    resolved = presets.resolve_new_configuration(load_preset("quick_demo"), overrides)
+    assert resolved.validation.is_valid
+    settings = resolved.configuration
+    assert settings["cycles"] == 0
+    assert settings["train"]["n_epochs"] == 15
+    assert settings["data"]["base"]["seed"] == 110
+    assert settings["data"]["base"]["class_names"] == []
+    assert settings["data"]["base"]["feature_weight_range"] == [1, 2]
+    assert settings["models"]["gcn"]["batch_norm"] is False
+    assert settings["models"]["gcn"]["n_layers"] == 3
+    assert settings["models"]["gat"]["residual"] is True
+    settings["data"]["base"]["feature_weight_range"].append(3)
+    assert overrides == original
+
+
+@pytest.mark.parametrize(
+    ("edits", "options"),
+    [
+        ({"scaler_type": "StandardScaler"}, {}),
+        (
+            {"scaler_type": "MinMaxScaler", "scaler_params": {"clip": False}},
+            {"clip": False},
+        ),
+        ({"scaler_type": None, "scaler_params": None}, None),
+        ({"scaler_params": {}}, {}),
+        ({"scaler_params": {"with_centering": False}}, {"with_centering": False}),
+        ({"scaler_type": "RobustScaler"}, {"quantile_range": [25.0, 75.0]}),
+    ],
+)
+def test_scaler_options_belong_to_the_method(edits, options):
+    """Use identical scaler overlay rules for a preset and an imported base."""
+    preset = load_preset("research")
+    imported = apply_preset(preset).configuration
+    for result in (
+        presets.resolve_new_configuration(preset, {"data": edits}),
+        presets.resolve_imported_configuration(imported, {"data": edits}),
+    ):
+        assert result.validation.is_valid
+        assert result.configuration["data"]["scaler_params"] == options
+
+
+def test_preset_scaler_override_is_validated_for_selected_method():
+    """Reset options on both layers and reject incompatible explicit options."""
+    preset = replace(
+        load_preset("research"),
+        overrides={
+            "data": {
+                "scaler_type": "StandardScaler",
+                "scaler_params": {"with_std": False},
+            }
+        },
+    )
+    resolved = presets.resolve_new_configuration(
+        preset, {"data": {"scaler_type": "MinMaxScaler"}}
+    )
+    assert resolved.validation.is_valid
+    assert resolved.configuration["data"]["scaler_params"] == {}
+    invalid = presets.resolve_new_configuration(
+        preset,
+        {
+            "data": {
+                "scaler_type": "MinMaxScaler",
+                "scaler_params": {"with_std": False},
+            }
+        },
+    )
+    assert any(
+        issue.path == "data.scaler_params.with_std" and issue.severity == "error"
+        for issue in invalid.validation.issues
+    )
+
+
+def test_import_completes_runtime_omissions_without_research_inheritance():
+    """Apply only runtime fallbacks before explicit imported-experiment edits."""
+    imported = apply_preset(load_preset("standard")).configuration
+    base = imported["data"]["base"]
+    for key in (
+        "seed",
+        "test_size",
+        "k_nearest",
+        "mineral_noise_level",
+        "interaction_strength",
+    ):
+        del base[key]
+    base.update(class_names=[], calib_size=10)
+    del imported["data"]["pred"]["n_samples"]
+    del imported["data"]["scaler_params"]
+    del imported["models"]["gat"]["residual"]
+    del imported["models"]["gcn"]["improved"]
+    del imported["analyze_drift"]["early_stopping"]
+    imported["analyze_drift"].update(
+        use_max_sliced_wasserstein=True, use_sinkhorn_wasserstein=True
+    )
+    imported["train"]["seed"] = None
+    before = deepcopy(imported)
+    resolved = presets.resolve_imported_configuration(imported, {"cycles": 0})
+    assert resolved.validation.is_valid
+    result = resolved.configuration
+    assert result["cycles"] == 0
+    assert result["train"]["n_epochs"] == 100
+    assert result["train"]["seed"] is None
+    assert result["data"]["base"] == base | {
+        "seed": 42,
+        "test_size": None,
+        "k_nearest": None,
+        "mineral_noise_level": 0.1,
+        "interaction_strength": 0.1,
+    }
+    assert result["data"]["pred"]["n_samples"] == 200
+    assert result["data"]["scaler_params"] is None
+    assert result["analyze_drift"]["early_stopping"] == {}
+    assert result["analyze_drift"]["use_max_sliced_wasserstein"] is True
+    assert result["analyze_drift"]["use_sinkhorn_wasserstein"] is True
+    assert any(
+        issue.code == "wasserstein_precedence" for issue in resolved.validation.issues
+    )
+    assert result["models"]["gat"]["residual"] is False
+    assert result["models"]["gcn"]["improved"] is False
+    assert imported == before
+
+
+def test_import_preserves_complete_values_and_explicit_null():
+    """Keep explicit null distinct from omissions and honor overriding a fallback."""
+    config = apply_preset(load_preset("research")).configuration
+    config["data"]["base"].update(seed=None, test_size=100, calib_size=None)
+    assert presets.resolve_imported_configuration(config).configuration == config
+    del config["data"]["base"]["seed"]
+    resolved = presets.resolve_imported_configuration(
+        config, {"data": {"base": {"seed": None}}}
+    )
+    assert resolved.validation.is_valid
+    assert resolved.configuration["data"]["base"]["seed"] is None
+
+
+def test_import_reports_required_unknown_and_unresolved_options():
+    """Leave unsupported fields visible and report omissions with no reliable fallback."""
+    config = apply_preset(load_preset("research")).configuration
+    del config["data"]["base"]["n_features"]
+    del config["models"]["gcn"]["normalize"]
+    config["data"]["make_edge_weight"] = True
+    config["data"]["base"]["k_nearest"] = 5
+    config["analyze_drift"]["early_stopping"] = {"enabled": False}
+    result = presets.resolve_imported_configuration(config)
+    assert result.configuration["data"]["make_edge_weight"] is True
+    assert {
+        (issue.path, issue.code)
+        for issue in result.validation.issues
+        if issue.severity == "error"
+    } == {
+        ("data.base.n_features", "missing_key"),
+        ("models.gcn.normalize", "missing_key"),
+        ("data.make_edge_weight", "unknown_key"),
+        ("data.base", "connectivity_conflict"),
+        (
+            "analyze_drift.early_stopping.confidence_threshold",
+            "unresolved_compatibility",
+        ),
+        ("analyze_drift.early_stopping.min_permutations", "unresolved_compatibility"),
+    }

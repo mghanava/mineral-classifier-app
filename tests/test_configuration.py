@@ -10,6 +10,7 @@ import pytest
 import yaml
 
 from src.configuration import ValidationIssue, validate_configuration
+from src.presets import resolve_imported_configuration
 
 _ROOT = Path(__file__).resolve().parents[1]
 _DEFAULTS = _ROOT / "config/defaults.yaml"
@@ -548,3 +549,31 @@ def test_robust_unit_variance_range(configuration, quantiles, scaling, valid):
             "data.scaler_params.quantile_range",
             "invalid_scaler_range",
         ) in _findings(result)
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "data.base.seed",
+        "data.pred.seed",
+        "train.seed",
+        "evaluate.seed",
+        "analyze_drift.seed",
+    ),
+)
+def test_missing_seed_requires_resolution_but_explicit_null_is_valid(
+    configuration, path
+):
+    """Keep strict validation independent from legacy fallback resolution."""
+    parent, key = _parent(configuration, path)
+    del parent[key]
+    assert any(
+        (issue.path, issue.code) == (path, "missing_key")
+        for issue in validate_configuration(configuration).issues
+    )
+    imported = resolve_imported_configuration(configuration)
+    assert imported.validation.is_valid
+    resolved, key = _parent(imported.configuration, path)
+    assert resolved[key] == 42
+    parent[key] = None
+    assert resolve_imported_configuration(configuration).configuration == configuration

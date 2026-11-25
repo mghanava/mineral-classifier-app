@@ -39,7 +39,7 @@ On the host, the production graph builder and fold-local preprocessing prepared 
 
 ## Command failures
 
-The dashboard starts DVC and pipeline generation with its own Python interpreter and adds that interpreter's directory to child `PATH` for DVC's stage commands. The log includes stdout and stderr, and the dashboard reports the failing command and exit status or launch error. Full reproduction starts only if generation succeeds. The full-run success message appears only after both commands return zero. CLI errors propagate to the caller with a nonzero exit status, and stage timing distinguishes completion from failure.
+The dashboard starts DVC and pipeline generation with its own Python interpreter and adds that interpreter's directory to child `PATH` for DVC's stage commands. The log includes stdout and stderr, and the dashboard reports the failing command and exit status or launch error. Full and targeted reproduction validate the applied configuration and start only if generation succeeds. Apply in Parameters updates the active scientific YAML. The [configuration CLI](configuration_design.md#cli-and-streamlit) can import, resolve and export the same experiment record. The full-run success message appears only after both commands return zero. CLI errors propagate to the caller with a nonzero exit status, and stage timing distinguishes completion from failure.
 
 ## Development checks
 

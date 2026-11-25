@@ -30,9 +30,11 @@ Open [http://localhost:8501](http://localhost:8501)
 
 ### Using the Dashboard
 
-1. **Parameters tab** - configure pipeline settings
-2. **Generate dvc.yaml** - creates pipeline from your config
-3. **Run Pipeline** - executes dvc repro (full or per-stage)
+1. In **Parameters**, load a preset into the draft or edit the YAML.
+2. Choose **Validate & Preview** to review the resolved settings and differences, then **Apply configuration** to update the active `params.yaml`.
+3. Use **Generate & Run Full Pipeline** or a per-stage run control. The dashboard regenerates DVC definitions from the applied settings before reproduction.
+
+For headless use, run `uv run --frozen --no-sync python -m scripts.configure list`. The CLI can validate, preview and export resolved YAML. [Configuration CLI examples](docs/configuration_design.md#cli-and-streamlit)
 
 ### Stop
 
