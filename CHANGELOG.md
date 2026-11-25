@@ -6,6 +6,10 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
+### Added
+
+- Pin the v0.2.0.dev1 configuration in `config/defaults.yaml` and add a shared static validator for the complete resolved synthetic configuration. Return path-specific errors, warnings and informational findings while preserving active YAML, scientific defaults and existing pipeline behavior.
+
 ### Fixed
 
 - Apply each fitted isotonic map to its matching multiclass logit column. Normalize positive rows by their actual sum and report undefined zero-mass rows. Existing fitted isotonic artifacts remain readable, but affected reports and predictions need regeneration.

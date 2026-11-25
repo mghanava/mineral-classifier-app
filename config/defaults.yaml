@@ -1,0 +1,112 @@
+# Training cycle configuration
+cycles: 3
+add_self_loops: true
+default_model: gcn
+device: auto # auto, cpu, cuda or cuda:N
+# Data generation parameters
+data:
+  scaler_type: RobustScaler # Options: RobustScaler, StandardScaler, MinMaxScaler
+  scaler_params:
+    quantile_range:
+      - 25.0
+      - 75.0
+  edge_affinity:
+    method: inverse_quadratic # Use unit with scale: null for unit edge weights
+    scale: 460.0 # Synthetic coordinate units
+  base:
+    radius: 2500
+    depth: -500
+    n_samples: 1000
+    spacing: 10
+    n_features: 5
+    n_classes: 4
+    class_names:
+    threshold_binary: 0.5
+    min_samples_per_class: 50
+    k_nearest:
+    connection_radius:
+    distance_percentile: 5
+    n_splits: 3
+    test_size: 0.3
+    calib_size: 0.3
+    n_hotspots_max: 5
+    hotspot_drift: 0.1
+    mineral_noise_level: 0.5
+    exp_decay_factor: 0.05
+    feature_noise_level: 0.3
+    prototype_evolution_rate: 0.25
+    class_separation: 2.0
+    class_influence: 0.3
+    spatial_weight: 0.5
+    interaction_strength: 0.25
+    correlation_strength: 0.25
+    feature_weight_range: [0.7, 1.7]
+    feature_offset_std: 0.2
+    seed: 110
+  pred:
+    n_samples: 200
+    min_samples_per_class:
+    seed: 42 # Set null to draw a new batch when generation executes
+
+# Model parameters
+models:
+  gat:
+    hidden_channels: 64
+    n_layers: 3
+    n_heads: 5
+    dropout: 0.1
+    batch_norm: true
+    negative_slope: 0.2
+    bias: true
+    residual: true
+  gcn:
+    hidden_channels: 64
+    n_layers: 3
+    dropout: 0.3
+    batch_norm: true
+    improved: true
+    normalize: true
+
+# Training parameters
+train:
+  seed: 42
+  n_epochs: 1500
+  lr: 0.0005
+  max_grad_norm: 1.0
+  weight_decay_adam_optimizer: 5.0e-4
+  factor_learning_rate_scheduler: 0.5
+  patience_learning_rate_scheduler: 20
+  patience_early_stopping: 50
+  min_delta_early_stopping: 1.0e-3
+
+# Evaluation parameters
+evaluate:
+  initial_temperature: 1.2
+  n_bins: 10
+  calibration_method: dirichlet # Options: "temperature", "isotonic", "platt", "beta", "dirichlet"
+  n_epochs: 1000
+  lr: 1.0e-4
+  weight_decay_adam_optimizer: 5.0e-4
+  verbose: true
+  factor_learning_rate_scheduler: 0.4
+  patience_learning_rate_scheduler: 20
+  patience_early_stopping: 100
+  min_delta_early_stopping: 1.0e-3
+  reg_lambda: 1.0e-2
+  reg_mu: 1.0e-2
+  eps: 1.0e-8
+  seed: 42
+
+# Drift detection parameters
+analyze_drift:
+  seed: 42
+  n_permutations: 1000
+  use_max_sliced_wasserstein:
+  n_projections: 100
+  use_sinkhorn_wasserstein:
+  sinkhorn_wasserstein_reg: 0.1
+  gamma:
+  early_stopping:
+    enabled: true
+    confidence_threshold: 0.01 # Stop early if p-value < threshold
+    min_permutations: 100 # Minimum permutations before early stopping

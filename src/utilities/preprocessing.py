@@ -19,6 +19,14 @@ _SCALERS = {
 }
 
 
+def validate_scaler_type(scaler_type: object) -> None:
+    """Check the supported scaler names and the explicit identity option."""
+    if scaler_type is not None and (
+        not isinstance(scaler_type, str) or scaler_type not in _SCALERS
+    ):
+        raise ValueError(f"Unsupported scaler type {scaler_type!r}.")
+
+
 def _names(values: Sequence[str], name: str) -> tuple[str, ...]:
     if not isinstance(values, list | tuple) or not values:
         raise ValueError(f"{name} must be a non-empty ordered sequence.")
@@ -474,12 +482,11 @@ def fit_preprocessing(
 
     options = dict(scaler_params) if scaler_params is not None else {}
     center = scale = offset = clip_bounds = None
+    validate_scaler_type(scaler_type)
     if scaler_type is None:
         if options:
             raise ValueError("Disabled scaling requires empty scaler parameters.")
     else:
-        if not isinstance(scaler_type, str) or scaler_type not in _SCALERS:
-            raise ValueError(f"Unsupported scaler type {scaler_type!r}.")
         for key in ("quantile_range", "feature_range"):
             if isinstance(options.get(key), list):
                 options[key] = tuple(options[key])

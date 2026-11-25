@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+from collections.abc import Mapping
 from numbers import Real
 
 import torch
@@ -19,19 +20,8 @@ def json_digest(value: dict) -> str:
     ).hexdigest()
 
 
-def resolve_graph_protocol(params: dict) -> dict:
-    """Resolve the versioned, model-independent graph settings from YAML."""
-    data = params["data"]
-    if {"make_edge_weight", "make_edge_weight_method"} & data.keys():
-        raise ValueError(
-            "Legacy edge weighting is incompatible. Remove data.make_edge_weight and "
-            "data.make_edge_weight_method, then set data.edge_affinity to "
-            "{method: inverse_quadratic, scale: 460.0} or {method: unit, scale: null}."
-        )
-    affinity = data.get("edge_affinity")
-    if not isinstance(affinity, dict) or set(affinity) != {"method", "scale"}:
-        raise ValueError("Set data.edge_affinity with explicit method and scale keys.")
-    method, scale = affinity["method"], affinity["scale"]
+def validate_affinity_scale(method: str, scale: object) -> None:
+    """Check the scale contract for the configured affinity method."""
     if method == "unit":
         if scale is not None:
             raise ValueError("Unit edge affinity requires scale: null.")
@@ -46,14 +36,34 @@ def resolve_graph_protocol(params: dict) -> dict:
             )
     else:
         raise ValueError("Use edge_affinity.method inverse_quadratic or unit.")
+
+
+def resolve_connectivity(base: Mapping[str, object]) -> dict[str, object]:
+    """Return the sole active connectivity rule without building a graph."""
     keys = ("k_nearest", "connection_radius", "distance_percentile")
-    connectivity = {
-        key: data["base"][key] for key in keys if data["base"].get(key) is not None
-    }
+    connectivity = {key: base[key] for key in keys if base.get(key) is not None}
     if len(connectivity) != 1:
         raise ValueError(
             "Set exactly one of k_nearest, connection_radius, distance_percentile; set the others to null."
         )
+    return connectivity
+
+
+def resolve_graph_protocol(params: dict) -> dict:
+    """Resolve the versioned, model-independent graph settings from YAML."""
+    data = params["data"]
+    if {"make_edge_weight", "make_edge_weight_method"} & data.keys():
+        raise ValueError(
+            "Legacy edge weighting is incompatible. Remove data.make_edge_weight and "
+            "data.make_edge_weight_method, then set data.edge_affinity to "
+            "{method: inverse_quadratic, scale: 460.0} or {method: unit, scale: null}."
+        )
+    affinity = data.get("edge_affinity")
+    if not isinstance(affinity, dict) or set(affinity) != {"method", "scale"}:
+        raise ValueError("Set data.edge_affinity with explicit method and scale keys.")
+    method, scale = affinity["method"], affinity["scale"]
+    validate_affinity_scale(method, scale)
+    connectivity = resolve_connectivity(data["base"])
     loops = params.get("add_self_loops")
     if type(loops) is not bool:
         raise ValueError("Set add_self_loops to true or false.")
@@ -77,17 +87,22 @@ def resolve_graph_protocol(params: dict) -> dict:
     }
 
 
-def model_graph_settings(protocol: dict, model_name: str, params: dict) -> dict:
-    """Resolve model-specific settings without changing graph topology."""
-    if model_name not in ("gcn", "gat"):
-        raise ValueError(f"Unsupported graph model {model_name!r}.")
-    model = params["models"][model_name]
+def validate_model_graph_settings(model_name: str, model: Mapping[str, object]) -> None:
+    """Check model-specific requirements of the independent graph protocol."""
     if "add_self_loops" in model:
         raise ValueError(
             "Remove models.*.add_self_loops. Use the top-level add_self_loops setting."
         )
     if model_name == "gcn" and model.get("normalize") is not True:
         raise ValueError("Independent GCN graphs require models.gcn.normalize: true.")
+
+
+def model_graph_settings(protocol: dict, model_name: str, params: dict) -> dict:
+    """Resolve model-specific settings without changing graph topology."""
+    if model_name not in ("gcn", "gat"):
+        raise ValueError(f"Unsupported graph model {model_name!r}.")
+    model = params["models"][model_name]
+    validate_model_graph_settings(model_name, model)
     loops = protocol["self_loops"]
     improved = model_name == "gcn" and model.get("improved", False)
     return {
