@@ -28,7 +28,10 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 - [x] **M1.2a — Correct training and evaluation mode transitions.** Restore training mode at the start of every epoch. A three-epoch CPU regression test verifies that training and gradient-free validation alternate in the correct modes.
 - [ ] **M1.3 — Preprocessing and inference consistency.**
   - [x] **M1.3a — Design audit.** Traced scaling, graph and artifact interfaces and documented the proposed cutover in [preprocessing design](docs/preprocessing_design.md).
-  - [ ] **M1.3b — Implementation.** Preserve raw inputs, fit per-fold preprocessing on training observations, and reuse the winning fold's fitted state for calibration, test and prediction. Validate schema and checkpoint pairing and keep drift inputs in a common feature space.
+  - [ ] **M1.3b — Implementation.**
+    - [x] **M1.3b-i — Preprocessing utilities and artifact contracts.** Add validated raw and partition contracts, fold-local scaler fitting, frozen transforms and versioned JSON bound to model weights.
+    - [ ] **M1.3b-ii — Raw data, training and inference integration.** Preserve and merge raw observations, fit per fold, publish the winning scaler with its model and reuse it for calibration, test and prediction.
+    - [ ] **M1.3b-iii — Drift, DVC integration and lifecycle verification.** Use raw features for marginal drift diagnostics and the same frozen model transform on both sides of multivariate comparisons. Verify dependencies, artifact restoration and the cycle lifecycle.
 - [ ] **M1.4 — Graph construction and leakage review.** Define the intended graph protocol and verify graph statistics, edges and message passing respect partition boundaries.
 - [ ] **M1.4a — Full development-pool retraining.** After the graph leakage review and before end-to-end verification, train a fresh final model on the full development graph with a duration informed by cross-validation. Exclude calibration and test nodes.
 - [ ] **M1.5 — DVC dependencies and artifact declarations.** Declare required source, parameter and artifact dependencies. Verify restoration of artifacts used by downstream stages and the dashboard.

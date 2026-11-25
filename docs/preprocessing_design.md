@@ -1,4 +1,4 @@
-# M1.3a preprocessing architecture audit and design
+# M1.3 preprocessing architecture audit and design
 
 ## Current lifecycle
 
@@ -26,16 +26,39 @@ Cycle N trains and evaluates against base cycle N−1. Paths below are relative 
 
 M1.3b can replace node features without rebuilding edges because the graph builder does not use predictor values to choose connectivity. The feature path can be verified independently with identical spatial inputs and partition indices. Carry forward the existing graph protocol as an explicitly identified limitation, and reserve claims of leakage-safe spatial evaluation for M1.4. If that review changes the graph protocol or partition contract, coordinate rollout of both changes before generating a new scientific baseline. Keep the current graph and feature artifacts compatible across all consumers at any runnable revision.
 
-## Proposed preprocessing and artifact contracts
+## Finalized standalone contract
 
-| Artifact or boundary | Proposed contract |
+M1.3b-i implements the contracts in [preprocessing.py](../src/utilities/preprocessing.py). The stage wiring below is planned for M1.3b-ii and M1.3b-iii.
+
+- `RawDataset` holds a finite float64 feature matrix and three float64 coordinates per row. Labels, when present, are int64 indices into the ordered class-name tuple. Feature names, class names and sample IDs are unique and ordered. Immutable copies preserve canonical values and keep the dataset digest stable when caller-owned arrays change. The dataset SHA-256 covers schema, sample IDs, row order, raw numeric arrays and label presence and values. Arrays are encoded with their shape and little-endian float64 or int64 values in row order.
+- `synthetic_sample_ids(batch_id, row_count)` derives `<batch_id>:<zero-based-row>` identifiers. The generator must assign and persist a unique identity for each original batch. Carry the existing IDs forward when appending or selecting observations, and keep them separate from current parent row indices. A later cycle's identity must never replace an observation's original batch identity.
+- `TrainingPartition` carries the exact parent digest, a **zero-based** fold index and immutable, unique, non-negative int64 training row indices. Its digest covers the parent, fold and ordered index vector. `fit_preprocessing` verifies the parent and index bounds and requires labels. The caller owns eligibility and split disjointness. The fitting function receives only the partition's training rows, even when validation, calibration or test rows are present in the parent. One-based fold labels can remain in existing plots and console messages.
+- `FittedPreprocessing.transform` validates the input feature order, dimensions, canonical dtype and finite values, then returns a new float64 matrix. `transform_model_input` uses the same transform and casts to float32, rejecting overflow. Neither operation fits an estimator, mutates raw rows or touches graph edges. Training uses scikit-learn estimators configured with the existing constructor options, including YAML lists for ranges. `None` with empty options explicitly disables scaling.
+
+### JSON sidecar v1
+
+Keep `model.pt` as a weights-only state dict. Store `preprocessing.json` alongside it in the trained-cycle directory. Its top-level fields are `version` (integer `1`), `weights_sha256` (lowercase SHA-256 of the exact checkpoint file bytes), and `state`. The state requires every field below. Optional numeric values are written as JSON null.
+
+| State fields | Meaning |
 | --- | --- |
-| Base and prediction graphs | Retain the existing tensor paths. Store the canonical raw feature matrix, coordinates, ordered feature identifiers, class mapping, sample IDs or documented synthetic ID derivation, and dataset/schema provenance. Mark the representation and schema version explicitly. Keep raw values at a documented canonical precision and cast only derived model inputs to float32. A raw graph may carry raw `x` for existing PyG consumers, but the model boundary must require an explicitly prepared model-input graph. Never infer raw status from the presence of `unscaled_features` alone. |
-| Fold, calibration and test artifacts | Keep `fold_data.pt`, `calib_data.pt` and `test_data.pt`. Preserve partition-to-parent indices and bind them to the exact parent dataset and row order. Validate index bounds, uniqueness, label alignment and schema. Use stable synthetic IDs, for example a generation batch identity plus row number that persists when the cycle grows. Positional indices remain useful within one parent artifact. |
-| Model and fitted preprocessing | Keep `model.pt` as a weights-only state dict. Save a versioned, non-executable `preprocessing.json` alongside it in the trained-cycle directory. Persist the selected fold ID, fitted scaler kind/options and numeric transform state, feature order, class mapping, resolved model config and training/partition provenance. Bind the file to the exact weights digest. Stage both files before publishing and check their binding at consumption so a partial update or stale pair fails explicitly. |
-| Calibration | Keep `calibrator.pt` and record its weights-plus-preprocessing binding and calibration split provenance in a versioned companion file under the evaluation output. Validate the binding in prediction before loading the existing trusted local calibrator. A sidecar digest is a consistency check and does not make an untrusted serialized calibrator safe to load. |
+| `scaler_type` | `RobustScaler`, `StandardScaler`, `MinMaxScaler`, or null for identity. |
+| `feature_names`, `class_names` | Exact column order and integer-label-to-class mapping. |
+| `dataset_sha256`, `partition_sha256`, `fold_index` | Raw parent digest, training-partition digest and selected zero-based fold. |
+| `center`, `scale` | For Standard and Robust, subtract the center and then divide by the scale. Each can independently be null. For MinMax, center is null and scale is a positive multiplier. |
+| `offset`, `clip_bounds` | For MinMax, add the required offset after multiplying, then optionally clip at the two ordered bounds. Both fields are null for other variants. All numerical fields are null for identity. |
 
-Use the existing scikit-learn estimators for fitting. Prefer a validated numeric representation of their transform state to pickled scaler objects. Standard and Robust transforms require center/scale behavior including disabled options. MinMax requires fitted scale and offset plus configured clipping and bounds. Validate type, array lengths, finite values, and ordered schema. Confirm transform parity for supported options and dtypes, including constant columns and values outside training ranges. An absent, stale or incompatible sidecar should produce an actionable regenerate/retrain error. Do not silently refit, accept a dimension match as proof of feature order, or reuse old weights with a newly fitted scaler.
+The format stores fitted transform coefficients and effective flags, including disabled centering or scaling and MinMax clipping. Fit-only settings such as the quantile range and execution options such as `copy` do not need to be replayed. Keep the resolved estimator and model configuration in the run configuration for reproducibility.
+
+Load requires the expected feature and class schema and the weights file. It can also verify an expected training partition when that provenance is available. Missing, legacy, malformed and mismatched files raise an error. The JSON loader does not deserialize estimators or model weights. Digests verify consistency with expected files and are not signatures.
+
+### Integration contracts
+
+| Boundary | Planned handling |
+| --- | --- |
+| Base and prediction graphs | Retain existing tensor paths. Attach an explicit raw schema/version and canonical feature, coordinate and ID data. A raw graph can carry raw `x` for PyG consumers. Require a prepared model-input graph before any forward pass. The presence of `unscaled_features` alone does not establish raw provenance. |
+| Fold, calibration and test artifacts | Keep `fold_data.pt`, `calib_data.pt` and `test_data.pt`. Bind their partition-to-parent indices to the exact dataset. Validate bounds, uniqueness, label alignment and partition disjointness before use. |
+| Model publication | Publish the verified winning-fold state with its restored weights. Stage both files together and verify their digest binding before consumption. Keep the winning-fold policy until M1.4a. |
+| Calibration | Keep `calibrator.pt`. Record weights-plus-preprocessing binding and calibration split provenance in a companion file under the evaluation output. Verify the binding before loading the existing trusted-local calibrator. A digest does not make an untrusted serialized calibrator safe to load. |
 
 ## Runtime handling
 
@@ -43,7 +66,7 @@ Use the existing scikit-learn estimators for fitting. Prefer a validated numeric
 2. **Calibration and test.** Read the raw rows from the verified parent, verify and load the winning preprocessing, and transform both sets with that state. Fit probability calibration on the calibration logits only. Evaluate on the test logits with the fitted calibrator. Record the checkpoint pairing without changing calibration methods.
 3. **Prediction.** Keep synthetic generation model-independent and persist raw observations and topology. At the scoring boundary, verify schema and model/calibrator pairing, transform once with the saved scaler, and use that same prepared graph for calibrated and uncalibrated scoring. Use synthetic truth only for diagnostics or explicitly authorized supervised cycle updates. General unlabeled inference is a later workflow.
 4. **Next learning cycle.** Append canonical raw rows and corresponding coordinates, verified synthetic labels and persistent IDs. Validate feature/model-independent schema and provenance before merging. Repartition under the existing per-cycle policy and fit only when training the new model. Historical transformed values and model predictions never become raw observations or training labels. Fixed longitudinal holdout membership remains a separate decision. Treat pre-cutover metrics as historical and compare performance only across runs with a documented compatible protocol.
-5. **Drift.** Use the same feature space on both sides and make it explicit in report metadata. Prefer canonical raw features for both reference and new batch, including the median kernel-bandwidth heuristic and permutation samples. Preserve the statistics and report paths and document changed units for any configured gamma. If feature units make raw distances unsuitable, use the selected model's saved scaler on both sides as an explicit alternative and declare that dependency. Keep the current historical-base reference population unless a separate model-training reference policy is agreed. Drift is a distribution comparison and does not establish a loss of predictive performance.
+5. **Drift.** Use canonical raw observations for marginal geological diagnostics. Use the same frozen model preprocessing for both reference and incoming observations in multivariate statistics, including the bandwidth heuristic and permutation samples. Record the feature space and checkpoint pairing in report metadata. Keep the current historical-base reference population unless a separate model-training reference policy is agreed. Drift describes a distribution change and does not establish a loss of predictive performance.
 
 ## DVC and dashboard impact
 
@@ -56,20 +79,20 @@ Update both [setup_dvc.py](../scripts/setup_dvc.py) and the checked-in [dvc.yaml
 | Evaluate | Add `calib_data.pt` alongside `test_data.pt`, the preceding raw parent when used, and the trained preprocessing sidecar alongside `model.pt`. Track transform/validation and calibration code and any resolved model or schema settings still read from YAML. |
 | Generate prediction data | Add the bootstrap arrays and relevant `data.base`, edge and self-loop parameters alongside `data.pred`. Keep generation independent of the trained scaler. Declare the graph diagnostic outputs used by Streamlit. |
 | Predict | Add the trained preprocessing sidecar and calibration binding alongside current weights, raw prediction graph and calibrator dependencies. Track transform/validation and calibration code and settings still read from YAML. |
-| Drift | Existing base and prediction tensor dependencies suffice for canonical raw inputs if schema metadata is embedded. Track metadata/validation helpers if used. If a shared model transform is selected, declare the exact preprocessing bundle as a dependency. |
+| Drift | Depend on both raw graph artifacts and the exact model preprocessing bundle for shared multivariate transforms. Track metadata and transform/validation helpers. |
 
 The existing dashboard launches named DVC targets and reads fixed result paths. Keep stage names, cycle directories, plots, metrics and prediction CSV paths stable. The Data tab parses every top-level JSON file in its graph directories as Plotly, so embed raw-schema metadata in tensor artifacts or place auxiliary JSON under a dedicated subdirectory. Training and evaluation sidecars live outside those graph directories. The preprocessing-specific DVC declarations must ship with the consuming code. Broader artifact coverage can be reviewed in M1.5. Generate and validate candidate DAGs in temporary directories first, and leave production DVC cache/lock changes to an authorized run.
 
 ## Implementation sequence and regression plan
 
-1. Define the raw/schema and fitted-state format and implement fit/transform boundaries. Use tiny fixtures to compare all three scaler kinds with scikit-learn, cover serialization round trips and reject stale weights, malformed state and feature-order mismatches.
-2. Introduce versioned raw producers, index validation and raw next-cycle merging. Check preserved values and IDs over two cycles, unchanged coordinates and graph topology for identical inputs, and rejection of ambiguous legacy artifacts. Keep exploratory t-SNE fitting isolated from model training and label its scope.
+1. **M1.3b-i, complete.** Standalone tests compare the three scaler types and identity against scikit-learn or raw values, exercise JSON round trips and reject stale weights, malformed state and schema mismatches. They also check fit isolation, precision, raw immutability and batch-invariant row transforms.
+2. **M1.3b-ii.** Introduce versioned raw producers, index validation and raw next-cycle merging. Check preserved values and IDs over two cycles, unchanged coordinates and graph topology for identical inputs, and rejection of ambiguous legacy artifacts. Keep exploratory t-SNE fitting isolated from model training and label its scope.
 3. Wire fold training, selection, evaluation and prediction as one compatible cutover. Use fixtures with shifted held-out features to check training-only fit statistics and verify that folds fit independently. Assert that winner and scaler IDs match even when a later fold loses. Assert that calibration, test and prediction use the saved transform and exercise fit-call guards in inference paths. Compare the transformed representation of one row across different prediction batches while holding topology out of that assertion.
-4. Wire drift to the common representation. Check that both sides and the bandwidth heuristic see the intended space and that a known raw shift survives, using small fixtures and a controlled statistic or permutation count. Verify DAG invalidation paths, declared artifact restoration and dashboard discovery with isolated fixtures. Real-data ingestion, graph protocol revision and full development-pool refitting belong to their scheduled work items.
+4. **M1.3b-iii.** Wire marginal drift to raw values and multivariate drift to the shared frozen transform. Check that both sides and the bandwidth heuristic see the intended space and that a known raw shift survives, using small fixtures and a controlled statistic or permutation count. Verify DAG invalidation paths, declared artifact restoration and dashboard discovery with isolated fixtures. Real-data ingestion, graph protocol revision and full development-pool refitting belong to their scheduled work items.
 
 ## Open decisions and blockers
 
-- Agree on the manifest shape, raw numeric precision, supported scaler options and migration policy. Recommend regenerated model/scaler/calibrator bundles for legacy cycles with incomplete provenance.
-- Choose whether drift defaults to raw units or a single shared transform. Document reference membership and bandwidth units. A fixed longitudinal holdout and stable external IDs require separate protocol decisions.
+- Plan the legacy cycle cutover. Regenerate model/scaler/calibrator bundles where provenance is incomplete. Decide how the stage will persist generation-batch IDs and stage the related model, scaler and calibration outputs.
+- Document drift reference membership and bandwidth units in M1.3b-iii. A fixed longitudinal holdout and stable external IDs require separate protocol decisions.
 - M1.4 must settle inductive versus transductive construction, adaptive-neighbor and edge-weight statistics, and whether visualized edges should match model edges. Until then, corrected feature preprocessing alone cannot certify the spatial evaluation.
 - M1.4a needs the final development population, graph and refit-duration rule. The same fitted-state contract can then describe the full-pool model instead of a winning fold.
