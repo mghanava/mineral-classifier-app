@@ -170,8 +170,8 @@ Preset selection is independent of Basic, Advanced and Expert parameter visibili
 | `analyze_drift.early_stopping.min_permutations` | 100 | 100 | 100 |
 
 - **Quick demo** (`quick_demo`) runs the verified two-cycle CPU GCN demonstration. Its complete resolved settings match the retained M1.7 Experiment A configuration. It keeps the original drift minimum of 100, so all 19 permutations run. The shared validator also warns about the training scheduler and the calibration scheduler and early-stop budgets. Two cycles expose performance aggregation. [M1.7 verification report](end_to_end_verification.md)
-- **Standard** (`standard`) uses intermediate sample and iteration budgets. Its drift stop can activate after 100 of up to 199 permutations. Inherited calibration early-stopping patience produces a static warning. The approximate 3–5 minute CPU runtime is an initial design target. M2.5 will measure runtime, check realized calibration populations and review the interaction between the training scheduler and stopping controls.
-- **Research** (`research`) has empty overrides and retains the canonical configuration in full. Full default-budget reproduction remains to be verified in M2.5.
+- **Standard** (`standard`) uses intermediate sample and iteration budgets. Its drift stop can activate after 100 of up to 199 permutations. Inherited calibration early-stopping patience produces a static warning. The two-cycle CPU run took 101.66 seconds in M2.5, below the 3–5 minute design target. The approved budget was retained. [Production verification](configuration_verification.md#production-results)
+- **Research** (`research`) has empty overrides and retains the canonical configuration in full. M2.5 verified exact settings, static validation and equivalent DVC generation. Full-budget reproduction remains unverified. [Equivalence checks](configuration_verification.md#research-cli-and-dvc-compatibility)
 
 All three inherit the 50-per-class bootstrap floor, RobustScaler, the graph protocol, Dirichlet calibration, and the existing seed values and scopes.
 

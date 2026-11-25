@@ -6,21 +6,32 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
+## [0.2.0.dev2] - 2026-11-25
+
+Configuration management is complete for the synthetic workflow, with 336 passing regression tests. Quick demo and Standard completed all 14 stages of their two-cycle CPU pipelines in 74.31 s and 101.66 s, respectively. Quick demo matched the retained M1.7 configuration and scientific outputs exactly for both cycles. Research matched the canonical defaults and generated an equivalent DVC definition. All three preset budgets and versions were retained after verification. Preset budgets describe computational effort. Predictive performance depends on the data and evaluation protocol. See the [configuration verification report](docs/configuration_verification.md).
+
 ### Added
 
-- Verify production configuration workflows for Quick demo and Standard on CPU, Research default equivalence, and legacy CLI and dashboard compatibility. Record the measured runtimes and artifact checks in the [configuration verification report](docs/configuration_verification.md).
-- Add shared preset and legacy configuration resolution, scientific YAML diffs and atomic export through `python -m scripts.configure`.
-- Distribute version-1 Quick demo, Standard and Research presets with a read-only application API and shared static validation. Quick demo matches the verified M1.7 Experiment A settings, and Research inherits the complete canonical configuration.
-- Pin the v0.2.0.dev1 configuration in `config/defaults.yaml` and add a shared static validator for the complete resolved synthetic configuration. Return path-specific errors, warnings and informational findings while preserving active YAML, scientific defaults and existing pipeline behavior.
+- Inventory and classify all 88 configurable parameters by proposed Basic, Advanced, Expert and Internal visibility. Document their stage consumers, defaults and compatibility. See the [configuration design](docs/configuration_design.md).
+- Pin the v0.2.0.dev1 scientific defaults in `config/defaults.yaml`, separate from the active experiment. Centralize static validation with path-specific errors, warnings and informational findings.
+- Distribute version-1 Quick demo, Standard and Research presets. Resolve new experiments with explicit overrides and import legacy YAML with documented runtime fallbacks.
+- Add the `python -m scripts.configure` CLI for listing presets, validating, previewing, comparing and exporting configuration. Publish validated YAML atomically and protect against stale previews.
 
 ### Changed
 
-- Make Parameters use an editable draft, validation and explicit Apply. Full and targeted dashboard runs regenerate DVC definitions from the applied configuration before reproduction.
+- Add an expert YAML draft, read-only **Validate & Preview**, and explicit **Apply configuration** to Parameters. Full and targeted dashboard runs regenerate DVC definitions from the applied configuration. Equivalent configurations generate equivalent definitions.
 
 ### Fixed
 
 - Prevent another dashboard session or cooperative CLI export from changing the applied configuration during a dashboard reproduction.
 - Apply each fitted isotonic map to its matching multiclass logit column. Normalize positive rows by their actual sum and report undefined zero-mass rows. Existing fitted isotonic artifacts remain readable, but affected reports and predictions need regeneration.
+
+### Known limitations
+
+- The workflow uses synthetic data and random stratified validation. Generalization to unseen regions remains unverified.
+- Full-budget Research execution and container deployment remain unverified.
+- Direct filesystem edits and direct DVC commands require a stable active configuration during execution. The dashboard lock protects cooperating writers in the shared workspace.
+- The dashboard retains seven tabs and an expert YAML editor. The [roadmap](ROADMAP.md) tracks guided Basic, Advanced and Expert configuration for `0.2.0.dev3` and user-uploaded geological data for `0.2.0.dev4`.
 
 ## [0.2.0.dev1]
 

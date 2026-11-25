@@ -1,6 +1,6 @@
 # Mineral Deposit Classification
 
-A web-based dashboard for classifying mineral deposits using graph neural networks with an online learning pipeline managed by DVC.
+A web-based dashboard for synthetic mineral classification using graph neural networks and a DVC-managed learning pipeline. The current development version is `0.2.0.dev2`.
 
 ## Demo
 
@@ -8,12 +8,12 @@ A web-based dashboard for classifying mineral deposits using graph neural networ
 
 ## How It Works
 
-1. **Bootstrap**: Generate initial data samples and construct a graph (KNN, distance threshold, or percentile). The graph is split for cross-validation ensuring no data leakage.
+1. **Bootstrap**: Generate labeled synthetic observations, make stratified partitions, and construct independent graphs for each partition using KNN, a distance threshold, or a percentile.
 2. **Train & Evaluate**: Train GNN models (GCN/GAT) and calibrate output probabilities using techniques like temperature scaling, isotonic regression, or Platt scaling.
-3. **Online Learning Cycles**: Introduce new unlabeled data → predict with calibrated model → analyze drift (MMD, Energy Distance, Wasserstein) → integrate into training set → repeat.
+3. **Learning Cycles**: Generate synthetic batches, predict with the calibrated model, analyze drift (MMD, energy distance, Wasserstein), and append the simulator-labeled observations for the next cycle.
 4. **Performance Analysis**: Compare model performance across learning cycles.
 
-## Quick Start
+## Container Quick Start
 
 **Requirements:**
 - Docker >= 23.0
@@ -30,11 +30,29 @@ Open [http://localhost:8501](http://localhost:8501)
 
 ### Using the Dashboard
 
-1. In **Parameters**, load a preset into the draft or edit the YAML.
-2. Choose **Validate & Preview** to review the resolved settings and differences, then **Apply configuration** to update the active `params.yaml`.
+1. In **Parameters**, select a preset and click **Load preset into draft**. You can also edit the expert YAML draft.
+2. Choose **Validate & Preview** to review the resolved settings, findings and differences. Click **Apply configuration** to update the active `params.yaml`. Review a fresh preview if the active file changes.
 3. Use **Generate & Run Full Pipeline** or a per-stage run control. The dashboard regenerates DVC definitions from the applied settings before reproduction.
 
-For headless use, run `uv run --frozen --no-sync python -m scripts.configure list`. The CLI can validate, preview and export resolved YAML. [Configuration CLI examples](docs/configuration_design.md#cli-and-streamlit)
+Quick demo and Standard completed their two-cycle CPU pipelines in 74.31 s and 101.66 s on the verification host. Both retain their approved budgets. Presets set computational budgets, and predictive performance depends on the data and evaluation protocol. Research resolves to the full canonical defaults and has been checked through static validation and DVC generation. [Verification report](docs/configuration_verification.md)
+
+### Configuration CLI
+
+Run these commands from the repository with the project environment installed.
+
+```fish
+uv run --frozen --no-sync python -m scripts.configure list
+uv run --frozen --no-sync python -m scripts.configure validate params.yaml
+uv run --frozen --no-sync python -m scripts.configure resolve quick_demo --against params.yaml
+uv run --frozen --no-sync python -m scripts.configure resolve standard --output experiment.yaml
+uv run --frozen --no-sync python -m scripts.configure import legacy.yaml --output resolved.yaml
+```
+
+Resolution and import preview to stdout by default. Use `--overrides` with a partial YAML mapping for custom settings. Use `--output` for an explicit export, and add `--overwrite` when replacing an existing file. For direct DVC use, regenerate with `uv run --frozen --no-sync python -m scripts.setup_dvc` after applying topology changes. Keep the active file fixed during a direct DVC run. Dashboard reproduction blocks cooperating configuration writers in its workspace until the run exits. [Configuration design](docs/configuration_design.md#cli-and-streamlit)
+
+### Current scope
+
+The verified workflow uses synthetic data and random stratified validation. Generalization to unseen regions, full-budget Research execution and container deployment remain unverified. The dashboard retains seven tabs and the expert YAML editor. The guided Basic, Advanced and Expert interface is planned for `0.2.0.dev3`, and user-uploaded geological data is planned for `0.2.0.dev4`. [Roadmap](ROADMAP.md)
 
 ### Stop
 
@@ -57,7 +75,8 @@ make dev               # start in dev mode (bind mount, hot reload)
 
 | Change | Action |
 |---|---|
-| Edit .py / params.yaml | Save - browser auto-refreshes |
+| Edit Python source | Save to trigger a development-mode reload |
+| Change an experiment | Preview and apply it in Parameters |
 | Add Python dependency | make rebuild |
 | Change Dockerfile/compose | make rebuild |
 | Something broken | make clean and make dev |
@@ -118,6 +137,7 @@ make help      Show all commands
 ```
 ├── app.py                       # Streamlit dashboard
 ├── scripts/
+│   ├── configure.py             # Configuration CLI
 │   ├── setup_dvc.py             # DVC pipeline generator
 │   └── abort_pipeline.py        # Stop a running pipeline (`make abort`)
 ├── Dockerfile                   # Multi-stage Docker build
@@ -127,7 +147,8 @@ make help      Show all commands
 ├── pyproject.toml               # Dependencies and tooling config
 ├── .pre-commit-config.yaml      # Pre-commit hooks
 ├── dvc.yaml / dvc.lock          # DVC pipeline definition and state
-├── params.yaml                  # Pipeline parameters
+├── config/                      # Canonical defaults and versioned presets
+├── params.yaml                  # Applied pipeline configuration
 ├── results/                     # Pipeline outputs (DVC tracked)
 └── src/
     ├── models/                  # GNN architectures (GCN, GAT)

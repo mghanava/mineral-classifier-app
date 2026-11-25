@@ -1,6 +1,6 @@
 [project]
 name = "mineral-classifier"
-version = "0.2.0.dev1"
+version = "0.2.0.dev2"
 description = "Machine learning project for mineral classification"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -6,7 +6,7 @@ Transform the v0.1.0 research prototype into an accessible spatial machine learn
 
 ## Release strategy
 
-The `v0.1.0` tag preserves the original application at `d00c2cd`. The development foundation is recorded at `55aeacf`. Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below identify milestones. The current project version is `0.2.0.dev1`. The owner approves version changes, commits, tags and merges. Check off milestones and work items after verification.
+The `v0.1.0` tag preserves the original application at `d00c2cd`. The development foundation is recorded at `55aeacf`. Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below identify milestones. The current project version is `0.2.0.dev2`. The owner approves version changes, commits, tags and merges. Check off milestones and work items after verification.
 
 ## v0.2.0 — Accessible classification application
 
@@ -49,21 +49,23 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 
 ### Milestone 2 — Configuration management (`0.2.0.dev2`)
 
-- [x] **M2.1 — Configuration inventory and design.** Document all existing parameters, actual consumers, conditional behavior, preset recommendations and compatibility in the [configuration design](docs/configuration_design.md).
+- [x] **M2.1 — Configuration inventory and design.** Inventory and classify all 88 configurable parameters. Document their consumers, conditional behavior and compatibility in the [configuration design](docs/configuration_design.md).
 - [x] **M2.1a — Multiclass isotonic calibration.** Verified and corrected per-class inference, row normalization and handling of undefined rows. Confirmed existing artifact compatibility.
-- [x] **M2.2 — Centralized configuration validation.** Pin the canonical release defaults and validate the 88-leaf resolved configuration with structured static findings. Preserve runtime and expert compatibility as described in the [configuration design](docs/configuration_design.md#m22-static-validation).
+- [x] **M2.2 — Centralized configuration validation.** Separate canonical defaults from the active configuration and validate the resolved configuration with structured errors, warnings and informational findings. See the [validation contract](docs/configuration_design.md#m22-static-validation).
 - [x] **M2.3 — Experiment presets.** Distribute and validate version-1 overlays for Quick demo, Standard and Research against the canonical defaults. See the [preset contract](docs/configuration_design.md#m23-experiment-presets).
-- [x] **M2.4 — Configuration resolution and integration.** Add shared preset and legacy resolution, read-only previews, explicit atomic application and export, and DVC regeneration guidance. Verify draft isolation and equivalent generated definitions for identical settings. See the [configuration integration contract](docs/configuration_design.md#m24-configuration-resolution-and-integration).
+- [x] **M2.4 — Configuration resolution and integration.** Add preset resolution, explicit overrides, legacy YAML imports and a dedicated CLI. Integrate read-only previews and explicit dashboard Apply with atomic writes, stale-preview protection and DVC regeneration. Verify equivalent definitions for identical settings. See the [configuration integration contract](docs/configuration_design.md#m24-configuration-resolution-and-integration).
 - [x] **M2.5 — Configuration integration and production verification.** Verified CLI and dashboard workflows, Research equivalence, and complete two-cycle CPU reproductions for Quick demo (74.31 s) and Standard (101.66 s). Prevented concurrent dashboard runs and configuration writes in the same workspace. See the [configuration verification report](docs/configuration_verification.md).
 
-**Acceptance:** A user can configure a synthetic run without editing YAML; the legacy configuration remains usable; invalid settings fail before computation; scientific defaults are preserved or changes are explicitly documented.
+**Acceptance met.** All 336 regression tests passed. Users can configure a synthetic run by loading, previewing and applying a preset without editing YAML. Existing configurations can be imported, and static validation errors block application and dashboard execution. Quick demo matched M1.7 scientifically, Research matched the canonical defaults, and the preset budgets were retained.
+
+**Release boundary.** The seven-tab dashboard and expert YAML editor remain in use. Guided configuration belongs to `0.2.0.dev3`, and geological data uploads belong to `0.2.0.dev4`. The verified workflow uses synthetic data and random stratified validation. Full-budget Research and container deployment remain unverified. Keep the active file stable during direct DVC runs. See the [release limitations](CHANGELOG.md#known-limitations).
 
 ### Milestone 3 — User interface redesign (`0.2.0.dev3`)
 
 - [ ] Extract Streamlit pages incrementally from the existing entry point.
 - [ ] Add an overview with Explore Demo and Use My Own Data entry points; clearly label unavailable workflows until implemented.
 - [ ] Organize navigation around Data, Train, Results and Predict, with advanced diagnostics separate.
-- [ ] Integrate configuration forms and presets; retain expert access to existing pipeline stages.
+- [ ] Integrate presets with guided Basic, Advanced and Expert configuration, preserving access to existing pipeline stages.
 - [ ] Hide routine DVC setup behind application orchestration where feasible.
 - [ ] Improve empty states, errors, progress feedback and contextual help.
 
