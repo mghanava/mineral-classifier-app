@@ -6,11 +6,19 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
-No implementation changes recorded yet.
+### Added
+
+- Deterministic CPU regression tests for GCN and GAT forward passes, graph edges, dataset partition disjointness, feature and label alignment, and induced subgraphs.
+- Isolated DVC pipeline generation checks and a Streamlit rendering test for missing artifacts.
+
+### Changed
+
+- Added a scientific stabilization milestone with seven work items before configuration management.
+- Removed executable permissions from `AGENTS.md`, `ROADMAP.md` and `CHANGELOG.md`.
 
 ## [0.1.0]
 
-Original research-oriented application; baseline summary based on existing project documentation and prior repository review. Release date and exact baseline commit are pending verification in Milestone 0.
+Original research-oriented application; baseline summary based on existing project documentation and prior repository review. The `v0.1.0` tag points to baseline commit `d00c2cd`.
 
 ### Added
 
@@ -27,4 +35,4 @@ Original research-oriented application; baseline summary based on existing proje
 - General-purpose import of user-provided geological datasets is not yet established.
 - CPU-only deployment and end-to-end reproducibility require verification.
 
-These notes describe the starting point, not independently verified test outcomes. See the planned baseline report at `docs/baseline_v0.1.0.md` once it has been created.
+See the [baseline report](docs/baseline_v0.1.0.md) for verified checks and limitations.

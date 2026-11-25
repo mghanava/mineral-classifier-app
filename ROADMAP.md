@@ -6,22 +6,34 @@ Transform the v0.1.0 research prototype into an accessible spatial machine learn
 
 ## Release strategy
 
-Preserve the existing release using Git tag `v0.1.0` (verify the tag and baseline commit first). Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below are proposed milestone identifiers, not released versions. The owner approves version changes, commits, tags and merges. All milestones start pending until verified; do not mark them complete based on plans alone.
+The `v0.1.0` tag preserves the original application at `d00c2cd`. The development foundation is recorded at `55aeacf`. Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below identify milestones. The current project version is `0.2.0.dev0`. The owner approves version changes, commits, tags and merges. Check off milestones and work items after verification.
 
 ## v0.2.0 — Accessible classification application
 
 ### Milestone 0 — Development foundation (`0.2.0.dev0`)
 
-- [ ] Verify Git status, branch, tags and current version; preserve original baseline with owner approval.
-- [ ] Inspect architecture, entry points, configuration, DVC dependencies, Docker, and existing test tooling.
-- [ ] Run lightweight existing tests and static checks; record failures or unavailable tooling.
-- [ ] Identify required artifacts, CPU compatibility obstacles and reproducibility risks.
-- [ ] Create `docs/baseline_v0.1.0.md` with execution instructions, verified functionality, test outcomes and limitations.
-- [ ] Establish project instructions, roadmap and changelog; update development version and lockfile if authorized.
+- [x] Verify Git status, branch, tags and current version; preserve original baseline with owner approval.
+- [x] Inspect architecture, entry points, configuration, DVC dependencies, Docker, and existing test tooling.
+- [x] Run lightweight existing tests and static checks; record failures or unavailable tooling.
+- [x] Identify required artifacts, CPU compatibility obstacles and reproducibility risks.
+- [x] Create `docs/baseline_v0.1.0.md` with execution instructions, verified functionality, test outcomes and limitations.
+- [x] Establish project instructions, roadmap and changelog; update development version and lockfile if authorized.
 
 **Acceptance:** Baseline is documented, Git preservation is verified, and no scientific pipeline or application behavior has changed. Full training is not required without approval; unverified behavior is clearly identified.
 
-### Milestone 1 — Configuration management (`0.2.0.dev1`)
+### Milestone 1 — Scientific correctness and regression tests (`0.2.0.dev1`)
+
+- [x] **M1.1 — Automated regression tests.** Added deterministic CPU checks for GCN and GAT forward passes, edge validity, partition disjointness, feature and label alignment, and induced subgraphs. Added DVC generation tests for one and two cycles and a Streamlit empty-results test using temporary directories.
+- [ ] **M1.2 — Cross-validation fold independence.** Initialize independent model and training state for each fold and verify held-out samples cannot influence their own validation through earlier folds.
+- [ ] **M1.3 — Preprocessing and inference consistency.** Fit preprocessing on eligible training data and reuse fitted state for validation, calibration, test and prediction. Verify feature order and class mapping.
+- [ ] **M1.4 — Graph construction and leakage review.** Define the intended graph protocol and verify graph statistics, edges and message passing respect partition boundaries.
+- [ ] **M1.5 — DVC dependencies and artifact declarations.** Declare required source, parameter and artifact dependencies. Verify restoration of artifacts used by downstream stages and the dashboard.
+- [ ] **M1.6 — Reproducibility and error handling.** Record relevant seeds and configuration, test repeatability where feasible and propagate pipeline failures to the dashboard.
+- [ ] **M1.7 — Small end-to-end pipeline verification.** Run an isolated CPU synthetic cycle and verify training, evaluation, calibration, prediction and drift artifacts.
+
+**Acceptance:** The CPU regression suite passes, scientific protocol changes are documented and tested, and a small synthetic run verifies the path from data generation through prediction and drift analysis.
+
+### Milestone 2 — Configuration management (`0.2.0.dev2`)
 
 - [ ] Audit existing YAML keys, defaults, consumers and valid combinations.
 - [ ] Introduce a typed, validated configuration layer (use an existing dependency if adequate; propose Pydantic if needed).
@@ -33,7 +45,7 @@ Preserve the existing release using Git tag `v0.1.0` (verify the tag and baselin
 
 **Acceptance:** A user can configure a synthetic run without editing YAML; the legacy configuration remains usable; invalid settings fail before computation; scientific defaults are preserved or changes are explicitly documented.
 
-### Milestone 2 — User interface redesign (`0.2.0.dev2`)
+### Milestone 3 — User interface redesign (`0.2.0.dev3`)
 
 - [ ] Extract Streamlit pages incrementally from the existing entry point.
 - [ ] Add an overview with Explore Demo and Use My Own Data entry points; clearly label unavailable workflows until implemented.
@@ -44,7 +56,7 @@ Preserve the existing release using Git tag `v0.1.0` (verify the tag and baselin
 
 **Acceptance:** A first-time visitor can understand and navigate the existing synthetic workflow; no manual DVC/YAML operations are needed for the supported basic path; existing expert functionality remains accessible.
 
-### Milestone 3 — Bring your own data (`0.2.0.dev3`)
+### Milestone 4 — User data ingestion (`0.2.0.dev4`)
 
 - [ ] Define a canonical dataset contract and column mapping for sample ID, coordinates, numerical predictors, label, optional group/batch metadata and CRS/units when applicable.
 - [ ] Separate synthetic data acquisition from shared preparation and graph construction.
@@ -56,19 +68,19 @@ Preserve the existing release using Git tag `v0.1.0` (verify the tag and baselin
 
 **Acceptance:** Both sources feed a common downstream representation; a valid CSV can be prepared without source-code changes; invalid data receives actionable errors; synthetic generation still works. Uploaded data is not transmitted externally by default.
 
-### Milestone 4 — Training, prediction and scientific safeguards (`0.2.0.dev4`)
+### Milestone 5 — Training and prediction workflows (`0.2.0.dev5`)
 
 - [ ] Support independent training and prediction operations; never require retraining for each new batch.
 - [ ] Persist model, preprocessing, feature ordering, label mappings and inference protocol.
 - [ ] Implement appropriate grouped/spatial validation for real data before presenting generalization claims; retain random validation for suitable synthetic experiments.
-- [ ] Audit scaler fitting, graph edges/message passing, tuning and calibration for leakage.
+- [ ] Verify that the preprocessing, graph, tuning and calibration safeguards apply to user data.
 - [ ] Support unlabeled prediction batches with compatible schemas; reject incompatible features/classes appropriately.
 - [ ] Export stable sample IDs, predictions and class probabilities, with clear model provenance.
 - [ ] Add lightweight end-to-end tests for training and inference on both data sources.
 
 **Acceptance:** A user can train on labeled data, classify compatible new samples without retraining and export results. Evaluation protocols are documented and tested. No unverified labels enter supervised training. If a required scientific safeguard is incomplete, do not present the workflow as validated.
 
-### Milestone 5 — Results and accessibility (`0.2.0.dev5`)
+### Milestone 6 — Results and accessibility (`0.2.0.dev6`)
 
 - [ ] Present interpretable performance summaries, confusion matrix, class metrics, calibration and uncertainty.
 - [ ] Provide interactive spatial visualization and filtering plus accessible tabular alternatives.
