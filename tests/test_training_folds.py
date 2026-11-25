@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import Mock
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
@@ -11,6 +12,7 @@ from torch_geometric.data import Data
 from src.stages import train as training_stage
 from src.utilities import train_utils
 from src.utilities.general_utils import load_params
+from src.utilities.raw_graphs import stamp_partitions, stamp_raw_graph, synthetic_raw
 
 
 class FoldModel(nn.Module):
@@ -44,14 +46,42 @@ def test_folds_train_independently_and_save_winning_epoch(
     params["train"].update(
         n_epochs=3, patience_early_stopping=1, patience_learning_rate_scheduler=2
     )
-    folds = [
-        (
-            Data(x=torch.eye(2), y=torch.tensor([1, 0]), is_validation=False),
-            Data(y=torch.tensor([0, 1]), is_validation=True, fold_idx=fold_idx),
+    base_params = params["data"]["base"]
+    base_params["n_features"] = 2
+    params["data"]["scaler_type"] = None
+    params["data"]["scaler_params"] = {}
+    raw = synthetic_raw(
+        np.tile(np.eye(2), (4, 1)),
+        np.arange(24, dtype=np.float64).reshape(-1, 3),
+        np.tile([1, 0], 4),
+        base_params,
+    )
+
+    def graph(rows: list[int], role: str, fold: int | None = None) -> Data:
+        return Data(
+            y=torch.tensor(raw.labels[rows]),
+            original_node_indices=torch.tensor(rows),
+            split_type=role,
+            fold=fold,
+            fold_idx=fold + 1 if fold is not None else None,
+            is_validation=role == "val",
         )
-        for fold_idx in (1, 2)
+
+    folds = [
+        (graph([0, 1], "train", 0), graph([2, 3], "val", 0)),
+        (graph([2, 3], "train", 1), graph([0, 1], "val", 1)),
     ]
-    torch.save(folds, tmp_path / "fold_data.pt")
+    test, calibration = graph([4, 5], "test"), graph([6, 7], "calib")
+    base = Data(y=torch.tensor(raw.labels))
+    stamp_raw_graph(base, raw)
+    stamp_partitions(raw, folds, test, calibration)
+    for name, artifact in (
+        ("base_data", base),
+        ("fold_data", folds),
+        ("test_data", test),
+        ("calib_data", calibration),
+    ):
+        torch.save(artifact, tmp_path / f"{name}.pt")
     models: list[FoldModel] = []
 
     def create_model(_name: str, _params: dict) -> FoldModel:
@@ -128,6 +158,7 @@ def test_folds_train_independently_and_save_winning_epoch(
 
     state = torch.load(tmp_path / "model.pt", weights_only=True)
     torch.testing.assert_close(state["weight"], models[0].validation_weights[0])
+    assert (tmp_path / "preprocessing.json").is_file()
     assert "Fold 1 model (validation loss" in capsys.readouterr().out
 
 

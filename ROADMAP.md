@@ -30,7 +30,7 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
   - [x] **M1.3a — Design audit.** Traced scaling, graph and artifact interfaces and documented the proposed cutover in [preprocessing design](docs/preprocessing_design.md).
   - [ ] **M1.3b — Implementation.**
     - [x] **M1.3b-i — Preprocessing utilities and artifact contracts.** Add validated raw and partition contracts, fold-local scaler fitting, frozen transforms and versioned JSON bound to model weights.
-    - [ ] **M1.3b-ii — Raw data, training and inference integration.** Preserve and merge raw observations, fit per fold, publish the winning scaler with its model and reuse it for calibration, test and prediction.
+    - [x] **M1.3b-ii — Raw data, training and inference integration.** Preserve raw observations and IDs across cycles, fit per fold, publish the winning scaler with its model, and reuse it for calibration, test and prediction. Track the new artifact dependencies and suspend drift scoring until M1.3b-iii.
     - [ ] **M1.3b-iii — Drift, DVC integration and lifecycle verification.** Use raw features for marginal drift diagnostics and the same frozen model transform on both sides of multivariate comparisons. Verify dependencies, artifact restoration and the cycle lifecycle.
 - [ ] **M1.4 — Graph construction and leakage review.** Define the intended graph protocol and verify graph statistics, edges and message passing respect partition boundaries.
 - [ ] **M1.4a — Full development-pool retraining.** After the graph leakage review and before end-to-end verification, train a fresh final model on the full development graph with a duration informed by cross-validation. Exclude calibration and test nodes.

@@ -14,6 +14,9 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Changed
 
+- Store canonical float64 synthetic observations and stable sample IDs across cycles. Training publishes the winning fold's scaler with its weights, and evaluation and prediction verify and reuse that scaler. Calibration records its fitted split and exact bundle digests.
+- Updated the affected DVC dependencies and temporarily disabled the drift stage until it can compare multivariate inputs in a shared feature space. Legacy generated data and checkpoints require regeneration for the new contracts.
+
 - Added a scientific stabilization milestone with seven work items before configuration management.
 - Removed executable permissions from `AGENTS.md`, `ROADMAP.md` and `CHANGELOG.md`.
 

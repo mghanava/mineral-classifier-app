@@ -507,7 +507,9 @@ def fit_preprocessing(
     )
 
 
-def _weights_digest(weights_path: Path) -> str:
+def _weights_digest(weights_path: Path | bytes) -> str:
+    if isinstance(weights_path, bytes):
+        return hashlib.sha256(weights_path).hexdigest()
     try:
         with weights_path.open("rb") as weights:
             return hashlib.file_digest(weights, "sha256").hexdigest()
@@ -557,8 +559,8 @@ def _unique_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def load_preprocessing(
-    path: Path,
-    weights_path: Path,
+    path: Path | bytes,
+    weights_path: Path | bytes,
     *,
     feature_names: Sequence[str],
     class_names: Sequence[str],
@@ -570,8 +572,8 @@ def load_preprocessing(
     the original training partition is available, also check the fit provenance.
 
     Args:
-        path: Path to the versioned JSON sidecar.
-        weights_path: Path to the checkpoint expected to match the fitted state.
+        path: Path or byte snapshot of the versioned JSON sidecar.
+        weights_path: Path or byte snapshot of the matching checkpoint.
         feature_names: Expected ordered feature names.
         class_names: Expected class names in integer-label order.
         partition: Expected fit provenance, when available. Defaults to None.
@@ -593,17 +595,17 @@ def load_preprocessing(
         ```
 
     """
+    source = "sidecar snapshot" if isinstance(path, bytes) else path
     try:
-        artifact = json.loads(
-            path.read_text(encoding="utf-8"), object_pairs_hook=_unique_keys
-        )
+        payload = path if isinstance(path, bytes) else path.read_text(encoding="utf-8")
+        artifact = json.loads(payload, object_pairs_hook=_unique_keys)
     except FileNotFoundError as exc:
         raise ValueError(
             f"Missing preprocessing artifact at {path}. Retrain to produce a matched bundle."
         ) from exc
     except (OSError, ValueError) as exc:
         raise ValueError(
-            f"Cannot read preprocessing artifact at {path}: {exc}"
+            f"Cannot read preprocessing artifact at {source}: {exc}"
         ) from exc
 
     if (
@@ -626,7 +628,9 @@ def load_preprocessing(
             raise ValueError("Unexpected or missing numerical state fields.")
         state = FittedPreprocessing(**state_fields)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"Malformed preprocessing artifact at {path}: {exc}") from exc
+        raise ValueError(
+            f"Malformed preprocessing artifact at {source}: {exc}"
+        ) from exc
 
     if state.feature_names != _names(feature_names, "Expected feature names"):
         raise ValueError(

@@ -16,7 +16,6 @@ from src.utilities.data_utils import (
     export_all_graphs_to_html,
     export_graph_to_html,
     generate_mineral_data,
-    scaler_setup,
 )
 from src.utilities.general_utils import (
     LogTime,
@@ -24,6 +23,7 @@ from src.utilities.general_utils import (
     load_params,
     save_data,
 )
+from src.utilities.raw_graphs import stamp_partitions, stamp_raw_graph, synthetic_raw
 
 
 def prepare_base_data(
@@ -74,6 +74,7 @@ def prepare_base_data(
         seed=base_params.get("seed", 42),
     )
 
+    raw = synthetic_raw(features, coordinates, labels, base_params)
     all_data = construct_graph(
         coordinates,
         features,
@@ -86,7 +87,7 @@ def prepare_base_data(
         test_size=base_params.get("test_size", None),
         calib_size=base_params.get("calib_size", None),
         seed=base_params.get("seed", 42),
-        scaler=scaler_setup(params),
+        scaler=None,
         make_edge_weight=params["data"].get("make_edge_weight", True),
         make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
@@ -96,6 +97,8 @@ def prepare_base_data(
             "Expected construct_graph to return a tuple when should_split is True."
         )
     base_data, fold_data, test_data, calib_data = all_data
+    stamp_raw_graph(base_data, raw)
+    stamp_partitions(raw, fold_data, test_data, calib_data)
 
     # export the interactive 3D plots
     print("\nExporting 3D interactive plots of graphs ...")
@@ -130,6 +133,7 @@ def prepare_base_data(
         labels,
         save_path=os.path.join(output_path, "tsne_comparison.png"),
         class_names=class_names,
+        scaler=None,
     )
 
     # Save the datasets

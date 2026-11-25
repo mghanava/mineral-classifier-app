@@ -5,7 +5,7 @@ then runs predictions and saves the results for a given cycle.
 """
 
 import argparse
-import os
+from pathlib import Path
 
 import torch
 
@@ -14,10 +14,11 @@ from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
     load_data,
-    load_model_weights,
     load_params,
 )
+from src.utilities.model_bundle import load_model_bundle, verified_calibrator
 from src.utilities.pred_utils import prediction
+from src.utilities.raw_graphs import model_graph, read_raw_graph, synthetic_schema
 
 
 def get_cycle_paths(cycle_num):
@@ -54,29 +55,32 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 
-    # Load trained model
+    pred_data = load_data(Path(paths["prediction_data"]) / "pred_data.pt", "Prediction")
+    raw = read_raw_graph(pred_data)
+    schema = synthetic_schema(base_params)
+    if (raw.feature_names, raw.class_names) != schema:
+        raise ValueError(
+            "Prediction observations do not match the configured feature or class schema."
+        )
     model = get_model(model_name, model_params)
-    load_model_weights(model, os.path.join(paths["model"], "model.pt"))
-
-    # Load prediction data
-    pred_data = load_data(
-        os.path.join(paths["prediction_data"], "pred_data.pt"), "Prediction"
+    state, bundle = load_model_bundle(Path(paths["model"]), model, *schema)
+    if getattr(pred_data, "source_parent_sha256", None) != state.dataset_sha256:
+        raise ValueError(
+            "Prediction batch was generated for a different base cycle. Regenerate it."
+        )
+    calibrator = verified_calibrator(
+        Path(paths["evaluation"]), bundle, state.dataset_sha256
     )
-
-    # Load calibrator from evaluation
-    calibrator_path = os.path.join(paths["evaluation"], "calibrator.pt")
-    if not os.path.exists(calibrator_path):
-        raise FileNotFoundError(f"Calibrator not found at {calibrator_path}")
 
     # Run prediction
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device} ...")
 
     prediction(
-        pred_data=pred_data.to(device),
+        pred_data=model_graph(pred_data, raw, state).to(device),
         model=model.to(device),
-        calibrator_path=calibrator_path,
-        class_names=base_params["class_names"],
+        calibrator_path=calibrator,
+        class_names=list(raw.class_names),
         save_path=output_path,
     )
     print(f"✓ Prediction results saved to {output_path}.")

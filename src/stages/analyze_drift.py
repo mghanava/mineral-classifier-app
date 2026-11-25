@@ -4,13 +4,9 @@ This script loads data, performs drift analysis using specified parameters, and 
 """
 
 import argparse
-import os
 
-from src.utilities.drift_detection_utils import AnalyzeDrift
 from src.utilities.general_utils import (
     LogTime,
-    ensure_directory_exists,
-    load_data,
     load_params,
 )
 
@@ -28,44 +24,11 @@ def run_analyze_drift(
     paths: dict,
     params: dict,
 ):
-    """Run drift analysis between base data and prediction data for a given cycle.
-
-    Parameters
-    ----------
-    paths : dict
-        Dictionary containing paths for base data, prediction data, and output.
-    params : dict
-        Dictionary of parameters loaded from configuration.
-
-    Raises
-    ------
-    FileNotFoundError
-        If required data files are not found.
-
-    """
-    output_path = ensure_directory_exists(paths["output"])
-    drift_params = params["analyze_drift"]
-    # Load base data (previous cycle)
-    base_data = load_data(os.path.join(paths["base_data"], "base_data.pt"), "Base")
-    # Load prediction data (current cycle)
-    pred_data = load_data(
-        os.path.join(paths["prediction_data"], "pred_data.pt"), "Prediction"
+    """Report that drift scoring is unavailable during the raw artifact cutover."""
+    raise ValueError(
+        "Drift analysis is temporarily unavailable during the raw-data cutover. "
+        "M1.3b-iii will use the same fitted preprocessing for both multivariate inputs."
     )
-
-    analyzer = AnalyzeDrift(
-        base_data=base_data,
-        pred_data=pred_data,
-        save_path=output_path,
-        gamma=drift_params["gamma"],
-        n_permutations=drift_params["n_permutations"],
-        n_projections=drift_params["n_projections"],
-        use_max_sliced_wasserstein=drift_params["use_max_sliced_wasserstein"],
-        use_sinkhorn_wasserstein=drift_params["use_sinkhorn_wasserstein"],
-        early_stopping_config=drift_params.get("early_stopping", {}),
-    )
-    analyzer.export_drift_analysis_to_file()
-    analyzer.export_drift_analysis_plots()
-    print(f"✓ Drift analysis results saved to {output_path}.")
 
 
 def main():

@@ -9,6 +9,7 @@ This module provides a comprehensive function for running predictions on new dat
 
 import json
 import os
+from typing import BinaryIO
 
 import pandas as pd
 import torch
@@ -29,10 +30,11 @@ from src.utilities.eval_utils import plot_confusion_matrix
 def prediction(
     pred_data: Data,
     model: torch.nn.Module,
-    calibrator_path: str,
+    calibrator_path: str | BinaryIO,
     class_names: list,
     save_path: str | None = None,
 ):
+    """Score one prepared graph with and without probability calibration."""
     device = next(model.parameters()).device
     # hide the labels from model
     hidden_labels = pred_data.y

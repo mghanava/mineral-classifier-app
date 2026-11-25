@@ -21,6 +21,13 @@ from src.utilities.general_utils import (
     load_params,
     save_data,
 )
+from src.utilities.preprocessing import RawDataset
+from src.utilities.raw_graphs import (
+    read_raw_graph,
+    stamp_partitions,
+    stamp_raw_graph,
+    synthetic_schema,
+)
 
 
 def get_cycle_paths(cycle_num):
@@ -65,17 +72,32 @@ def combine_split_data(
     base_data = load_data(os.path.join(base_path, "base_data.pt"), "Base")
     pred_data = load_data(os.path.join(pred_path, "pred_data.pt"), "Prediction")
 
-    print("📊 Data sizes before combination:")
-    print(f"   Base/Previous: {base_data.x.shape[0]} samples")
-    print(f"   Prediction: {pred_data.x.shape[0]} samples")
-    combined_size = base_data.x.shape[0] + pred_data.x.shape[0]
-    print(f"   Total: {combined_size} samples")
-    # Combine datasets
-    coordinates = np.concatenate(
-        (base_data.coordinates.numpy(), pred_data.coordinates.numpy()), axis=0
+    base = read_raw_graph(base_data)
+    incoming = read_raw_graph(pred_data)
+    if getattr(pred_data, "source_parent_sha256", None) != base.dataset_sha256:
+        raise ValueError(
+            "Prediction observations do not match this base cycle. Regenerate the batch."
+        )
+    expected_schema = synthetic_schema(base_params)
+    if any(
+        (raw.feature_names, raw.class_names) != expected_schema
+        for raw in (base, incoming)
+    ):
+        raise ValueError(
+            "Next-cycle inputs have incompatible feature order or class mapping."
+        )
+
+    raw = RawDataset(
+        features=np.concatenate((base.features, incoming.features)),
+        coordinates=np.concatenate((base.coordinates, incoming.coordinates)),
+        labels=np.concatenate((base.labels, incoming.labels)),
+        feature_names=base.feature_names,
+        class_names=base.class_names,
+        sample_ids=base.sample_ids + incoming.sample_ids,
     )
-    features = np.concatenate((base_data.x, pred_data.x), axis=0)
-    labels = np.concatenate((base_data.y, pred_data.y), axis=0)
+    # Earlier cycles computed topology from coordinates stored at float32.
+    coordinates = raw.coordinates.astype(np.float32)
+    features, labels = raw.features, raw.labels
 
     all_data = construct_graph(
         coordinates,
@@ -89,7 +111,7 @@ def combine_split_data(
         test_size=base_params["test_size"],
         calib_size=base_params["calib_size"],
         seed=base_params["seed"],
-        scaler=None,  # No scaling needed for combined data
+        scaler=None,
         make_edge_weight=params["data"].get("make_edge_weight", True),
         make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
@@ -99,6 +121,8 @@ def combine_split_data(
             "Expected construct_graph to return a tuple when should_split is True."
         )
     base_data, fold_data, test_data, calib_data = all_data
+    stamp_raw_graph(base_data, raw)
+    stamp_partitions(raw, fold_data, test_data, calib_data)
 
     # Export visualizations
     print("\nExporting 3D interactive plots of graphs ...")
@@ -132,6 +156,7 @@ def combine_split_data(
         labels,
         save_path=os.path.join(output_path, "tsne_comparison.png"),
         class_names=class_names,
+        scaler=None,
     )
 
     # Save data files

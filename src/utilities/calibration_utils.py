@@ -12,7 +12,7 @@ This module provides classes and functions for:
 """
 
 import os
-from typing import ClassVar, Literal, NamedTuple
+from typing import BinaryIO, ClassVar, Literal, NamedTuple
 
 import torch
 import torch.nn as nn
@@ -238,9 +238,9 @@ class CalibrationMetrics:
         bin_confidences = torch.tensor(bin_confidences_list, device=y_prob.device)
         # find single metric calibration error from calibration errors of all bins
         bin_errors = bin_accuracies - bin_confidences
-        # ece is the weighted average of the bins’ accuracy/confidence absolute difference
+        # ece is the weighted average of the bins' accuracy/confidence absolute difference
         ece = (torch.abs(bin_errors) @ bin_weights / total_weight).item()
-        # mce is the maximum of the bins’ accuracy/confidence absolute difference
+        # mce is the maximum of the bins' accuracy/confidence absolute difference
         mce = torch.max(torch.abs(bin_errors)).item()
 
         # Filter bin edges to only include edges of non-empty bins (redundant for adaptive binning)
@@ -1401,7 +1401,7 @@ class CalibratedModel:
 
     @classmethod
     def load_calibrated_model(
-        cls, filepath: str, device: torch.device | None = None
+        cls, filepath: str | BinaryIO, device: torch.device | None = None
     ) -> "CalibratedModel":
         """Load a previously saved calibrated model for inference.
 
@@ -1413,7 +1413,7 @@ class CalibratedModel:
             CalibratedModel: Loaded calibrated model ready for inference
 
         """
-        if not os.path.exists(filepath):
+        if isinstance(filepath, str | os.PathLike) and not os.path.exists(filepath):
             raise FileNotFoundError(f"Calibrated model file not found: {filepath}")
 
         # Load state (weights_only=False since we're saving custom objects)
@@ -1574,7 +1574,7 @@ class CalibrationPipeline:
     @classmethod
     def load(
         cls,
-        filepath: str,
+        filepath: str | BinaryIO,
         base_model: nn.Module,
         device: torch.device = torch.device("cpu"),
     ) -> "CalibrationPipeline":

@@ -6,6 +6,7 @@ This module provides functionality to generate prediction data, ensuring directo
 import argparse
 import os
 
+import numpy as np
 import torch
 
 from src.utilities.data_utils import (
@@ -13,7 +14,6 @@ from src.utilities.data_utils import (
     export_graph_to_html,
     generate_mineral_data,
     no_coordinate_overlap,
-    scaler_setup,
 )
 from src.utilities.general_utils import (
     LogTime,
@@ -21,6 +21,12 @@ from src.utilities.general_utils import (
     load_data,
     load_params,
     save_data,
+)
+from src.utilities.raw_graphs import (
+    read_raw_graph,
+    stamp_raw_graph,
+    synthetic_raw,
+    synthetic_schema,
 )
 
 
@@ -52,9 +58,13 @@ def prepare_pred_data(paths: dict, params: dict):
     output_path = ensure_directory_exists(paths["output"])
 
     # Load exisiting coordinates from previous cycle and hotspots and prototypes from bootstrap
-    exisiting_coordinates = load_data(
-        os.path.join(base_path, "base_data.pt"), "Base"
-    ).coordinates.numpy()
+    parent = read_raw_graph(load_data(os.path.join(base_path, "base_data.pt"), "Base"))
+    if (parent.feature_names, parent.class_names) != synthetic_schema(base_params):
+        raise ValueError(
+            "Prediction configuration does not match the raw parent schema."
+        )
+    # Retain the historical coordinate precision for the generator's exclusion check.
+    existing_coordinates = parent.coordinates.astype(np.float32)
     previous_hotspots = load_data(
         os.path.join(bootstrap_path, "hotspots.npy"), "Hotspots", load_numpy=True
     )
@@ -81,7 +91,7 @@ def prepare_pred_data(paths: dict, params: dict):
         mineral_noise_level=base_params.get("mineral_noise_level", 0.1),
         exp_decay_factor=base_params.get("exp_decay_factor", 0.01),
         feature_noise_level=base_params.get("feature_noise_level", 0.5),
-        existing_sample_coords=exisiting_coordinates,
+        existing_sample_coords=existing_coordinates,
         existing_hotspots=previous_hotspots,
         hotspot_drift=base_params.get("hotspot_drift", 0.1),
         existing_prototypes=previous_prototypes,
@@ -93,11 +103,15 @@ def prepare_pred_data(paths: dict, params: dict):
 
     # Verify no overlap with existing data
     if no_coordinate_overlap(
-        exisiting_coordinates, torch.tensor(coordinates, dtype=torch.float32)
+        torch.from_numpy(existing_coordinates),
+        torch.tensor(coordinates, dtype=torch.float32),
     ):
         print("✓ No overlap detected with existing data!")
 
     # Construct and save graph
+    raw = synthetic_raw(
+        features, coordinates, labels, base_params, parent_sha256=parent.dataset_sha256
+    )
     pred_data = construct_graph(
         coordinates,
         features,
@@ -106,11 +120,12 @@ def prepare_pred_data(paths: dict, params: dict):
         connection_radius=base_params.get("connection_radius", None),
         distance_percentile=base_params.get("distance_percentile", None),
         add_self_loops=base_params["add_self_loops"],
-        scaler=scaler_setup(params),
+        scaler=None,
         should_split=False,
         make_edge_weight=params["data"].get("make_edge_weight", True),
         make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
     )
+    stamp_raw_graph(pred_data, raw, source_parent=parent.dataset_sha256)
     save_data(pred_data, os.path.join(output_path, "pred_data.pt"), "Prediction")
     # export the interactive 3D plots
     # Handle class names and labels

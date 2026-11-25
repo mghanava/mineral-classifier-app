@@ -1398,7 +1398,7 @@ def analyze_feature_discrimination(
     labels,
     save_path: str,
     class_names: list,
-    scaler: ScalerType = RobustScaler(),
+    scaler: ScalerType | None = RobustScaler(),
 ):
     """Analyze and visualize feature discrimination using t-SNE and silhouette scores.
 
@@ -1412,7 +1412,7 @@ def analyze_feature_discrimination(
         Path to save the visualization plot
     class_names : list
         List of class names for the legend
-    scaler : ScalerType, optional
+    scaler : ScalerType or None, optional
         Scaler to use for feature normalization, by default RobustScaler()
 
     Returns
@@ -1421,7 +1421,9 @@ def analyze_feature_discrimination(
         Saves the visualization plot to the specified path
 
     """
-    features_scaled = scale_data(data=features, scaler=scaler)
+    features_scaled = (
+        features if scaler is None else scale_data(data=features, scaler=scaler)
+    )
     silhouette = silhouette_score(features_scaled, labels)
 
     fig, axes = pyplot.subplots(2, 2, figsize=(15, 12))
