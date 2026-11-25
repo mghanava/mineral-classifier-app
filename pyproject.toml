@@ -1,28 +1,28 @@
 [project]
 name = "mineral-classifier"
-version = "0.1.0"
+version = "0.2.0.dev0"
 description = "Machine learning project for mineral classification"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "POT>=0.9.5",
-    "dvc>=3.56, <4.0",
-    "pathspec>=0.12",
-    "plotly>=5.24.1",
-    "ruamel.yaml>=0.18.15",
-    "scikit-learn>=1.6.0",
-    "seaborn>=0.13.2",
-    "statsmodels>=0.14.4",
-    "streamlit>=1.45.1",
-    "torch>=2.6.0",
-    "torch-geometric>=2.6.1",
+  "POT>=0.9.5",
+  "dvc>=3.56, <4.0",
+  "pathspec>=0.12",
+  "plotly>=5.24.1",
+  "ruamel.yaml>=0.18.15",
+  "scikit-learn>=1.6.0",
+  "seaborn>=0.13.2",
+  "statsmodels>=0.14.4",
+  "streamlit>=1.45.1",
+  "torch>=2.6.0",
+  "torch-geometric>=2.6.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.12.5",
-    "pre-commit>=4.2.0",
-    "pytest>=8.3.5",
+  "ruff>=0.12.5",
+  "pre-commit>=4.2.0",
+  "pytest>=8.3.5",
 ]
 
 [build-system]
