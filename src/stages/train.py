@@ -48,9 +48,11 @@ def run_training(paths, params, model_name, cycle_num):
 
     """
     train_params = params["train"]
-    model_params = params["models"][model_name]
+    model_params = {
+        **params["models"][model_name],
+        "add_self_loops": params.get("add_self_loops", True),
+    }
     n_classes = params["data"]["base"]["n_classes"]
-    model_params["add_self_loops"] = params.get("add_self_loops", True)
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 
@@ -59,21 +61,16 @@ def run_training(paths, params, model_name, cycle_num):
         os.path.join(paths["base_data"], "fold_data.pt"), "Train-Validation Fold"
     )
 
-    # Initialize model
-    model = get_model(model_name, model_params)
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device} ...")
 
-    # Training loop
-    fold_results = []
-
+    best_fold = None
     for fold_idx, fold in enumerate(fold_data, 1):
         print(f"\nTraining model on fold {fold_idx}...")
-
+        model = get_model(model_name, model_params).to(device)
         trained_model, best_loss_val = train(
             fold,
-            model.to(device),
+            model,
             n_classes=n_classes,
             n_epochs=train_params["n_epochs"],
             lr=train_params["lr"],
@@ -91,13 +88,20 @@ def run_training(paths, params, model_name, cycle_num):
             dataset_idx=fold_idx,
         )
 
-        fold_results.append((trained_model, best_loss_val))
+        if best_fold is None or best_loss_val < best_fold[1]:
+            best_fold = (fold_idx, best_loss_val, trained_model)
 
-    # Save best model
-    best_model = sorted(fold_results, key=lambda x: x[1])[0][0]
+    if best_fold is None:
+        raise ValueError("At least one train-validation fold is required.")
+
+    # Preserve the evaluation and prediction checkpoint contract until a refit is available.
+    fold_idx, best_loss_val, best_model = best_fold
     model_save_path = os.path.join(output_path, "model.pt")
     torch.save(best_model.state_dict(), model_save_path)
-    print(f"✓ Best model saved to {model_save_path}.")
+    print(
+        f"✓ Fold {fold_idx} model (validation loss {best_loss_val:.6g}) "
+        f"saved to {model_save_path}."
+    )
 
 
 def main():
