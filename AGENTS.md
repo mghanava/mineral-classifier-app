@@ -91,3 +91,7 @@ Develop the existing research-oriented mineral classification application into a
 - Relevant checks pass; distinguish passed, failed, skipped and not-run checks. Never claim a test ran if it did not.
 - Documentation and changelog reflect actual behavior. No unrelated changes, secrets or generated artifacts are included.
 - The project owner can inspect the diff and approve the work before a Git commit.
+- Run pre-commit checks on modified Python files before reporting task completion.
+  Local Ruff checks alone are insufficient because pre-commit may use a different Ruff version.
+- Do not bypass Git hooks or use --no-verify.
+- Report any files automatically modified by pre-commit.
