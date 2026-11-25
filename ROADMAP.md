@@ -32,7 +32,9 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
     - [x] **M1.3b-i — Preprocessing utilities and artifact contracts.** Add validated raw and partition contracts, fold-local scaler fitting, frozen transforms and versioned JSON bound to model weights.
     - [x] **M1.3b-ii — Raw data, training and inference integration.** Preserve raw observations and IDs across cycles, fit per fold, publish the winning scaler with its model, and reuse it for calibration, test and prediction. Track the new artifact dependencies and suspend drift scoring until M1.3b-iii.
     - [x] **M1.3b-iii — Drift, DVC integration and lifecycle verification.** Restored drift with raw marginals and a shared frozen transform for multivariate diagnostics. CPU fixtures verified drift routing, DVC invalidation and sidecar restoration.
-- [ ] **M1.4 — Graph construction and leakage review.** Define the intended graph protocol and verify graph statistics, edges and message passing respect partition boundaries.
+- [ ] **M1.4 — Graph construction and leakage review.**
+  - [x] **M1.4-i — Graph design audit.** Traced connectivity, normalization, model inputs and visualization and documented an independent inductive protocol in [graph design](docs/graph_design.md).
+  - [ ] **M1.4-ii — Independent graph implementation.** Construct and verify partition-local topology, edge weights, model compatibility and graph diagnostics before development-pool retraining.
 - [ ] **M1.4a — Full development-pool retraining.** After the graph leakage review and before end-to-end verification, train a fresh final model on the full development graph with a duration informed by cross-validation. Exclude calibration and test nodes.
 - [ ] **M1.5 — DVC dependencies and artifact declarations.** Declare required source, parameter and artifact dependencies. Verify restoration of artifacts used by downstream stages and the dashboard.
 - [ ] **M1.6 — Reproducibility and error handling.** Record relevant seeds and configuration, test repeatability where feasible and propagate pipeline failures to the dashboard.
