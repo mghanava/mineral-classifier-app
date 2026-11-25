@@ -22,6 +22,8 @@ from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 from torch_geometric.data import Data
 from torch_geometric.utils import subgraph
 
+from src.utilities.spatial_graph import summarize_graph
+
 
 def _generate_coordinates(
     radius: float,
@@ -788,17 +790,14 @@ def visualize_graph(
         None: Displays the interactive plot.
 
     """
-    # Create color map for different classes
     classes = np.unique(labels)
-    unique_classes = len(classes)
-    cmap = colormaps["Set1"]
-    colors = cmap(np.linspace(0, 1, unique_classes))
-    color_map = {
-        i: f"rgb({int(255 * c[0])},{int(255 * c[1])},{int(255 * c[2])})"
-        for i, c in enumerate(colors)
-    }
     if labels_map is None:
-        labels_map = {i: f"Class {i}" for i in range(unique_classes)}
+        labels_map = {label: f"Class {label}" for label in classes}
+    colors = colormaps["Set1"](np.linspace(0, 1, len(labels_map)))
+    color_map = {
+        label: f"rgb({int(255 * c[0])},{int(255 * c[1])},{int(255 * c[2])})"
+        for label, c in zip(sorted(labels_map), colors, strict=True)
+    }
     # Create node trace
     node_trace = go.Scatter3d(
         x=coordinates[:, 0],  # Easting
@@ -854,9 +853,9 @@ def visualize_graph(
         height=800,
     )
     # Add legend entries for classes
-    class_count = [np.sum(labels == i) for i in classes]
-    for label, color in color_map.items():
-        count = class_count[label]
+    for label in classes:
+        count = np.count_nonzero(labels == label)
+        color = color_map[label]
         fig.add_trace(
             go.Scatter3d(
                 x=[None],
@@ -893,6 +892,30 @@ def scale_data(data: np.ndarray, scaler: ScalerType) -> np.ndarray:
     return scaler.fit_transform(data)
 
 
+def partition_indices(
+    labels: np.ndarray,
+    n_splits: int | None,
+    test_size: float | None,
+    calib_size: float | None,
+    seed: int | None,
+) -> tuple[list[tuple[np.ndarray, np.ndarray]], np.ndarray, np.ndarray]:
+    """Return stratified fold, test and calibration membership in parent order."""
+    development, holdout = train_test_split(
+        np.arange(len(labels)), test_size=test_size, stratify=labels, random_state=seed
+    )
+    test, calibration = train_test_split(
+        holdout, test_size=calib_size, stratify=labels[holdout], random_state=seed
+    )
+    if n_splits is None:
+        raise ValueError("n_splits is required for cross-validation.")
+    fold_splitter = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    folds = [
+        (development[train], development[validation])
+        for train, validation in fold_splitter.split(development, labels[development])
+    ]
+    return folds, test, calibration
+
+
 def _split_graph_no_leakage(
     x: torch.Tensor,
     y: torch.Tensor,
@@ -924,39 +947,11 @@ def _split_graph_no_leakage(
             - calib_data is a Data object containing the calibration set
 
     """
-    features = x.numpy()
-    labels = y.numpy()
-    n_nodes = len(labels)
-
-    # First split into train+val and temp (test+calib)
-    train_val_idx, temp_idx = train_test_split(
-        np.arange(n_nodes),
-        test_size=test_size,
-        stratify=labels,
-        random_state=seed,
+    folds, test_idx, calib_idx = partition_indices(
+        y.numpy(), n_splits, test_size, calib_size, seed
     )
-
-    # Split temp into test and calibration
-    test_idx, calib_idx = train_test_split(
-        temp_idx,
-        test_size=calib_size,
-        stratify=labels[temp_idx],
-        random_state=seed,
-    )
-
-    if n_splits is None:
-        raise ValueError("n_splits must be specified when should_split is True.")
-
-    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
     fold_data = []
-
-    # Generate folds from the train+val data
-    for fold_idx, (train_fold_idx, val_fold_idx) in enumerate(
-        skf.split(features[train_val_idx], labels[train_val_idx])
-    ):
-        # Map fold indices back to original indices
-        train_idx = train_val_idx[train_fold_idx]
-        val_idx = train_val_idx[val_fold_idx]
+    for fold_idx, (train_idx, val_idx) in enumerate(folds):
         # Create separate subgraphs for train and val
         train_data = _create_subgraph(
             x, y, edge_index, edge_attr, edge_weight, train_idx, fold_idx, "train"
@@ -1225,148 +1220,73 @@ def prepare_edge_data(
 
 
 def export_graph_to_html(
-    graph,
-    coordinates: np.ndarray,
-    node_indices: np.ndarray | None,
-    k_nearest: int,
-    connection_radius: float,
-    distance_percentile: float,
-    add_self_loops: bool,
+    graph: Data,
     save_path: str,
     labels_map: dict[int, str],
     dataset_idx: int | None = None,
     dataset_tag: str = "train",
-):
-    """Export the graph to an interactive HTML file using Plotly."""
-    coordinates = coordinates[node_indices] if node_indices is not None else coordinates
-    labels = (
-        graph.y[node_indices].numpy() if node_indices is not None else graph.y.numpy()
-    )
-    edge_index, _, _ = prepare_edge_data(
-        coordinates, k_nearest, connection_radius, distance_percentile, add_self_loops
-    )
-    src, dst = edge_index
-    n_nodes, n_edges = graph.num_nodes, graph.num_edges
-    network_density = _calculate_network_density(n_nodes, n_edges)
-    avg_degree = _calculate_average_degree(n_nodes, n_edges)
+) -> None:
+    """Render unique physical links and report the stored graph statistics."""
+    stats = summarize_graph(graph)
+    edges = graph.edge_index.numpy().T
+    non_loop = edges[edges[:, 0] != edges[:, 1]]
+    src, dst = np.unique(np.sort(non_loop, axis=1), axis=0).T
     title = (
-        f"Graph statistics:\n"
-        f"Number of nodes: {n_nodes}\n"
-        f"Number of edges: {n_edges}\n"
-        f"Network degree: {network_density:.2f}\n"
-        f"Average node degree: {avg_degree:.2f}\n"
-        f"Has isolated nodes: {graph.has_isolated_nodes()}\n"
-        f"Has self-loops: {graph.has_self_loops()}"
+        "Descriptive full-base overview"
+        if dataset_tag == "base_data"
+        else f"Independent {dataset_tag} graph"
     )
-
+    degree = stats.non_loop_degree
+    lengths = stats.non_loop_edge_length
+    length_text = (
+        f"{lengths.minimum:.3g}/{lengths.median:.3g}/{lengths.mean:.3g}/{lengths.maximum:.3g}"
+        if lengths
+        else "none"
+    )
+    title += (
+        f"<br>Nodes {stats.node_count} · Directed edges {stats.directed_edge_count}"
+        f" · Unique links {stats.undirected_edge_count} · Self-loops {stats.self_loop_count}"
+        f" · Isolates {stats.isolated_node_count}<br>Density {stats.density:.3g}"
+        f" · Non-loop degree (min/median/mean/max) "
+        f"{degree.minimum:.3g}/{degree.median:.3g}/{degree.mean:.3g}/{degree.maximum:.3g}"
+        f"<br>Physical link length (min/median/mean/max) {length_text}"
+    )
+    if stats.effective_k is not None:
+        title += f" · Effective KNN quota {stats.effective_k}"
     fig = visualize_graph(
-        coordinates,
-        labels,
-        np.array(src),
-        np.array(dst),
+        graph.coordinates.numpy(),
+        graph.y.numpy(),
+        src,
+        dst,
         labels_map=labels_map,
         title=title,
     )
+    stem = f"{save_path}/{dataset_tag}_graph"
     if dataset_idx is not None:
-        base_filename = f"{save_path}/{dataset_tag}_graph_{dataset_idx}"
-    else:
-        base_filename = f"{save_path}/{dataset_tag}_graph"
-    assert fig is not None, "Figure creation failed."
-    # Save as HTML (for standalone viewing)
+        stem += f"_{dataset_idx}"
     fig.write_html(
-        f"{base_filename}.html",
+        f"{stem}.html",
         full_html=False,
         include_plotlyjs="cdn",
         config={"responsive": True},
     )
-    # Save as JSON (for Streamlit reloading)
-    with open(f"{base_filename}.json", "w") as f:
-        f.write(cast(str, fig.to_json()))
-    print(f"Graph exported as {base_filename}.html and {base_filename}.json.")
+    with open(f"{stem}.json", "w") as output:
+        output.write(cast(str, fig.to_json()))
 
 
 def export_all_graphs_to_html(
     fold_data: list[tuple[Data, Data]],
     test_data: Data,
     calib_data: Data,
-    coordinates: np.ndarray,
-    k_nearest: int,
-    connection_radius: float,
-    distance_percentile: float,
-    add_self_loops: bool,
     labels_map: dict[int, str],
     save_path: str,
-):
-    """Export all train, validation, test, and calibration graphs to interactive HTML files.
-
-    Args:
-        fold_data (list[Data]): List of PyG Data objects for each fold (train/val splits).
-        test_data (Data): PyG Data object for the test set.
-        calib_data (Data): PyG Data object for the calibration set.
-        coordinates (np.ndarray): Array of node coordinates.
-        k_nearest (int, optional): Number of nearest neighbors to connect for each node
-        connection_radius (float, optional): Distance threshold to consider interconnected nodes
-        distance_percentile (float, optional): Percentile of distances to use as connection threshold
-        add_self_loops (bool): Whether to add self-loops to the graph (default: True).
-        labels_map (dict[int, str]): Mapping from label indices to label names.
-        save_path (str): Directory path to save the exported HTML files.
-
-    Returns:
-        None
-
-    """
-    for i, data in enumerate(fold_data):
-        train_data, val_data = data
-        export_graph_to_html(
-            train_data,
-            coordinates[train_data.original_node_indices],
-            None,
-            k_nearest=k_nearest,
-            connection_radius=connection_radius,
-            distance_percentile=distance_percentile,
-            add_self_loops=add_self_loops,
-            save_path=save_path,
-            labels_map=labels_map,
-            dataset_idx=i + 1,
-            dataset_tag="train",
-        )
-        export_graph_to_html(
-            val_data,
-            coordinates[val_data.original_node_indices],
-            None,
-            k_nearest=k_nearest,
-            connection_radius=connection_radius,
-            distance_percentile=distance_percentile,
-            add_self_loops=add_self_loops,
-            save_path=save_path,
-            labels_map=labels_map,
-            dataset_idx=i + 1,
-            dataset_tag="val",
-        )
-    export_graph_to_html(
-        test_data,
-        coordinates[test_data.original_node_indices],
-        None,
-        k_nearest=k_nearest,
-        connection_radius=connection_radius,
-        distance_percentile=distance_percentile,
-        add_self_loops=add_self_loops,
-        save_path=save_path,
-        labels_map=labels_map,
-        dataset_tag="test",
-    )
-    export_graph_to_html(
-        calib_data,
-        coordinates[calib_data.original_node_indices],
-        None,
-        k_nearest=k_nearest,
-        connection_radius=connection_radius,
-        distance_percentile=distance_percentile,
-        add_self_loops=add_self_loops,
-        save_path=save_path,
-        labels_map=labels_map,
-        dataset_tag="calib",
-    )
+) -> None:
+    """Export stored fold, test and calibration graph figures."""
+    for fold, (training, validation) in enumerate(fold_data, 1):
+        export_graph_to_html(training, save_path, labels_map, fold, "train")
+        export_graph_to_html(validation, save_path, labels_map, fold, "val")
+    export_graph_to_html(test_data, save_path, labels_map, dataset_tag="test")
+    export_graph_to_html(calib_data, save_path, labels_map, dataset_tag="calib")
 
 
 def no_coordinate_overlap(coords1: torch.Tensor, coords2: torch.Tensor) -> bool:
@@ -1536,25 +1456,3 @@ def normalize_edge_weight(edge_attr, make_edge_weight_method: str | None = "minm
         return torch.log1p(weights)
 
     return weights
-
-
-def _calculate_network_density(n_nodes, n_edges):
-    """Calculate the density of the undirecetd graph.
-
-    Density measures how many edges are in the graph compared to the maximum possible number of edges between nodes. It ranges from 0 (no edges) to 1 (a complete graph where every node is connected to every other node).
-
-    Density = 2 * E / (N * (N - 1)) for undirected graphs where E is the number of edges and N is the number of nodes.
-    """
-    density = (2 * n_edges) / (n_nodes * (n_nodes - 1)) if n_nodes > 1 else 0
-    return density
-
-
-def _calculate_average_degree(n_nodes, n_edges):
-    """Calculate the average node degree of the undirecetd graph.
-
-    It describes the average connectivity of individual nodes rather than the overall connectedness of the entire network.
-    Average Degree = 2 * E / N for undirected graphs
-    where E is the number of edges and N is the number of nodes
-    """
-    avg_degree = (2 * n_edges) / n_nodes if n_nodes > 0 else 0
-    return avg_degree

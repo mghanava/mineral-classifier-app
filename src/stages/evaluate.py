@@ -16,6 +16,7 @@ from src.utilities.general_utils import (
     ensure_directory_exists,
     load_params,
 )
+from src.utilities.graph_protocol import model_graph_settings, resolve_graph_protocol
 from src.utilities.model_bundle import (
     CALIBRATION_BINDING,
     load_model_bundle,
@@ -54,23 +55,28 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
     """
     base_params = params["data"]["base"]
     eval_params = params["evaluate"]
-    model_params = params["models"][model_name]
-    model_params["add_self_loops"] = params.get("add_self_loops", True)
+    protocol = resolve_graph_protocol(params)
+    settings = model_graph_settings(protocol, model_name, params)
+    model_params = {**params["models"][model_name], "add_self_loops": False}
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
-    raw, folds, test_data, calib_data = load_cycle_data(Path(paths["base"]))
+    raw, folds, test_data, calib_data = load_cycle_data(Path(paths["base"]), protocol)
     schema = synthetic_schema(base_params)
     if (raw.feature_names, raw.class_names) != schema:
         raise ValueError(
             "Evaluation configuration does not match the canonical raw schema."
         )
     model = get_model(model_name, model_params)
-    state, bundle = load_model_bundle(Path(paths["model"]), model, *schema)
+    state, bundle = load_model_bundle(Path(paths["model"]), model, *schema, settings)
     if state.dataset_sha256 != raw.dataset_sha256 or state.fold_index >= len(folds):
         raise ValueError(
             "Model preprocessing does not match this evaluation dataset and fold."
         )
     training, _ = folds[state.fold_index]
+    if bundle["training_graph_sha256"] != training.graph_sha256:
+        raise ValueError(
+            "Model training graph does not match the evaluation cycle. Retrain on these graphs."
+        )
     partition = TrainingPartition(
         raw.dataset_sha256, state.fold_index, training.original_node_indices.numpy()
     )
@@ -86,8 +92,8 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
     destination = Path(output_path)
     with TemporaryDirectory(dir=destination) as temporary:
         evaluate_with_calibration(
-            test_data=model_graph(test_data, raw, state).to(device),
-            calibration_data=model_graph(calib_data, raw, state).to(device),
+            test_data=model_graph(test_data, raw, state, settings).to(device),
+            calibration_data=model_graph(calib_data, raw, state, settings).to(device),
             model=model.to(device),
             calibration_method=eval_params["calibration_method"],
             initial_temperature=eval_params["initial_temperature"],

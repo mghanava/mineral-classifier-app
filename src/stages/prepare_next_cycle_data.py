@@ -10,7 +10,6 @@ import numpy as np
 
 from src.utilities.data_utils import (
     analyze_feature_discrimination,
-    construct_graph,
     export_all_graphs_to_html,
     export_graph_to_html,
 )
@@ -21,11 +20,11 @@ from src.utilities.general_utils import (
     load_params,
     save_data,
 )
+from src.utilities.graph_protocol import resolve_graph_protocol, verify_graph
 from src.utilities.preprocessing import RawDataset
 from src.utilities.raw_graphs import (
+    build_cycle_graphs,
     read_raw_graph,
-    stamp_partitions,
-    stamp_raw_graph,
     synthetic_schema,
 )
 
@@ -58,7 +57,7 @@ def combine_split_data(
 
     """
     base_params = params["data"]["base"]
-    base_params["add_self_loops"] = params.get("add_self_loops", True)
+    protocol = resolve_graph_protocol(params)
     # Handle class names and labels
     class_names = base_params["class_names"] or [
         f"Class {i}" for i in range(base_params["n_classes"])
@@ -87,6 +86,8 @@ def combine_split_data(
             "Next-cycle inputs have incompatible feature order or class mapping."
         )
 
+    verify_graph(base_data, protocol, "overview")
+    verify_graph(pred_data, protocol, "prediction")
     raw = RawDataset(
         features=np.concatenate((base.features, incoming.features)),
         coordinates=np.concatenate((base.coordinates, incoming.coordinates)),
@@ -95,65 +96,15 @@ def combine_split_data(
         class_names=base.class_names,
         sample_ids=base.sample_ids + incoming.sample_ids,
     )
-    # Earlier cycles computed topology from coordinates stored at float32.
-    coordinates = raw.coordinates.astype(np.float32)
-    features, labels = raw.features, raw.labels
-
-    all_data = construct_graph(
-        coordinates,
-        features,
-        labels,
-        k_nearest=base_params.get("k_nearest", None),
-        connection_radius=base_params.get("connection_radius", None),
-        distance_percentile=base_params.get("distance_percentile", None),
-        add_self_loops=base_params["add_self_loops"],
-        n_splits=base_params["n_splits"],
-        test_size=base_params["test_size"],
-        calib_size=base_params["calib_size"],
-        seed=base_params["seed"],
-        scaler=None,
-        make_edge_weight=params["data"].get("make_edge_weight", True),
-        make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
+    base_data, fold_data, test_data, calib_data = build_cycle_graphs(
+        raw, protocol, base_params
     )
-    # Ensure the returned value is a tuple and unpack accordingly
-    if not isinstance(all_data, tuple):
-        raise ValueError(
-            "Expected construct_graph to return a tuple when should_split is True."
-        )
-    base_data, fold_data, test_data, calib_data = all_data
-    stamp_raw_graph(base_data, raw)
-    stamp_partitions(raw, fold_data, test_data, calib_data)
-
-    # Export visualizations
-    print("\nExporting 3D interactive plots of graphs ...")
-    export_graph_to_html(
-        base_data,
-        coordinates,
-        None,
-        base_params["k_nearest"],
-        base_params["connection_radius"],
-        base_params["distance_percentile"],
-        base_params["add_self_loops"],
-        output_path,
-        labels_map,
-        dataset_tag="base_data",
-    )
-    export_all_graphs_to_html(
-        fold_data,
-        test_data,
-        calib_data,
-        coordinates,
-        base_params["k_nearest"],
-        base_params["connection_radius"],
-        base_params["distance_percentile"],
-        base_params["add_self_loops"],
-        labels_map,
-        output_path,
-    )
+    export_graph_to_html(base_data, output_path, labels_map, dataset_tag="base_data")
+    export_all_graphs_to_html(fold_data, test_data, calib_data, labels_map, output_path)
 
     analyze_feature_discrimination(
-        features,
-        labels,
+        raw.features,
+        raw.labels,
         save_path=os.path.join(output_path, "tsne_comparison.png"),
         class_names=class_names,
         scaler=None,

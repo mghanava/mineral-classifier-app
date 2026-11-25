@@ -15,6 +15,8 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Changed
 
+- Build independent training, validation, calibration, test and prediction graphs from canonical coordinates. Keep the fifth-percentile default, use bounded affinities with a 460-unit synthetic scale and bind the protocol to model and calibration artifacts. Legacy graph settings and bundles require explicit migration.
+
 - Store canonical float64 synthetic observations and stable sample IDs across cycles. Training publishes the winning fold's scaler with its weights, and evaluation and prediction verify and reuse that scaler. Calibration records its fitted split and exact bundle digests.
 - Restored drift analysis using raw marginal features and the same frozen model transform for both populations' multivariate statistics and plots. Drift records dataset, checkpoint and representation provenance.
 - Updated preprocessing-related DVC dependencies and verified invalidation and sidecar restoration with a temporary fixture pipeline. Legacy generated data and checkpoints require regeneration.
@@ -22,6 +24,8 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 - Removed executable permissions from `AGENTS.md`, `ROADMAP.md` and `CHANGELOG.md`.
 
 ### Fixed
+
+- Render stored graph edges once per physical link and report unique-edge diagnostics, including for partitions with non-contiguous class labels.
 
 - Use the selected Wasserstein statistic for both the observed comparison and its permutations.
 

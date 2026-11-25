@@ -12,7 +12,8 @@ from torch_geometric.data import Data
 from src.stages import train as training_stage
 from src.utilities import train_utils
 from src.utilities.general_utils import load_params
-from src.utilities.raw_graphs import stamp_partitions, stamp_raw_graph, synthetic_raw
+from src.utilities.graph_protocol import resolve_graph_protocol
+from src.utilities.raw_graphs import build_raw_graph, synthetic_raw
 
 
 class FoldModel(nn.Module):
@@ -50,6 +51,7 @@ def test_folds_train_independently_and_save_winning_epoch(
     base_params["n_features"] = 2
     params["data"]["scaler_type"] = None
     params["data"]["scaler_params"] = {}
+    params["data"]["edge_affinity"] = {"method": "unit", "scale": None}
     raw = synthetic_raw(
         np.tile(np.eye(2), (4, 1)),
         np.arange(24, dtype=np.float64).reshape(-1, 3),
@@ -57,24 +59,22 @@ def test_folds_train_independently_and_save_winning_epoch(
         base_params,
     )
 
+    protocol = resolve_graph_protocol(params)
+
     def graph(rows: list[int], role: str, fold: int | None = None) -> Data:
-        return Data(
-            y=torch.tensor(raw.labels[rows]),
-            original_node_indices=torch.tensor(rows),
-            split_type=role,
-            fold=fold,
-            fold_idx=fold + 1 if fold is not None else None,
-            is_validation=role == "val",
+        result = build_raw_graph(
+            raw, protocol, role, indices=np.array(rows, dtype=np.int64), fold=fold
         )
+        result.fold_idx = fold + 1 if fold is not None else None
+        result.is_validation = role == "val"
+        return result
 
     folds = [
         (graph([0, 1], "train", 0), graph([2, 3], "val", 0)),
         (graph([2, 3], "train", 1), graph([0, 1], "val", 1)),
     ]
     test, calibration = graph([4, 5], "test"), graph([6, 7], "calib")
-    base = Data(y=torch.tensor(raw.labels))
-    stamp_raw_graph(base, raw)
-    stamp_partitions(raw, folds, test, calibration)
+    base = build_raw_graph(raw, protocol, "overview")
     for name, artifact in (
         ("base_data", base),
         ("fold_data", folds),

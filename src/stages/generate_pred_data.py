@@ -10,7 +10,6 @@ import numpy as np
 import torch
 
 from src.utilities.data_utils import (
-    construct_graph,
     export_graph_to_html,
     generate_mineral_data,
     no_coordinate_overlap,
@@ -22,9 +21,10 @@ from src.utilities.general_utils import (
     load_params,
     save_data,
 )
+from src.utilities.graph_protocol import resolve_graph_protocol, verify_graph
 from src.utilities.raw_graphs import (
+    build_raw_graph,
     read_raw_graph,
-    stamp_raw_graph,
     synthetic_raw,
     synthetic_schema,
 )
@@ -49,7 +49,7 @@ def prepare_pred_data(paths: dict, params: dict):
     """
     # load parameters
     base_params = params["data"]["base"]
-    base_params["add_self_loops"] = params.get("add_self_loops", True)
+    protocol = resolve_graph_protocol(params)
     pred_params = params["data"]["pred"]
 
     bootstrap_path = paths["bootstrap_data"]
@@ -58,7 +58,9 @@ def prepare_pred_data(paths: dict, params: dict):
     output_path = ensure_directory_exists(paths["output"])
 
     # Load exisiting coordinates from previous cycle and hotspots and prototypes from bootstrap
-    parent = read_raw_graph(load_data(os.path.join(base_path, "base_data.pt"), "Base"))
+    base_graph = load_data(os.path.join(base_path, "base_data.pt"), "Base")
+    parent = read_raw_graph(base_graph)
+    verify_graph(base_graph, protocol, "overview")
     if (parent.feature_names, parent.class_names) != synthetic_schema(base_params):
         raise ValueError(
             "Prediction configuration does not match the raw parent schema."
@@ -112,20 +114,9 @@ def prepare_pred_data(paths: dict, params: dict):
     raw = synthetic_raw(
         features, coordinates, labels, base_params, parent_sha256=parent.dataset_sha256
     )
-    pred_data = construct_graph(
-        coordinates,
-        features,
-        labels,
-        k_nearest=base_params.get("k_nearest", None),
-        connection_radius=base_params.get("connection_radius", None),
-        distance_percentile=base_params.get("distance_percentile", None),
-        add_self_loops=base_params["add_self_loops"],
-        scaler=None,
-        should_split=False,
-        make_edge_weight=params["data"].get("make_edge_weight", True),
-        make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
+    pred_data = build_raw_graph(
+        raw, protocol, "prediction", source_parent=parent.dataset_sha256
     )
-    stamp_raw_graph(pred_data, raw, source_parent=parent.dataset_sha256)
     save_data(pred_data, os.path.join(output_path, "pred_data.pt"), "Prediction")
     # export the interactive 3D plots
     # Handle class names and labels
@@ -135,16 +126,7 @@ def prepare_pred_data(paths: dict, params: dict):
     labels_map = dict(zip(range(len(class_names)), class_names, strict=True))
     print("\nExporting 3D interactive plots of graphs ...")
     export_graph_to_html(
-        pred_data,
-        coordinates,
-        None,
-        base_params["k_nearest"],
-        base_params["connection_radius"],
-        base_params["distance_percentile"],
-        base_params["add_self_loops"],
-        output_path,
-        labels_map,
-        dataset_tag="prediction_data",
+        pred_data, output_path, labels_map, dataset_tag="prediction_data"
     )
 
 

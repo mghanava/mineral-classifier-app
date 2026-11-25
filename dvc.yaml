@@ -3,15 +3,16 @@ stages:
     cmd: python src/stages/generate_base_data.py --cycle 0
     deps:
     - src/stages/generate_base_data.py
-    - src/utilities/data_utils.py
     - src/utilities/general_utils.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     params:
     - data.base
     - add_self_loops
-    - data.make_edge_weight
-    - data.make_edge_weight_method
+    - data.edge_affinity
     outs:
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/fold_data.pt
@@ -19,6 +20,24 @@ stages:
     - results/data/base/cycle_0/calib_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
+    - results/data/base/cycle_0/base_data_graph.html
+    - results/data/base/cycle_0/base_data_graph.json
+    - results/data/base/cycle_0/test_graph.html
+    - results/data/base/cycle_0/test_graph.json
+    - results/data/base/cycle_0/calib_graph.html
+    - results/data/base/cycle_0/calib_graph.json
+    - results/data/base/cycle_0/train_graph_1.html
+    - results/data/base/cycle_0/train_graph_1.json
+    - results/data/base/cycle_0/val_graph_1.html
+    - results/data/base/cycle_0/val_graph_1.json
+    - results/data/base/cycle_0/train_graph_2.html
+    - results/data/base/cycle_0/train_graph_2.json
+    - results/data/base/cycle_0/val_graph_2.html
+    - results/data/base/cycle_0/val_graph_2.json
+    - results/data/base/cycle_0/train_graph_3.html
+    - results/data/base/cycle_0/train_graph_3.json
+    - results/data/base/cycle_0/val_graph_3.html
+    - results/data/base/cycle_0/val_graph_3.json
   train_cycle_1:
     cmd: python src/stages/train.py --cycle 1 --model gcn
     deps:
@@ -28,6 +47,9 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/fold_data.pt
     - results/data/base/cycle_0/test_data.pt
@@ -36,6 +58,10 @@ stages:
     params:
     - models.gcn
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - train
     - data.base.n_features
     - data.base.n_classes
@@ -54,6 +80,9 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/fold_data.pt
     - results/data/base/cycle_0/test_data.pt
@@ -61,10 +90,15 @@ stages:
     - src/models/
     - results/trained/cycle_1/model.pt
     - results/trained/cycle_1/preprocessing.json
+    - results/trained/cycle_1/graph_binding.json
     params:
     - models.gcn
     - evaluate
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -74,10 +108,12 @@ stages:
     cmd: python src/stages/generate_pred_data.py --cycle 1
     deps:
     - src/stages/generate_pred_data.py
-    - src/utilities/data_utils.py
     - src/utilities/general_utils.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
@@ -85,10 +121,11 @@ stages:
     - data.pred
     - data.base
     - add_self_loops
-    - data.make_edge_weight
-    - data.make_edge_weight_method
+    - data.edge_affinity
     outs:
     - results/data/prediction/cycle_1/pred_data.pt
+    - results/data/prediction/cycle_1/prediction_data_graph.html
+    - results/data/prediction/cycle_1/prediction_data_graph.json
   predict_cycle_1:
     cmd: python src/stages/predict.py --cycle 1 --model gcn
     deps:
@@ -101,14 +138,22 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/trained/cycle_1/model.pt
     - results/trained/cycle_1/preprocessing.json
+    - results/trained/cycle_1/graph_binding.json
     - results/evaluation/cycle_1/calibrator.pt
     - results/evaluation/cycle_1/calibration_binding.json
     - src/models/
     params:
     - models.gcn
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -123,12 +168,21 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/trained/cycle_1/model.pt
     - results/trained/cycle_1/preprocessing.json
+    - results/trained/cycle_1/graph_binding.json
     - results/data/base/cycle_0/base_data.pt
     - results/data/prediction/cycle_1/pred_data.pt
     params:
     - analyze_drift
+    - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -138,22 +192,41 @@ stages:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 1
     deps:
     - src/stages/prepare_next_cycle_data.py
-    - src/utilities/data_utils.py
     - src/utilities/general_utils.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/prediction/cycle_1/pred_data.pt
     params:
     - data.base
     - add_self_loops
-    - data.make_edge_weight
-    - data.make_edge_weight_method
+    - data.edge_affinity
     outs:
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
     - results/data/base/cycle_1/calib_data.pt
+    - results/data/base/cycle_1/base_data_graph.html
+    - results/data/base/cycle_1/base_data_graph.json
+    - results/data/base/cycle_1/test_graph.html
+    - results/data/base/cycle_1/test_graph.json
+    - results/data/base/cycle_1/calib_graph.html
+    - results/data/base/cycle_1/calib_graph.json
+    - results/data/base/cycle_1/train_graph_1.html
+    - results/data/base/cycle_1/train_graph_1.json
+    - results/data/base/cycle_1/val_graph_1.html
+    - results/data/base/cycle_1/val_graph_1.json
+    - results/data/base/cycle_1/train_graph_2.html
+    - results/data/base/cycle_1/train_graph_2.json
+    - results/data/base/cycle_1/val_graph_2.html
+    - results/data/base/cycle_1/val_graph_2.json
+    - results/data/base/cycle_1/train_graph_3.html
+    - results/data/base/cycle_1/train_graph_3.json
+    - results/data/base/cycle_1/val_graph_3.html
+    - results/data/base/cycle_1/val_graph_3.json
   train_cycle_2:
     cmd: python src/stages/train.py --cycle 2 --model gcn
     deps:
@@ -163,6 +236,9 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
@@ -171,6 +247,10 @@ stages:
     params:
     - models.gcn
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - train
     - data.base.n_features
     - data.base.n_classes
@@ -189,6 +269,9 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
@@ -196,10 +279,15 @@ stages:
     - src/models/
     - results/trained/cycle_2/model.pt
     - results/trained/cycle_2/preprocessing.json
+    - results/trained/cycle_2/graph_binding.json
     params:
     - models.gcn
     - evaluate
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -209,10 +297,12 @@ stages:
     cmd: python src/stages/generate_pred_data.py --cycle 2
     deps:
     - src/stages/generate_pred_data.py
-    - src/utilities/data_utils.py
     - src/utilities/general_utils.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
@@ -220,10 +310,11 @@ stages:
     - data.pred
     - data.base
     - add_self_loops
-    - data.make_edge_weight
-    - data.make_edge_weight_method
+    - data.edge_affinity
     outs:
     - results/data/prediction/cycle_2/pred_data.pt
+    - results/data/prediction/cycle_2/prediction_data_graph.html
+    - results/data/prediction/cycle_2/prediction_data_graph.json
   predict_cycle_2:
     cmd: python src/stages/predict.py --cycle 2 --model gcn
     deps:
@@ -236,14 +327,22 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/trained/cycle_2/model.pt
     - results/trained/cycle_2/preprocessing.json
+    - results/trained/cycle_2/graph_binding.json
     - results/evaluation/cycle_2/calibrator.pt
     - results/evaluation/cycle_2/calibration_binding.json
     - src/models/
     params:
     - models.gcn
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -258,12 +357,21 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/trained/cycle_2/model.pt
     - results/trained/cycle_2/preprocessing.json
+    - results/trained/cycle_2/graph_binding.json
     - results/data/base/cycle_1/base_data.pt
     - results/data/prediction/cycle_2/pred_data.pt
     params:
     - analyze_drift
+    - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -273,22 +381,41 @@ stages:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 2
     deps:
     - src/stages/prepare_next_cycle_data.py
-    - src/utilities/data_utils.py
     - src/utilities/general_utils.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/prediction/cycle_2/pred_data.pt
     params:
     - data.base
     - add_self_loops
-    - data.make_edge_weight
-    - data.make_edge_weight_method
+    - data.edge_affinity
     outs:
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
     - results/data/base/cycle_2/calib_data.pt
+    - results/data/base/cycle_2/base_data_graph.html
+    - results/data/base/cycle_2/base_data_graph.json
+    - results/data/base/cycle_2/test_graph.html
+    - results/data/base/cycle_2/test_graph.json
+    - results/data/base/cycle_2/calib_graph.html
+    - results/data/base/cycle_2/calib_graph.json
+    - results/data/base/cycle_2/train_graph_1.html
+    - results/data/base/cycle_2/train_graph_1.json
+    - results/data/base/cycle_2/val_graph_1.html
+    - results/data/base/cycle_2/val_graph_1.json
+    - results/data/base/cycle_2/train_graph_2.html
+    - results/data/base/cycle_2/train_graph_2.json
+    - results/data/base/cycle_2/val_graph_2.html
+    - results/data/base/cycle_2/val_graph_2.json
+    - results/data/base/cycle_2/train_graph_3.html
+    - results/data/base/cycle_2/train_graph_3.json
+    - results/data/base/cycle_2/val_graph_3.html
+    - results/data/base/cycle_2/val_graph_3.json
   train_cycle_3:
     cmd: python src/stages/train.py --cycle 3 --model gcn
     deps:
@@ -298,6 +425,9 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
@@ -306,6 +436,10 @@ stages:
     params:
     - models.gcn
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - train
     - data.base.n_features
     - data.base.n_classes
@@ -324,6 +458,9 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
@@ -331,10 +468,15 @@ stages:
     - src/models/
     - results/trained/cycle_3/model.pt
     - results/trained/cycle_3/preprocessing.json
+    - results/trained/cycle_3/graph_binding.json
     params:
     - models.gcn
     - evaluate
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -344,10 +486,12 @@ stages:
     cmd: python src/stages/generate_pred_data.py --cycle 3
     deps:
     - src/stages/generate_pred_data.py
-    - src/utilities/data_utils.py
     - src/utilities/general_utils.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
@@ -355,10 +499,11 @@ stages:
     - data.pred
     - data.base
     - add_self_loops
-    - data.make_edge_weight
-    - data.make_edge_weight_method
+    - data.edge_affinity
     outs:
     - results/data/prediction/cycle_3/pred_data.pt
+    - results/data/prediction/cycle_3/prediction_data_graph.html
+    - results/data/prediction/cycle_3/prediction_data_graph.json
   predict_cycle_3:
     cmd: python src/stages/predict.py --cycle 3 --model gcn
     deps:
@@ -371,14 +516,22 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/trained/cycle_3/model.pt
     - results/trained/cycle_3/preprocessing.json
+    - results/trained/cycle_3/graph_binding.json
     - results/evaluation/cycle_3/calibrator.pt
     - results/evaluation/cycle_3/calibration_binding.json
     - src/models/
     params:
     - models.gcn
     - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -393,12 +546,21 @@ stages:
     - src/utilities/model_bundle.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/trained/cycle_3/model.pt
     - results/trained/cycle_3/preprocessing.json
+    - results/trained/cycle_3/graph_binding.json
     - results/data/base/cycle_2/base_data.pt
     - results/data/prediction/cycle_3/pred_data.pt
     params:
     - analyze_drift
+    - add_self_loops
+    - data.edge_affinity
+    - data.base.k_nearest
+    - data.base.connection_radius
+    - data.base.distance_percentile
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -408,22 +570,41 @@ stages:
     cmd: python src/stages/prepare_next_cycle_data.py --cycle 3
     deps:
     - src/stages/prepare_next_cycle_data.py
-    - src/utilities/data_utils.py
     - src/utilities/general_utils.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
+    - src/utilities/graph_protocol.py
+    - src/utilities/spatial_graph.py
+    - src/utilities/data_utils.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/prediction/cycle_3/pred_data.pt
     params:
     - data.base
     - add_self_loops
-    - data.make_edge_weight
-    - data.make_edge_weight_method
+    - data.edge_affinity
     outs:
     - results/data/base/cycle_3/base_data.pt
     - results/data/base/cycle_3/fold_data.pt
     - results/data/base/cycle_3/test_data.pt
     - results/data/base/cycle_3/calib_data.pt
+    - results/data/base/cycle_3/base_data_graph.html
+    - results/data/base/cycle_3/base_data_graph.json
+    - results/data/base/cycle_3/test_graph.html
+    - results/data/base/cycle_3/test_graph.json
+    - results/data/base/cycle_3/calib_graph.html
+    - results/data/base/cycle_3/calib_graph.json
+    - results/data/base/cycle_3/train_graph_1.html
+    - results/data/base/cycle_3/train_graph_1.json
+    - results/data/base/cycle_3/val_graph_1.html
+    - results/data/base/cycle_3/val_graph_1.json
+    - results/data/base/cycle_3/train_graph_2.html
+    - results/data/base/cycle_3/train_graph_2.json
+    - results/data/base/cycle_3/val_graph_2.html
+    - results/data/base/cycle_3/val_graph_2.json
+    - results/data/base/cycle_3/train_graph_3.html
+    - results/data/base/cycle_3/train_graph_3.json
+    - results/data/base/cycle_3/val_graph_3.html
+    - results/data/base/cycle_3/val_graph_3.json
   analyze_cycles_performance:
     cmd: python src/stages/analyze_cycles_performance.py
     deps:

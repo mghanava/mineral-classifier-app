@@ -16,6 +16,7 @@ from src.utilities.general_utils import (
     load_data,
     load_params,
 )
+from src.utilities.graph_protocol import resolve_graph_protocol, verify_graph
 from src.utilities.model_bundle import read_model_bundle
 from src.utilities.raw_graphs import read_raw_graph, synthetic_schema
 
@@ -52,7 +53,10 @@ def run_analyze_drift(paths: dict, params: dict, cycle_num: int) -> None:
             "Drift input batch does not match the historical base cycle. Regenerate the batch."
         )
 
-    state, bundle, _ = read_model_bundle(Path(paths["model"]), *schema)
+    protocol = resolve_graph_protocol(params)
+    verify_graph(reference_graph, protocol, "overview")
+    verify_graph(incoming_graph, protocol, "prediction")
+    state, bundle, _ = read_model_bundle(Path(paths["model"]), *schema, protocol)
     if state.dataset_sha256 != reference.dataset_sha256:
         raise ValueError(
             "Drift reference does not match the model's source dataset. Use the matching cycle bundle."

@@ -7,7 +7,10 @@ from torch_geometric.data import Data
 
 from src.models.gat import MineralDepositGAT
 from src.models.gcn import MineralDepositGCN
-from src.utilities.data_utils import construct_graph
+from src.utilities.general_utils import load_params
+from src.utilities.graph_protocol import resolve_graph_protocol
+from src.utilities.raw_graphs import build_cycle_graphs, synthetic_raw
+from src.utilities.spatial_graph import build_spatial_graph
 
 N_NODES = 80
 N_FEATURES = 5
@@ -21,20 +24,13 @@ def graph_splits() -> GraphSplits:
     coordinates = np.random.default_rng(3).uniform(size=(N_NODES, 3))
     features = np.random.default_rng(4).normal(size=(N_NODES, N_FEATURES))
     labels = np.arange(N_NODES) % N_CLASSES
-    graphs = construct_graph(
-        coordinates,
-        features,
-        labels,
-        connection_radius=0.5,
-        n_splits=3,
-        test_size=0.3,
-        calib_size=0.3,
-        seed=110,
-        scaler=None,
-    )
-    assert isinstance(graphs, tuple)
+    params = load_params()
+    base_params = params["data"]["base"]
+    base_params.update(distance_percentile=None, connection_radius=0.5)
+    raw = synthetic_raw(features, coordinates, labels, base_params)
+    graphs = build_cycle_graphs(raw, resolve_graph_protocol(params), base_params)
     base, _, _, _ = graphs
-    torch.testing.assert_close(base.x, torch.tensor(features, dtype=torch.float32))
+    torch.testing.assert_close(base.x, torch.tensor(features))
     torch.testing.assert_close(base.y, torch.tensor(labels, dtype=torch.long))
     return graphs
 
@@ -51,6 +47,8 @@ def test_model_forward_cpu(
 ) -> None:
     """Return finite CPU logits for every node and class."""
     base, _, _, _ = graph_splits
+    base = base.clone()
+    base.x = base.x.float()
     with torch.random.fork_rng(devices=[]), torch.inference_mode():
         torch.random.default_generator.manual_seed(42)
         model = (
@@ -58,6 +56,7 @@ def test_model_forward_cpu(
                 n_classes=N_CLASSES,
                 in_channels=N_FEATURES,
                 hidden_channels=8,
+                add_self_loops=False,
                 **model_options,
             )
             .cpu()
@@ -103,16 +102,18 @@ def test_partitions_are_disjoint_and_aligned(graph_splits: GraphSplits) -> None:
         assert seen == set(range(N_NODES))
 
 
-def test_partitions_preserve_induced_edges(graph_splits: GraphSplits) -> None:
-    """Map split edges back to base node IDs and compare their connectivity."""
-    base, folds, test, calibration = graph_splits
-    base_edges = {tuple(edge) for edge in base.edge_index.T.tolist()}
+def test_partitions_use_independent_edges(graph_splits: GraphSplits) -> None:
+    """Rebuild each graph from its own coordinates and require exact COO edges."""
+    _, folds, test, calibration = graph_splits
     fold_graphs = [graph for fold in folds for graph in fold]
     for graph in (*fold_graphs, test, calibration):
-        indices = graph.original_node_indices
-        members = set(indices.tolist())
-        expected = {
-            (src, dst) for src, dst in base_edges if src in members and dst in members
-        }
-        actual = {tuple(edge) for edge in indices[graph.edge_index].T.tolist()}
-        assert actual == expected
+        expected = build_spatial_graph(
+            graph.coordinates.numpy(),
+            graph.sample_ids,
+            connection_radius=0.5,
+            affinity_scale=460,
+            add_self_loops=True,
+        )
+        torch.testing.assert_close(graph.edge_index, expected.edge_index)
+        torch.testing.assert_close(graph.edge_weight, expected.edge_weight)
+        assert len(set(map(tuple, graph.edge_index.T.tolist()))) == graph.num_edges

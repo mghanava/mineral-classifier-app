@@ -12,6 +12,7 @@ import pytest
 import torch
 from matplotlib import pyplot
 from matplotlib.figure import Figure
+from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import StandardScaler
 from torch import nn
 from torch_geometric.data import Data
@@ -27,9 +28,9 @@ from src.stages import (
 )
 from src.utilities import eval_utils, pred_utils
 from src.utilities.calibration_utils import CalibratedModel
-from src.utilities.data_utils import construct_graph
 from src.utilities.drift_detection_utils import AnalyzeDrift
 from src.utilities.general_utils import load_data, load_params
+from src.utilities.graph_protocol import model_graph_settings, resolve_graph_protocol
 from src.utilities.model_bundle import publish_model
 from src.utilities.preprocessing import (
     TrainingPartition,
@@ -37,6 +38,7 @@ from src.utilities.preprocessing import (
     load_preprocessing,
 )
 from src.utilities.raw_graphs import load_cycle_data, read_raw_graph, stamp_raw_graph
+from src.utilities.spatial_graph import build_spatial_graph
 
 
 def _observations(
@@ -94,7 +96,9 @@ def test_raw_round_trip_and_next_cycle(
 ) -> None:
     """Preserve precision, sample IDs, topology and partition provenance."""
     params, base, incoming = generated
-    historical, folds, _, _ = load_cycle_data(base)
+    historical, folds, test, calib = load_cycle_data(
+        base, resolve_graph_protocol(params)
+    )
     batch_graph = load_data(incoming / "pred_data.pt", "Prediction")
     batch = read_raw_graph(batch_graph)
     for dataset, offset in ((historical, 0), (batch, 100)):
@@ -106,33 +110,48 @@ def test_raw_round_trip_and_next_cycle(
     assert not set(historical.sample_ids) & set(batch.sample_ids)
     assert batch_graph.source_parent_sha256 == historical.dataset_sha256
 
-    legacy_topology, legacy_folds, _, _ = construct_graph(
-        historical.coordinates,
-        historical.features,
-        historical.labels,
-        connection_radius=25,
-        n_splits=2,
+    development, holdout = train_test_split(
+        np.arange(len(historical.labels)),
         test_size=0.4,
-        calib_size=0.5,
-        seed=110,
-        scaler=None,
+        stratify=historical.labels,
+        random_state=110,
     )
-    base_graph = load_data(base / "base_data.pt", "Base")
-    torch.testing.assert_close(base_graph.edge_index, legacy_topology.edge_index)
-    torch.testing.assert_close(base_graph.edge_weight, legacy_topology.edge_weight)
-    for actual, expected in zip(folds, legacy_folds, strict=True):
-        for graph, legacy in zip(actual, expected, strict=True):
-            torch.testing.assert_close(
-                graph.original_node_indices, legacy.original_node_indices
-            )
-            torch.testing.assert_close(graph.edge_index, legacy.edge_index)
-            torch.testing.assert_close(graph.edge_weight, legacy.edge_weight)
+    expected_test, expected_calib = train_test_split(
+        holdout, test_size=0.5, stratify=historical.labels[holdout], random_state=110
+    )
+    expected_folds = [
+        (development[training], development[validation])
+        for training, validation in StratifiedKFold(
+            n_splits=2, shuffle=True, random_state=110
+        ).split(historical.features[development], historical.labels[development])
+    ]
+    graphs = [test, calib]
+    memberships = [expected_test, expected_calib]
+    for pair, expected in zip(folds, expected_folds, strict=True):
+        graphs.extend(pair)
+        memberships.extend(expected)
+    for graph, indices in zip(graphs, memberships, strict=True):
+        np.testing.assert_array_equal(graph.original_node_indices, indices)
+        sample_ids = tuple(historical.sample_ids[i] for i in indices)
+        expected = build_spatial_graph(
+            historical.coordinates[indices],
+            sample_ids,
+            connection_radius=25,
+            affinity_scale=460,
+            add_self_loops=True,
+        )
+        assert graph.sample_ids == sample_ids
+        for key in ("edge_index", "edge_weight", "edge_distance", "coordinates"):
+            torch.testing.assert_close(graph[key], expected[key], rtol=0, atol=0)
+        torch.testing.assert_close(graph.y, torch.tensor(historical.labels[indices]))
+        assert graph.graph_protocol == resolve_graph_protocol(params)
+    assert batch_graph.graph_protocol == resolve_graph_protocol(params)
 
     next_base = tmp_path / "next"
     prepare_next_cycle_data.combine_split_data(
         {"base_data": base, "prediction": incoming, "output": next_base}, params
     )
-    combined, _, _, _ = load_cycle_data(next_base)
+    combined, _, _, _ = load_cycle_data(next_base, resolve_graph_protocol(params))
     assert combined.sample_ids == historical.sample_ids + batch.sample_ids
     assert combined.dataset_sha256 != historical.dataset_sha256
     np.testing.assert_array_equal(
@@ -168,8 +187,14 @@ def _assert_graph(
 ) -> None:
     assert actual.x.dtype == torch.float32
     np.testing.assert_allclose(actual.x.numpy(), expected.astype(np.float32), atol=1e-7)
-    for key in ("edge_index", "edge_attr", "edge_weight"):
+    for key in ("edge_index", "edge_distance"):
         torch.testing.assert_close(actual[key], original[key])
+    weights = original.edge_weight.clone()
+    src, dst = original.edge_index
+    weights[src == dst] = 2.0
+    torch.testing.assert_close(actual.edge_weight, weights)
+    torch.testing.assert_close(actual.edge_attr, weights[:, None])
+    assert torch.all(original.edge_weight[src == dst] == 1)
     if with_labels:
         torch.testing.assert_close(actual.y, original.y)
     else:
@@ -181,16 +206,23 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
 ) -> None:
     """Train via a controlled double and run the real calibration and scoring path."""
     params, base, incoming = generated
-    raw, folds, test_graph, calibration_graph = load_cycle_data(base)
+    raw, folds, test_graph, calibration_graph = load_cycle_data(
+        base, resolve_graph_protocol(params)
+    )
     fitted = [
         StandardScaler().fit(raw.features[training.original_node_indices.numpy()])
         for training, _ in folds
     ]
     assert not np.array_equal(fitted[0].mean_, fitted[1].mean_)
     model_calls = []
-    monkeypatch.setattr(train, "get_model", lambda *_: RecordingModel(model_calls))
-    monkeypatch.setattr(evaluate, "get_model", lambda *_: RecordingModel(model_calls))
-    monkeypatch.setattr(predict, "get_model", lambda *_: RecordingModel(model_calls))
+
+    def model_double(_name, options):
+        assert options["add_self_loops"] is False
+        return RecordingModel(model_calls)
+
+    monkeypatch.setattr(train, "get_model", model_double)
+    monkeypatch.setattr(evaluate, "get_model", model_double)
+    monkeypatch.setattr(predict, "get_model", model_double)
     fit_rows = []
     original_fit = StandardScaler.fit
 
@@ -259,7 +291,13 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
     torch.testing.assert_close(logits, torch.stack((-score, score), dim=1))
     torch.testing.assert_close(labels, calibration_graph.y)
     assert (evaluation / "metrics.json").exists()
-    assert (evaluation / "calibration_binding.json").exists()
+    calibration = json.loads(
+        (evaluation / "calibration_binding.json").read_text(encoding="utf-8")
+    )
+    assert (
+        calibration["graph_binding_sha256"]
+        == hashlib.sha256((trained / "graph_binding.json").read_bytes()).hexdigest()
+    )
 
     predictions = tmp_path / "predictions"
     paths = {
@@ -281,10 +319,28 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
         results
     )
     assert (predictions / "metrics.json").is_file()
+
+    params["models"]["gcn"]["improved"] = False
+    with pytest.raises(ValueError, match="Model graph protocol does not match"):
+        predict.run_prediction(paths, params, "gcn")
+    with pytest.raises(ValueError, match="Model graph protocol does not match"):
+        evaluate.run_evaluation(
+            {"base": base, "model": trained, "output": evaluation}, params, "gcn"
+        )
+    params["models"]["gcn"]["improved"] = True
+
+    graph_binding = trained / "graph_binding.json"
+    binding_bytes = graph_binding.read_bytes()
+    graph_binding.unlink()
+    with pytest.raises(ValueError, match="Retrain using independent graphs"):
+        predict.run_prediction(paths, params, "gcn")
+    graph_binding.write_bytes(binding_bytes)
     np.testing.assert_array_equal(
         read_raw_graph(original).features, _observations(8, 100)[1]
     )
-    np.testing.assert_array_equal(load_cycle_data(base)[0].features, raw.features)
+    np.testing.assert_array_equal(
+        load_cycle_data(base, resolve_graph_protocol(params))[0].features, raw.features
+    )
 
     calibrator = evaluation / "calibrator.pt"
     old_calibrator = calibrator.read_bytes()
@@ -295,6 +351,13 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
 
     sidecar = trained / "preprocessing.json"
     sidecar.write_bytes(sidecar.read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="Model graph binding is stale"):
+        predict.run_prediction(paths, params, "gcn")
+
+    graph_path = trained / "graph_binding.json"
+    binding = json.loads(graph_path.read_text(encoding="utf-8"))
+    binding["preprocessing_sha256"] = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    graph_path.write_text(json.dumps(binding), encoding="utf-8")
     with pytest.raises(ValueError, match="Calibration binding does not match"):
         predict.run_prediction(paths, params, "gcn")
     torch.save({"weight": torch.tensor(8.0)}, trained / "model.pt")
@@ -322,21 +385,25 @@ def test_legacy_and_incompatible_artifacts_fail_explicitly(
     test_graph.original_node_indices = test_graph.original_node_indices.flip(0)
     torch.save(test_graph, base / "test_data.pt")
     with pytest.raises(ValueError, match="row order"):
-        load_cycle_data(base)
+        load_cycle_data(base, resolve_graph_protocol(params))
 
 
 def _drift_bundle(
     generated: tuple[dict, Path, Path], tmp_path: Path, scaler_type: str | None
 ) -> tuple[dict, dict]:
     params, base, incoming = generated
-    raw, folds, _, _ = load_cycle_data(base)
+    raw, folds, _, _ = load_cycle_data(base, resolve_graph_protocol(params))
     partition = TrainingPartition(
         raw.dataset_sha256, 0, folds[0][0].original_node_indices.numpy()
     )
     trained = tmp_path / "trained"
     trained.mkdir()
     publish_model(
-        trained, RecordingModel([]), fit_preprocessing(raw, partition, scaler_type)
+        trained,
+        RecordingModel([]),
+        fit_preprocessing(raw, partition, scaler_type),
+        model_graph_settings(resolve_graph_protocol(params), "gcn", params),
+        folds[0][0].graph_sha256,
     )
     params["analyze_drift"].update(n_permutations=2, early_stopping={"enabled": False})
     return params, {
@@ -466,7 +533,8 @@ def test_drift_uses_raw_marginals_and_shared_multivariate_transform(
     ) == 3
     assert len(list(output.glob("*.png"))) == 4
     np.testing.assert_array_equal(
-        load_cycle_data(paths["base_data"])[0].features, raw_inputs[0]
+        load_cycle_data(paths["base_data"], resolve_graph_protocol(params))[0].features,
+        raw_inputs[0],
     )
     persisted = read_raw_graph(
         load_data(paths["prediction_data"] / "pred_data.pt", "Pred")
@@ -495,6 +563,10 @@ def test_drift_rejects_stale_missing_and_incompatible_artifacts(
     artifact = json.loads(original)
     artifact["state"]["dataset_sha256"] = "0" * 64
     sidecar.write_text(json.dumps(artifact), encoding="utf-8")
+    graph_path = paths["model"] / "graph_binding.json"
+    binding = json.loads(graph_path.read_text(encoding="utf-8"))
+    binding["preprocessing_sha256"] = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    graph_path.write_text(json.dumps(binding), encoding="utf-8")
     with pytest.raises(ValueError, match="reference does not match"):
         analyze_drift.run_analyze_drift(paths, params, 1)
 

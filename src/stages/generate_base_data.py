@@ -12,7 +12,6 @@ import os
 
 from src.utilities.data_utils import (
     analyze_feature_discrimination,
-    construct_graph,
     export_all_graphs_to_html,
     export_graph_to_html,
     generate_mineral_data,
@@ -23,7 +22,8 @@ from src.utilities.general_utils import (
     load_params,
     save_data,
 )
-from src.utilities.raw_graphs import stamp_partitions, stamp_raw_graph, synthetic_raw
+from src.utilities.graph_protocol import resolve_graph_protocol
+from src.utilities.raw_graphs import build_cycle_graphs, synthetic_raw
 
 
 def prepare_base_data(
@@ -43,7 +43,7 @@ def prepare_base_data(
     output_path = ensure_directory_exists(path)
     # load parameters
     base_params = params["data"]["base"]
-    base_params["add_self_loops"] = params.get("add_self_loops", True)
+    protocol = resolve_graph_protocol(params)
 
     # Handle class names and labels
     class_names = base_params["class_names"] or [
@@ -75,58 +75,11 @@ def prepare_base_data(
     )
 
     raw = synthetic_raw(features, coordinates, labels, base_params)
-    all_data = construct_graph(
-        coordinates,
-        features,
-        labels,
-        k_nearest=base_params.get("k_nearest", None),
-        connection_radius=base_params.get("connection_radius", None),
-        distance_percentile=base_params.get("distance_percentile", None),
-        add_self_loops=base_params["add_self_loops"],
-        n_splits=base_params["n_splits"],
-        test_size=base_params.get("test_size", None),
-        calib_size=base_params.get("calib_size", None),
-        seed=base_params.get("seed", 42),
-        scaler=None,
-        make_edge_weight=params["data"].get("make_edge_weight", True),
-        make_edge_weight_method=params["data"].get("make_edge_weight_method", None),
+    base_data, fold_data, test_data, calib_data = build_cycle_graphs(
+        raw, protocol, base_params
     )
-    # When should_split is True, construct_graph returns a tuple (all_data, fold_data, test_data). Ensure the returned value is a tuple and unpack accordingly
-    if not isinstance(all_data, tuple):
-        raise ValueError(
-            "Expected construct_graph to return a tuple when should_split is True."
-        )
-    base_data, fold_data, test_data, calib_data = all_data
-    stamp_raw_graph(base_data, raw)
-    stamp_partitions(raw, fold_data, test_data, calib_data)
-
-    # export the interactive 3D plots
-    print("\nExporting 3D interactive plots of graphs ...")
-    export_graph_to_html(
-        base_data,
-        coordinates,
-        None,
-        base_params["k_nearest"],
-        base_params["connection_radius"],
-        base_params["distance_percentile"],
-        base_params["add_self_loops"],
-        output_path,
-        labels_map,
-        dataset_tag="base_data",
-    )
-    # Convert fold_data to list of tuples
-    export_all_graphs_to_html(
-        fold_data,
-        test_data,
-        calib_data,
-        coordinates,
-        base_params["k_nearest"],
-        base_params["connection_radius"],
-        base_params["distance_percentile"],
-        base_params["add_self_loops"],
-        labels_map,
-        output_path,
-    )
+    export_graph_to_html(base_data, output_path, labels_map, dataset_tag="base_data")
+    export_all_graphs_to_html(fold_data, test_data, calib_data, labels_map, output_path)
 
     analyze_feature_discrimination(
         features,

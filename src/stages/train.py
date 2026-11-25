@@ -16,6 +16,7 @@ from src.utilities.general_utils import (
     ensure_directory_exists,
     load_params,
 )
+from src.utilities.graph_protocol import model_graph_settings, resolve_graph_protocol
 from src.utilities.model_bundle import publish_model
 from src.utilities.preprocessing import TrainingPartition, fit_preprocessing
 from src.utilities.raw_graphs import load_cycle_data, model_graph, synthetic_schema
@@ -50,15 +51,17 @@ def run_training(paths, params, model_name, cycle_num):
 
     """
     train_params = params["train"]
+    protocol = resolve_graph_protocol(params)
+    settings = model_graph_settings(protocol, model_name, params)
     model_params = {
         **params["models"][model_name],
-        "add_self_loops": params.get("add_self_loops", True),
+        "add_self_loops": False,
     }
     n_classes = params["data"]["base"]["n_classes"]
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 
-    raw, fold_data, _, _ = load_cycle_data(Path(paths["base_data"]))
+    raw, fold_data, _, _ = load_cycle_data(Path(paths["base_data"]), protocol)
     if (raw.feature_names, raw.class_names) != synthetic_schema(params["data"]["base"]):
         raise ValueError(
             "Training configuration does not match the canonical raw schema."
@@ -70,6 +73,10 @@ def run_training(paths, params, model_name, cycle_num):
     best_fold = None
     for fold_index, (training, validation) in enumerate(fold_data):
         fold_idx = fold_index + 1
+        if training.num_nodes == 1 and model_params.get("batch_norm", True):
+            raise ValueError(
+                f"Fold {fold_idx} has one training node. Disable model batch_norm or use a larger training partition."
+            )
         print(f"\nTraining model on fold {fold_idx}...")
         partition = TrainingPartition(
             raw.dataset_sha256, fold_index, training.original_node_indices.numpy()
@@ -81,8 +88,8 @@ def run_training(paths, params, model_name, cycle_num):
             params["data"].get("scaler_params"),
         )
         fold = (
-            model_graph(training, raw, preprocessing),
-            model_graph(validation, raw, preprocessing),
+            model_graph(training, raw, preprocessing, settings),
+            model_graph(validation, raw, preprocessing, settings),
         )
         model = get_model(model_name, model_params).to(device)
         trained_model, best_loss_val = train(
@@ -106,15 +113,23 @@ def run_training(paths, params, model_name, cycle_num):
         )
 
         if best_fold is None or best_loss_val < best_fold[1]:
-            best_fold = (fold_idx, best_loss_val, trained_model, preprocessing)
+            best_fold = (
+                fold_idx,
+                best_loss_val,
+                trained_model,
+                preprocessing,
+                training.graph_sha256,
+            )
 
     if best_fold is None:
         raise ValueError("At least one train-validation fold is required.")
 
     # Preserve the evaluation and prediction checkpoint contract until a refit is available.
-    fold_idx, best_loss_val, best_model, preprocessing = best_fold
+    fold_idx, best_loss_val, best_model, preprocessing, training_graph = best_fold
     model_save_path = Path(output_path) / "model.pt"
-    publish_model(model_save_path.parent, best_model, preprocessing)
+    publish_model(
+        model_save_path.parent, best_model, preprocessing, settings, training_graph
+    )
     print(
         f"✓ Fold {fold_idx} model (validation loss {best_loss_val:.6g}) "
         f"saved to {model_save_path}."

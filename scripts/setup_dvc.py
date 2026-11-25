@@ -34,6 +34,21 @@ def generate_performance_analysis_stage(cycles):
     }
 
 
+def base_graph_figures(directory: str, n_splits: int) -> list[str]:
+    """List the dashboard's Plotly graph outputs for a base cycle."""
+    stems = ["base_data_graph", "test_graph", "calib_graph"]
+    stems += [
+        f"{role}_graph_{fold}"
+        for fold in range(1, n_splits + 1)
+        for role in ("train", "val")
+    ]
+    return [
+        f"{directory}/{stem}.{extension}"
+        for stem in stems
+        for extension in ("html", "json")
+    ]
+
+
 def generate_fine_grained_dvc_yaml():
     """Generate fine-grained DVC pipeline with individual stages."""
     params = load_params()
@@ -45,7 +60,14 @@ def generate_fine_grained_dvc_yaml():
     # number of cycles changes. Use `make reset` to deliberately wipe results.
     bootstrap_cmd = "python src/stages/generate_base_data.py --cycle 0"
 
-    raw_helpers = ["src/utilities/raw_graphs.py", "src/utilities/preprocessing.py"]
+    n_splits = params["data"]["base"]["n_splits"]
+    raw_helpers = [
+        "src/utilities/raw_graphs.py",
+        "src/utilities/preprocessing.py",
+        "src/utilities/graph_protocol.py",
+        "src/utilities/spatial_graph.py",
+        "src/utilities/data_utils.py",
+    ]
     bundle_helpers = ["src/utilities/model_bundle.py", *raw_helpers]
     model_schema = [
         "data.base.n_features",
@@ -54,8 +76,13 @@ def generate_fine_grained_dvc_yaml():
     ]
     edge_settings = [
         "add_self_loops",
-        "data.make_edge_weight",
-        "data.make_edge_weight_method",
+        "data.edge_affinity",
+    ]
+    graph_consumer_settings = [
+        *edge_settings,
+        "data.base.k_nearest",
+        "data.base.connection_radius",
+        "data.base.distance_percentile",
     ]
     stages = {
         "stages": {
@@ -63,7 +90,6 @@ def generate_fine_grained_dvc_yaml():
                 "cmd": bootstrap_cmd,
                 "deps": [
                     "src/stages/generate_base_data.py",
-                    "src/utilities/data_utils.py",
                     "src/utilities/general_utils.py",
                     *raw_helpers,
                 ],
@@ -75,6 +101,7 @@ def generate_fine_grained_dvc_yaml():
                     "results/data/base/cycle_0/calib_data.pt",
                     "results/data/base/cycle_0/hotspots.npy",
                     "results/data/base/cycle_0/prototypes.npy",
+                    *base_graph_figures("results/data/base/cycle_0", n_splits),
                 ],
             }
         }
@@ -88,7 +115,11 @@ def generate_fine_grained_dvc_yaml():
             f"{base}/{name}.pt"
             for name in ("base_data", "fold_data", "test_data", "calib_data")
         ]
-        model_bundle = [f"{trained}/model.pt", f"{trained}/preprocessing.json"]
+        model_bundle = [
+            f"{trained}/model.pt",
+            f"{trained}/preprocessing.json",
+            f"{trained}/graph_binding.json",
+        ]
         stages["stages"][f"train_cycle_{cycle}"] = {
             "cmd": f"python src/stages/train.py --cycle {cycle} --model {model}",
             "deps": [
@@ -101,7 +132,7 @@ def generate_fine_grained_dvc_yaml():
             ],
             "params": [
                 f"models.{model}",
-                "add_self_loops",
+                *graph_consumer_settings,
                 "train",
                 *model_schema,
                 "data.scaler_type",
@@ -126,7 +157,7 @@ def generate_fine_grained_dvc_yaml():
             "params": [
                 f"models.{model}",
                 "evaluate",
-                "add_self_loops",
+                *graph_consumer_settings,
                 *model_schema,
             ],
             "outs": [
@@ -137,7 +168,6 @@ def generate_fine_grained_dvc_yaml():
             "cmd": f"python src/stages/generate_pred_data.py --cycle {cycle}",
             "deps": [
                 "src/stages/generate_pred_data.py",
-                "src/utilities/data_utils.py",
                 "src/utilities/general_utils.py",
                 *raw_helpers,
                 f"{base}/base_data.pt",
@@ -151,6 +181,8 @@ def generate_fine_grained_dvc_yaml():
             ],
             "outs": [
                 f"results/data/prediction/cycle_{cycle}/pred_data.pt",
+                f"results/data/prediction/cycle_{cycle}/prediction_data_graph.html",
+                f"results/data/prediction/cycle_{cycle}/prediction_data_graph.json",
             ],
         }
         stages["stages"][f"predict_cycle_{cycle}"] = {
@@ -170,7 +202,7 @@ def generate_fine_grained_dvc_yaml():
             ],
             "params": [
                 f"models.{model}",
-                "add_self_loops",
+                *graph_consumer_settings,
                 *model_schema,
             ],
             "outs": [
@@ -190,6 +222,7 @@ def generate_fine_grained_dvc_yaml():
             ],
             "params": [
                 "analyze_drift",
+                *graph_consumer_settings,
                 *model_schema,
             ],
             "outs": [
@@ -200,7 +233,6 @@ def generate_fine_grained_dvc_yaml():
             "cmd": f"python src/stages/prepare_next_cycle_data.py --cycle {cycle}",
             "deps": [
                 "src/stages/prepare_next_cycle_data.py",
-                "src/utilities/data_utils.py",
                 "src/utilities/general_utils.py",
                 *raw_helpers,
                 f"results/data/base/cycle_{cycle - 1}/base_data.pt"
@@ -214,6 +246,7 @@ def generate_fine_grained_dvc_yaml():
                 f"results/data/base/cycle_{cycle}/fold_data.pt",
                 f"results/data/base/cycle_{cycle}/test_data.pt",
                 f"results/data/base/cycle_{cycle}/calib_data.pt",
+                *base_graph_figures(f"results/data/base/cycle_{cycle}", n_splits),
             ],
         }
     # Add performance analysis stage

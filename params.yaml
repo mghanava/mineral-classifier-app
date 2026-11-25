@@ -9,8 +9,9 @@ data:
     quantile_range:
       - 25.0
       - 75.0
-  make_edge_weight: true
-  make_edge_weight_method: minmax # Options: minmax, standard, softmax, log, None
+  edge_affinity:
+    method: inverse_quadratic # Use unit with scale: null for unit edge weights
+    scale: 460.0 # Synthetic coordinate units
   base:
     radius: 2500
     depth: -500

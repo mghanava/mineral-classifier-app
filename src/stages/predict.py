@@ -16,6 +16,11 @@ from src.utilities.general_utils import (
     load_data,
     load_params,
 )
+from src.utilities.graph_protocol import (
+    model_graph_settings,
+    resolve_graph_protocol,
+    verify_graph,
+)
 from src.utilities.model_bundle import load_model_bundle, verified_calibrator
 from src.utilities.pred_utils import prediction
 from src.utilities.raw_graphs import model_graph, read_raw_graph, synthetic_schema
@@ -50,8 +55,9 @@ def run_prediction(paths: dict, params: dict, model_name: str):
 
     """
     base_params = params["data"]["base"]
-    model_params = params["models"][model_name]
-    model_params["add_self_loops"] = params.get("add_self_loops", True)
+    protocol = resolve_graph_protocol(params)
+    settings = model_graph_settings(protocol, model_name, params)
+    model_params = {**params["models"][model_name], "add_self_loops": False}
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 
@@ -62,8 +68,9 @@ def run_prediction(paths: dict, params: dict, model_name: str):
         raise ValueError(
             "Prediction observations do not match the configured feature or class schema."
         )
+    verify_graph(pred_data, protocol, "prediction")
     model = get_model(model_name, model_params)
-    state, bundle = load_model_bundle(Path(paths["model"]), model, *schema)
+    state, bundle = load_model_bundle(Path(paths["model"]), model, *schema, settings)
     if getattr(pred_data, "source_parent_sha256", None) != state.dataset_sha256:
         raise ValueError(
             "Prediction batch was generated for a different base cycle. Regenerate it."
@@ -77,7 +84,7 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     print(f"Using device {device} ...")
 
     prediction(
-        pred_data=model_graph(pred_data, raw, state).to(device),
+        pred_data=model_graph(pred_data, raw, state, settings).to(device),
         model=model.to(device),
         calibrator_path=calibrator,
         class_names=list(raw.class_names),

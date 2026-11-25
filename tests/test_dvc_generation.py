@@ -17,7 +17,11 @@ def test_generate_pipeline(
 ) -> None:
     """Generate configured stages and connect training to prior-cycle data."""
     monkeypatch.chdir(tmp_path)
-    config = {"cycles": cycles, "default_model": model}
+    config = {
+        "cycles": cycles,
+        "default_model": model,
+        "data": {"base": {"n_splits": 3}},
+    }
     (tmp_path / "params.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
 
     generate_fine_grained_dvc_yaml()
@@ -47,13 +51,15 @@ def test_generate_pipeline(
         assert f"results/trained/cycle_{cycle}" in train["outs"]
 
         preprocess = f"results/trained/cycle_{cycle}/preprocessing.json"
+        graph_binding = f"results/trained/cycle_{cycle}/graph_binding.json"
         evaluation = stages[f"evaluate_cycle_{cycle}"]
-        assert {preprocess, *training_deps} <= set(evaluation["deps"])
+        assert {preprocess, graph_binding, *training_deps} <= set(evaluation["deps"])
         assert f"results/evaluation/cycle_{cycle}" in evaluation["outs"]
         prediction = stages[f"predict_cycle_{cycle}"]
         calibration = f"results/evaluation/cycle_{cycle}"
         assert {
             preprocess,
+            graph_binding,
             f"{calibration}/calibration_binding.json",
             f"{calibration}/calibrator.pt",
         } <= set(prediction["deps"])
@@ -67,9 +73,19 @@ def test_generate_pipeline(
         assert auxiliaries | {f"{base}/base_data.pt"} <= set(generation["deps"])
         assert not any("results/trained" in dep for dep in generation["deps"])
         assert not any("data.scaler" in parameter for parameter in generation["params"])
+        assert "data.edge_affinity" in generation["params"]
+        assert (
+            f"results/data/prediction/cycle_{cycle}/prediction_data_graph.json"
+            in generation["outs"]
+        )
+        assert (
+            f"results/data/base/cycle_{cycle}/train_graph_1.html"
+            in stages[f"prepare_next_cycle_data_{cycle}"]["outs"]
+        )
         drift = stages[f"analyze_drift_cycle_{cycle}"]
         assert {
             preprocess,
+            graph_binding,
             f"results/trained/cycle_{cycle}/model.pt",
             f"{base}/base_data.pt",
             f"results/data/prediction/cycle_{cycle}/pred_data.pt",
@@ -141,15 +157,16 @@ with Path("calls.txt").open("a") as log:
 
 preprocessing = Path("results/trained/cycle_1/preprocessing.json")
 sidecars = {
-    "train_cycle_1": ("model.pt", "preprocessing.json"),
+    "train_cycle_1": ("model.pt", "preprocessing.json", "graph_binding.json"),
     "evaluate_cycle_1": ("calibrator.pt", "calibration_binding.json"),
     "predict_cycle_1": ("predictions.csv",),
     "analyze_drift_cycle_1": ("drift_metadata.json",),
 }
 for output in map(Path, spec["outs"]):
     if stage not in sidecars:
+        graph_config = yaml.safe_load(Path("params.yaml").read_text())["data"]["edge_affinity"]
         output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(stage)
+        output.write_text(stage + str(graph_config))
         continue
     output.mkdir(parents=True, exist_ok=True)
     for name in sidecars[stage]:
@@ -179,9 +196,16 @@ for output in map(Path, spec["outs"]):
     }
     assert sorted(calls.read_text(encoding="utf-8").splitlines()) == sorted(expected)
 
+    calls.write_text("", encoding="utf-8")
+    config["data"]["edge_affinity"]["scale"] = 461.0
+    params.write_text(yaml.safe_dump(config), encoding="utf-8")
+    dvc("repro", "--no-run-cache")
+    assert sorted(calls.read_text(encoding="utf-8").splitlines()) == sorted(names)
+
     # Restore only disposable fixture outputs from the temporary DVC cache.
     for path in (
         Path("results/trained/cycle_1/preprocessing.json"),
+        Path("results/trained/cycle_1/graph_binding.json"),
         Path("results/evaluation/cycle_1/calibration_binding.json"),
         Path("results/drift_analysis/cycle_1/drift_metadata.json"),
     ):
@@ -190,6 +214,7 @@ for output in map(Path, spec["outs"]):
     dvc("checkout")
     for path in (
         Path("results/trained/cycle_1/preprocessing.json"),
+        Path("results/trained/cycle_1/graph_binding.json"),
         Path("results/evaluation/cycle_1/calibration_binding.json"),
         Path("results/drift_analysis/cycle_1/drift_metadata.json"),
     ):
