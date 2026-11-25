@@ -16,6 +16,12 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 - Added a scientific stabilization milestone with seven work items before configuration management.
 - Removed executable permissions from `AGENTS.md`, `ROADMAP.md` and `CHANGELOG.md`.
 
+### Fixed
+
+- Initialize a fresh model for each cross-validation fold alongside its own optimizer, learning-rate scheduler and early stopper.
+- Copy best-epoch weights independently of live CPU parameters and include the stopping epoch in fold diagnostics. The existing `model.pt` now contains the restored weights of the independently trained fold with the lowest validation loss.
+- Restore training mode before every epoch so dropout and batch normalization use training behavior after each validation pass. A three-epoch CPU test checks the model mode and gradient state of every forward pass.
+
 ## [0.1.0]
 
 Original research-oriented application; baseline summary based on existing project documentation and prior repository review. The `v0.1.0` tag points to baseline commit `d00c2cd`.

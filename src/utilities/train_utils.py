@@ -131,8 +131,8 @@ def train(
         patience=patience_early_stopping, min_delta=min_delta_early_stopping
     )
     # Training phase
-    model.train()
     for epoch in range(n_epochs):
+        model.train()
         optimizer.zero_grad()
         logits_train = model(train_data)
         loss = criterion_train(logits_train, y_true_train)
@@ -190,10 +190,21 @@ def train(
                 sample_weight=sample_weights_val,
             )
 
-        # Save best model state
-        if loss_val < best_loss_val:
-            best_loss_val = loss_val
-            best_model_state = {k: v.cpu() for k, v in model.state_dict().items()}
+        validation_loss = loss_val.item()
+        if validation_loss < best_loss_val:
+            best_loss_val = validation_loss
+            best_model_state = {
+                name: value.detach().to(device="cpu", copy=True)
+                for name, value in model.state_dict().items()
+            }
+
+        training_losses.append(loss.item())
+        validation_losses.append(validation_loss)
+        validation_accuracies.append(acc)
+        validation_f1_scores.append(f1)
+        validation_mcc.append(mcc)
+        validation_ece.append(ece)
+        validation_mce.append(mce)
 
         # Update learning rate based on validation loss
         scheduler.step(loss_val)
@@ -210,14 +221,6 @@ def train(
             print(f"\nEarly stopping triggered after {epoch + 1} epochs!")
             print(f"Best validation loss achieved: {early_stopping.best_score:.4f}.")
             break
-
-        training_losses.append(loss.item() if loss else 0)
-        validation_losses.append(loss_val.item() if loss else 0)
-        validation_accuracies.append(acc)
-        validation_f1_scores.append(f1)
-        validation_mcc.append(mcc)
-        validation_ece.append(ece)
-        validation_mce.append(mce)
 
     training_plots_path = os.path.join(
         save_path, f"training_plots_dataset_{dataset_idx}.png"

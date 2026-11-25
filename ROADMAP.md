@@ -24,12 +24,18 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 ### Milestone 1 — Scientific correctness and regression tests (`0.2.0.dev1`)
 
 - [x] **M1.1 — Automated regression tests.** Added deterministic CPU checks for GCN and GAT forward passes, edge validity, partition disjointness, feature and label alignment, and induced subgraphs. Added DVC generation tests for one and two cycles and a Streamlit empty-results test using temporary directories.
-- [ ] **M1.2 — Cross-validation fold independence.** Initialize independent model and training state for each fold and verify held-out samples cannot influence their own validation through earlier folds.
+- [x] **M1.2 — Cross-validation fold independence.** Each fold starts with a fresh model, optimizer, scheduler and early stopper. CPU regression coverage checks fold-specific metrics and checkpoint selection.
+- [x] **M1.2a — Correct training and evaluation mode transitions.** Restore training mode at the start of every epoch. A three-epoch CPU regression test verifies that training and gradient-free validation alternate in the correct modes.
 - [ ] **M1.3 — Preprocessing and inference consistency.** Fit preprocessing on eligible training data and reuse fitted state for validation, calibration, test and prediction. Verify feature order and class mapping.
 - [ ] **M1.4 — Graph construction and leakage review.** Define the intended graph protocol and verify graph statistics, edges and message passing respect partition boundaries.
+- [ ] **M1.4a — Full development-pool retraining.** After the graph leakage review and before end-to-end verification, train a fresh final model on the full development graph with a duration informed by cross-validation. Exclude calibration and test nodes.
 - [ ] **M1.5 — DVC dependencies and artifact declarations.** Declare required source, parameter and artifact dependencies. Verify restoration of artifacts used by downstream stages and the dashboard.
 - [ ] **M1.6 — Reproducibility and error handling.** Record relevant seeds and configuration, test repeatability where feasible and propagate pipeline failures to the dashboard.
 - [ ] **M1.7 — Small end-to-end pipeline verification.** Run an isolated CPU synthetic cycle and verify training, evaluation, calibration, prediction and drift artifacts.
+
+**Interim checkpoint policy.** Each fold restores its lowest-validation-loss epoch. The training stage writes the fold with the lowest such loss to the existing `model.pt` and logs the selected fold and loss. Ties favor the earliest epoch and earliest fold. Evaluation and prediction continue to consume the same weights-only artifact. This selects a model trained on a single fold's training subset, and the selected loss is optimistic as an estimate of generalization because it was used for selection.
+
+**M1.4a implementation notes.** Persist an explicit development-pool graph that excludes calibration and test nodes. Record fold-best epochs and agree on how to derive the refit duration and learning-rate schedule. Train a freshly initialized model on the full development graph with a fixed-duration path that does not require a validation graph. Track the graph and refit inputs in DVC while retaining `model.pt` for evaluation and prediction. The current training stage consumes fold pairs only, and the existing base graph includes held-out nodes. Scaling and graph leakage are tracked in M1.3 and M1.4.
 
 **Acceptance:** The CPU regression suite passes, scientific protocol changes are documented and tested, and a small synthetic run verifies the path from data generation through prediction and drift analysis.
 
