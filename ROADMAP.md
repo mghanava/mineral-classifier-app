@@ -49,13 +49,11 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 
 ### Milestone 2 — Configuration management (`0.2.0.dev2`)
 
-- [ ] Audit existing YAML keys, defaults, consumers and valid combinations.
-- [ ] Introduce a typed, validated configuration layer (use an existing dependency if adequate; propose Pydantic if needed).
-- [ ] Add Quick, Balanced and Research presets; choose actual values after examining current defaults and feasibility.
-- [ ] Provide basic settings, grouped advanced settings and expert YAML import/export.
-- [ ] Validate model-specific and data-source-specific parameters; avoid exposing irrelevant controls.
-- [ ] Preserve legacy YAML compatibility and save resolved configuration snapshots.
-- [ ] Test defaults, invalid combinations, preset resolution and YAML round trips.
+- [x] **M2.1 — Configuration inventory and design.** Document all existing parameters, actual consumers, conditional behavior, preset recommendations and compatibility in the [configuration design](docs/configuration_design.md).
+- [ ] **M2.2 — Centralized configuration validation.** Add a shared validation layer for types, ranges and conditional combinations while preserving resolved YAML compatibility.
+- [ ] **M2.3 — Experiment presets.** Implement Quick demo, Standard and Research using explicit overlays and coordinated budgets.
+- [ ] **M2.4 — Configuration resolution and integration.** Resolve defaults, presets and overrides for Streamlit and CLI use. Preserve expert editing and preview the complete configuration before applying it.
+- [ ] **M2.5 — Regression and production verification.** Verify round trips, defaults, preset behavior, DVC compatibility and reduced production runs.
 
 **Acceptance:** A user can configure a synthetic run without editing YAML; the legacy configuration remains usable; invalid settings fail before computation; scientific defaults are preserved or changes are explicitly documented.
 
