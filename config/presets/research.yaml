@@ -1,0 +1,5 @@
+id: research
+version: 1
+display_name: Research
+description: Use the complete released scientific defaults and their original budgets.
+overrides: {}

@@ -52,7 +52,7 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 - [x] **M2.1 — Configuration inventory and design.** Document all existing parameters, actual consumers, conditional behavior, preset recommendations and compatibility in the [configuration design](docs/configuration_design.md).
 - [x] **M2.1a — Multiclass isotonic calibration.** Verified and corrected per-class inference, row normalization and handling of undefined rows. Confirmed existing artifact compatibility.
 - [x] **M2.2 — Centralized configuration validation.** Pin the canonical release defaults and validate the 88-leaf resolved configuration with structured static findings. Preserve runtime and expert compatibility as described in the [configuration design](docs/configuration_design.md#m22-static-validation).
-- [ ] **M2.3 — Experiment presets.** Implement Quick demo, Standard and Research using explicit overlays and coordinated budgets.
+- [x] **M2.3 — Experiment presets.** Distribute and validate version-1 overlays for Quick demo, Standard and Research against the canonical defaults. See the [preset contract](docs/configuration_design.md#m23-experiment-presets).
 - [ ] **M2.4 — Configuration resolution and integration.** Resolve defaults, presets and overrides for Streamlit and CLI use. Preserve expert editing and preview the complete configuration before applying it.
 - [ ] **M2.5 — Regression and production verification.** Verify round trips, defaults, preset behavior, DVC compatibility and reduced production runs.
 

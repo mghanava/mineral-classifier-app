@@ -1,0 +1,21 @@
+id: quick_demo
+version: 1
+display_name: Quick demo
+description: Run the verified two-cycle CPU GCN demonstration with reduced budgets.
+overrides:
+  default_model: gcn
+  device: cpu
+  cycles: 2
+  data:
+    base:
+      n_samples: 400
+      n_splits: 3
+    pred:
+      n_samples: 100
+  train:
+    n_epochs: 15
+    patience_early_stopping: 5
+  evaluate:
+    n_epochs: 20
+  analyze_drift:
+    n_permutations: 19

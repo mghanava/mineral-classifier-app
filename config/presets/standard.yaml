@@ -1,0 +1,21 @@
+id: standard
+version: 1
+display_name: Standard
+description: Run a two-cycle GCN experiment with intermediate sample and iteration budgets.
+overrides:
+  default_model: gcn
+  device: auto
+  cycles: 2
+  data:
+    base:
+      n_samples: 700
+      n_splits: 3
+    pred:
+      n_samples: 150
+  train:
+    n_epochs: 100
+    patience_early_stopping: 20
+  evaluate:
+    n_epochs: 100
+  analyze_drift:
+    n_permutations: 199

@@ -8,6 +8,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Distribute version-1 Quick demo, Standard and Research presets with a read-only application API and shared static validation. Quick demo matches the verified M1.7 Experiment A settings, and Research inherits the complete canonical configuration.
 - Pin the v0.2.0.dev1 configuration in `config/defaults.yaml` and add a shared static validator for the complete resolved synthetic configuration. Return path-specific errors, warnings and informational findings while preserving active YAML, scientific defaults and existing pipeline behavior.
 
 ### Fixed

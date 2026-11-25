@@ -148,9 +148,11 @@ Use **Holdout share of full base** for `test_size`, **Calibration share of holdo
 
 Predict counts using the realized base size where available. For fractional holdout `h` and calibration share `c`, sklearn first rounds up `N × h` and then rounds up `holdout × c`. For integers use exact requested counts, and for null retain sklearn's 25% fallback at the relevant split. Present integer/count and null choices in expert editing. Check class feasibility using realized labels, including the parametric calibrator's internal split and per-fold training support. Stratification can fail for small classes or partitions even when the total size appears sufficient. Preserve split order, seed behavior and changing populations across cycles.
 
-## Proposed presets
+## M2.3 experiment presets
 
-The proposed presets are overlays on the canonical snapshot. Values below are recommendations for later implementation, with all unlisted settings inherited from the baseline. A preset controls effort and workflow scope; it is not an accuracy ranking.
+The distributed version-1 presets live under [config/presets](../config/presets). Each YAML document has five fields. The stable `id` matches the filename stem. The `version` is a positive integer, `display_name` and `description` are nonblank strings, and `overrides` is a nested mapping in the existing scientific configuration shape. Unlisted settings inherit [config/defaults.yaml](../config/defaults.yaml).
+
+Preset selection is independent of Basic, Advanced and Expert parameter visibility. Each preset controls the experiment's scope and computational effort. Accuracy depends on the realized data and evaluation protocol.
 
 | YAML path | Quick demo | Standard | Research |
 | --- | ---: | ---: | ---: |
@@ -167,9 +169,21 @@ The proposed presets are overlays on the canonical snapshot. Values below are re
 | `analyze_drift.early_stopping.enabled` | true | true | true |
 | `analyze_drift.early_stopping.min_permutations` | 100 | 100 | 100 |
 
-Quick demo is the verified two-cycle CPU GCN Experiment A configuration. Its 19 permutations all run because the early-stop minimum is 100. Training scheduler patience 20 and calibration early-stop patience 100 also remain inherited, beyond the respective 15- and 20-epoch budgets. Retaining those settings preserves the verified configuration. Two cycles expose performance aggregation. The verified one-cycle GAT CPU and GCN CUDA variants are possible explicit overrides, with no aggregation plot for one cycle. The bootstrap floor remains 50, the scaler remains RobustScaler, graph connectivity/affinity remain unchanged, and calibration remains Dirichlet. Seeds stay 110 for bootstrap and partitioning and 42 elsewhere. [M1.7 verification report](end_to_end_verification.md)
+- **Quick demo** (`quick_demo`) runs the verified two-cycle CPU GCN demonstration. Its complete resolved settings match the retained M1.7 Experiment A configuration. It keeps the original drift minimum of 100, so all 19 permutations run. The shared validator also warns about the training scheduler and the calibration scheduler and early-stop budgets. Two cycles expose performance aggregation. [M1.7 verification report](end_to_end_verification.md)
+- **Standard** (`standard`) uses intermediate sample and iteration budgets. Its drift stop can activate after 100 of up to 199 permutations. Inherited calibration early-stopping patience produces a static warning. The approximate 3–5 minute CPU runtime is an initial design target. M2.5 will measure runtime, check realized calibration populations and review the interaction between the training scheduler and stopping controls.
+- **Research** (`research`) has empty overrides and retains the canonical configuration in full. Full default-budget reproduction remains to be verified in M2.5.
 
-Standard is an unverified intermediate budget. It keeps the existing scheduler patience and allows the original drift stop rule to activate after 100 of up to 199 permutations. Review the training stop/scheduler interaction and actual calibration populations during M2.5. Changing calibration method changes whether an epoch budget is relevant. Larger populations and exact transport can materially increase runtime. Research is proposed to preserve the complete canonical snapshot, whose full default-budget reproduction is still pending.
+All three inherit the 50-per-class bootstrap floor, RobustScaler, the graph protocol, Dirichlet calibration, and the existing seed values and scopes.
+
+### Loading and application
+
+[`src.presets`](../src/presets.py) exposes `list_presets()` for stable identifiers in display order and `load_preset(preset_id)` for an `ExperimentPreset` with metadata and overrides. Unknown identifiers and malformed YAML, duplicate keys, incorrect metadata and non-mapping overrides raise `ValueError` with context.
+
+`apply_preset(preset)` reads fresh canonical defaults and returns an `AppliedPreset` with `configuration` and `validation`. Nonempty nested mappings update the corresponding settings. Explicit null, scalars, lists and empty nested mappings replace the corresponding value. Only scientific overrides enter the resolved configuration. The shared validator handles scientific types, paths, ranges and cross-field conditions. Callers use `validation.is_valid` before consuming the configuration and can render structured errors, warnings and informational findings. Each call returns an independent configuration. Application reads distributed files by repository path and leaves the active configuration and caller's mappings intact.
+
+### Versioning and experiment records
+
+A preset's identifier and version identify its effective settings. Increment the version when those settings change, including when a change to inherited defaults changes the preset's resolved configuration. Save the complete resolved configuration as the authoritative experiment record.
 
 ## M2.2 static validation
 
@@ -194,7 +208,7 @@ The proposed stricter policies for learning rates, clipping norms, scheduler fac
 
 ### Future resolver and integration
 
-M2.3 will define the approved preset names, versioning, and overlays independently of the active experiment. M2.4 will decide how to load legacy configurations with omitted fallback fields, apply defaults, presets and overrides, and preview and persist the complete resolved mapping through the CLI and Streamlit. Treat explicit null, zero, false and empty collections as actual values. Replace sequences as units and treat scaler options as a method-owned mapping when changing scalers. Keep preset metadata, effective devices and realized counts outside DVC-tracked YAML. The M2.2 validator has no preset resolution, implicit legacy defaults, persistence, or pipeline integration.
+M2.4 will decide how to load legacy configurations with omitted fallback fields, combine the distributed presets with explicit user overrides, and preview and persist the complete resolved mapping through the CLI and Streamlit. Treat explicit null, zero, false and empty collections as actual values. Replace sequences as units and treat scaler options as a method-owned mapping when changing scalers. Keep preset metadata, effective devices and realized counts outside DVC-tracked YAML. The M2.2 validator has no preset resolution, implicit legacy defaults, persistence, or pipeline integration.
 
 ### DVC boundary
 
@@ -210,8 +224,7 @@ M2.3 will define the approved preset names, versioning, and overlays independent
 
 ### Open decisions
 
-- Decide how to version presets without changing the meaning of older experiments.
-- Confirm Standard's runtime target and preset budgets after measurement. Decide whether unreachable stopping controls should warn only or be visually marked inactive in new drafts.
+- Measure Standard's CPU runtime in M2.5 against the initial 3–5 minute design target. Decide whether unreachable stopping controls should warn only or be visually marked inactive in new drafts.
 - Define expert import rules for omitted runtime fallback fields and migration guidance for unknown or misplaced keys. Preserve the static dual-Wasserstein warning and existing precedence.
 - Decide how a future guided selector should explain isotonic zero-mass rows. Selecting a fallback distribution would require a separate methodological decision.
 - Decide when to promote generated class names, seeds, and simulation geometry to the guided workflow, and whether to support a distinct bootstrap-only mode.
