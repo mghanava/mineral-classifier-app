@@ -11,6 +11,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 - Deterministic CPU regression tests for GCN and GAT forward passes, graph edges, dataset partition disjointness, feature and label alignment, and induced subgraphs.
 - Isolated DVC pipeline generation checks and a Streamlit rendering test for missing artifacts.
 - Standalone fold-local preprocessing for RobustScaler, StandardScaler, MinMaxScaler and disabled scaling, with immutable raw data and partition contracts, validated model-bound JSON and deterministic CPU coverage.
+- Standalone independent spatial graph construction with KNN, fixed-radius and per-node percentile rules, bounded or unit edge affinities, explicit self-loops, unique-edge statistics and CPU regression coverage.
 
 ### Changed
 
