@@ -183,13 +183,14 @@ def generate_fine_grained_dvc_yaml():
                 "src/stages/analyze_drift.py",
                 "src/utilities/drift_detection_utils.py",
                 "src/utilities/general_utils.py",
-                f"results/data/base/cycle_{cycle - 1}/base_data.pt"
-                if cycle > 1
-                else "results/data/base/cycle_0/base_data.pt",
+                *bundle_helpers,
+                *model_bundle,
+                f"{base}/base_data.pt",
                 f"results/data/prediction/cycle_{cycle}/pred_data.pt",
             ],
             "params": [
                 "analyze_drift",
+                *model_schema,
             ],
             "outs": [
                 f"results/drift_analysis/cycle_{cycle}",

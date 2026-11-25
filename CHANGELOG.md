@@ -15,12 +15,14 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 ### Changed
 
 - Store canonical float64 synthetic observations and stable sample IDs across cycles. Training publishes the winning fold's scaler with its weights, and evaluation and prediction verify and reuse that scaler. Calibration records its fitted split and exact bundle digests.
-- Updated the affected DVC dependencies and temporarily disabled the drift stage until it can compare multivariate inputs in a shared feature space. Legacy generated data and checkpoints require regeneration for the new contracts.
-
+- Restored drift analysis using raw marginal features and the same frozen model transform for both populations' multivariate statistics and plots. Drift records dataset, checkpoint and representation provenance.
+- Updated preprocessing-related DVC dependencies and verified invalidation and sidecar restoration with a temporary fixture pipeline. Legacy generated data and checkpoints require regeneration.
 - Added a scientific stabilization milestone with seven work items before configuration management.
 - Removed executable permissions from `AGENTS.md`, `ROADMAP.md` and `CHANGELOG.md`.
 
 ### Fixed
+
+- Use the selected Wasserstein statistic for both the observed comparison and its permutations.
 
 - Initialize a fresh model for each cross-validation fold alongside its own optimizer, learning-rate scheduler and early stopper.
 - Copy best-epoch weights independently of live CPU parameters and include the stopping epoch in fold diagnostics. The existing `model.pt` now contains the restored weights of the independently trained fold with the lowest validation loss.

@@ -26,12 +26,12 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 - [x] **M1.1 — Automated regression tests.** Added deterministic CPU checks for GCN and GAT forward passes, edge validity, partition disjointness, feature and label alignment, and induced subgraphs. Added DVC generation tests for one and two cycles and a Streamlit empty-results test using temporary directories.
 - [x] **M1.2 — Cross-validation fold independence.** Each fold starts with a fresh model, optimizer, scheduler and early stopper. CPU regression coverage checks fold-specific metrics and checkpoint selection.
 - [x] **M1.2a — Correct training and evaluation mode transitions.** Restore training mode at the start of every epoch. A three-epoch CPU regression test verifies that training and gradient-free validation alternate in the correct modes.
-- [ ] **M1.3 — Preprocessing and inference consistency.**
+- [x] **M1.3 — Preprocessing and inference consistency.**
   - [x] **M1.3a — Design audit.** Traced scaling, graph and artifact interfaces and documented the proposed cutover in [preprocessing design](docs/preprocessing_design.md).
-  - [ ] **M1.3b — Implementation.**
+  - [x] **M1.3b — Implementation.**
     - [x] **M1.3b-i — Preprocessing utilities and artifact contracts.** Add validated raw and partition contracts, fold-local scaler fitting, frozen transforms and versioned JSON bound to model weights.
     - [x] **M1.3b-ii — Raw data, training and inference integration.** Preserve raw observations and IDs across cycles, fit per fold, publish the winning scaler with its model, and reuse it for calibration, test and prediction. Track the new artifact dependencies and suspend drift scoring until M1.3b-iii.
-    - [ ] **M1.3b-iii — Drift, DVC integration and lifecycle verification.** Use raw features for marginal drift diagnostics and the same frozen model transform on both sides of multivariate comparisons. Verify dependencies, artifact restoration and the cycle lifecycle.
+    - [x] **M1.3b-iii — Drift, DVC integration and lifecycle verification.** Restored drift with raw marginals and a shared frozen transform for multivariate diagnostics. CPU fixtures verified drift routing, DVC invalidation and sidecar restoration.
 - [ ] **M1.4 — Graph construction and leakage review.** Define the intended graph protocol and verify graph statistics, edges and message passing respect partition boundaries.
 - [ ] **M1.4a — Full development-pool retraining.** After the graph leakage review and before end-to-end verification, train a fresh final model on the full development graph with a duration informed by cross-validation. Exclude calibration and test nodes.
 - [ ] **M1.5 — DVC dependencies and artifact declarations.** Declare required source, parameter and artifact dependencies. Verify restoration of artifacts used by downstream stages and the dashboard.

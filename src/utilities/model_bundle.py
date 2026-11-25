@@ -36,6 +36,24 @@ def _read_artifact(path: Path, recovery: str) -> bytes:
         raise ValueError(f"Cannot read required artifact {path}. {recovery}") from exc
 
 
+def read_model_bundle(
+    directory: Path,
+    feature_names: tuple[str, ...],
+    class_names: tuple[str, ...],
+) -> tuple[FittedPreprocessing, dict[str, str], bytes]:
+    """Verify the exact checkpoint and sidecar bytes without loading a model."""
+    weights = _read_artifact(directory / "model.pt", "Retrain for M1.3.")
+    sidecar = _read_artifact(directory / "preprocessing.json", "Retrain for M1.3.")
+    state = load_preprocessing(
+        sidecar, weights, feature_names=feature_names, class_names=class_names
+    )
+    digests = {
+        "weights_sha256": hashlib.sha256(weights).hexdigest(),
+        "preprocessing_sha256": hashlib.sha256(sidecar).hexdigest(),
+    }
+    return state, digests, weights
+
+
 def load_model_bundle(
     directory: Path,
     model: Module,
@@ -43,18 +61,11 @@ def load_model_bundle(
     class_names: tuple[str, ...],
 ) -> tuple[FittedPreprocessing, dict[str, str]]:
     """Verify the sidecar against the same checkpoint bytes loaded into the model."""
-    weights = _read_artifact(directory / "model.pt", "Retrain for M1.3.")
-    sidecar = _read_artifact(directory / "preprocessing.json", "Retrain for M1.3.")
-    state = load_preprocessing(
-        sidecar, weights, feature_names=feature_names, class_names=class_names
-    )
+    state, digests, weights = read_model_bundle(directory, feature_names, class_names)
     model.load_state_dict(
         torch.load(BytesIO(weights), weights_only=True, map_location="cpu")
     )
-    return state, {
-        "weights_sha256": hashlib.sha256(weights).hexdigest(),
-        "preprocessing_sha256": hashlib.sha256(sidecar).hexdigest(),
-    }
+    return state, digests
 
 
 def write_calibration_binding(

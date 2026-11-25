@@ -120,10 +120,18 @@ stages:
     - src/stages/analyze_drift.py
     - src/utilities/drift_detection_utils.py
     - src/utilities/general_utils.py
+    - src/utilities/model_bundle.py
+    - src/utilities/raw_graphs.py
+    - src/utilities/preprocessing.py
+    - results/trained/cycle_1/model.pt
+    - results/trained/cycle_1/preprocessing.json
     - results/data/base/cycle_0/base_data.pt
     - results/data/prediction/cycle_1/pred_data.pt
     params:
     - analyze_drift
+    - data.base.n_features
+    - data.base.n_classes
+    - data.base.class_names
     outs:
     - results/drift_analysis/cycle_1
   prepare_next_cycle_data_1:
@@ -247,10 +255,18 @@ stages:
     - src/stages/analyze_drift.py
     - src/utilities/drift_detection_utils.py
     - src/utilities/general_utils.py
+    - src/utilities/model_bundle.py
+    - src/utilities/raw_graphs.py
+    - src/utilities/preprocessing.py
+    - results/trained/cycle_2/model.pt
+    - results/trained/cycle_2/preprocessing.json
     - results/data/base/cycle_1/base_data.pt
     - results/data/prediction/cycle_2/pred_data.pt
     params:
     - analyze_drift
+    - data.base.n_features
+    - data.base.n_classes
+    - data.base.class_names
     outs:
     - results/drift_analysis/cycle_2
   prepare_next_cycle_data_2:
@@ -374,10 +390,18 @@ stages:
     - src/stages/analyze_drift.py
     - src/utilities/drift_detection_utils.py
     - src/utilities/general_utils.py
+    - src/utilities/model_bundle.py
+    - src/utilities/raw_graphs.py
+    - src/utilities/preprocessing.py
+    - results/trained/cycle_3/model.pt
+    - results/trained/cycle_3/preprocessing.json
     - results/data/base/cycle_2/base_data.pt
     - results/data/prediction/cycle_3/pred_data.pt
     params:
     - analyze_drift
+    - data.base.n_features
+    - data.base.n_classes
+    - data.base.class_names
     outs:
     - results/drift_analysis/cycle_3
   prepare_next_cycle_data_3:

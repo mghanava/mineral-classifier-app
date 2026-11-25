@@ -11,7 +11,6 @@ for detecting and visualizing distribution shifts between two datasets, includin
 """
 
 import os
-import warnings
 
 import numpy as np
 import ot
@@ -23,8 +22,6 @@ from scipy.stats import entropy
 from sklearn.decomposition import PCA, KernelPCA
 from sklearn.feature_selection import mutual_info_regression
 from torch_geometric.data import Data
-
-warnings.filterwarnings("ignore")
 
 
 class AnalyzeDrift:
@@ -57,11 +54,20 @@ class AnalyzeDrift:
             feature_names: List of feature names. If None, default names are generated.
             gamma: Parameter for RBF kernel. If None, median heuristic is used.
             n_permutations: Number of permutations for statistical tests.
+            use_max_sliced_wasserstein: Select maximum sliced transport distance.
+            use_sinkhorn_wasserstein: Select regularized transport cost.
+            n_projections: Number of projections for maximum sliced distance.
+            sinkhorn_wasserstein_reg: Regularization in squared feature-space units.
+            early_stopping_config: Permutation early-stopping settings.
             save_path: Directory path to save analysis results. If None, results aren't saved.
 
         """
-        self.use_max_sliced_wasserstein = use_max_sliced_wasserstein
-        self.use_sinkhorn_wasserstein = use_sinkhorn_wasserstein
+        if use_max_sliced_wasserstein:
+            self.wasserstein_method = "max_sliced_wasserstein"
+        elif use_sinkhorn_wasserstein:
+            self.wasserstein_method = "sinkhorn_wasserstein"
+        else:
+            self.wasserstein_method = "wasserstein"
         self.n_permutations = n_permutations
         self.n_projections = n_projections
         self.sinkhorn_wasserstein_reg = sinkhorn_wasserstein_reg
@@ -93,8 +99,11 @@ class AnalyzeDrift:
                 )
         else:
             self.gamma = gamma
-        if feature_names is None:
-            self.feature_names = [f"Feature_{i}" for i in range(self.n_features)]
+        self.feature_names = (
+            feature_names
+            if feature_names is not None
+            else [f"Feature_{i}" for i in range(self.n_features)]
+        )
         self.save_path = save_path
 
     def _mmd_unbiased(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
@@ -148,16 +157,16 @@ class AnalyzeDrift:
         return (2 * dXY - dXX - dYY).item()
 
     def _wasserstein_1d(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
-        a = torch.ones(self.n1) / self.n1
-        b = torch.ones(self.n2) / self.n2
+        a = X1.new_full((len(X1),), 1 / len(X1))
+        b = X2.new_full((len(X2),), 1 / len(X2))
         return ot.emd2_1d(X1, X2, a, b).item()  # type: ignore
 
     def _max_sliced_wasserstein(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
         if X1.shape[1] == 1:
             # For 1D, just use regular Wasserstein
             return self._wasserstein_1d(X1.squeeze(), X2.squeeze())
-        a = torch.ones(self.n1) / self.n1
-        b = torch.ones(self.n2) / self.n2
+        a = X1.new_full((len(X1),), 1 / len(X1))
+        b = X2.new_full((len(X2),), 1 / len(X2))
         return ot.max_sliced_wasserstein_distance(
             X1, X2, a, b, self.n_projections
         ).item()  # type: ignore
@@ -166,8 +175,8 @@ class AnalyzeDrift:
         if X1.shape[1] == 1:
             # For 1D, just use regular Wasserstein
             return self._wasserstein_1d(X1.squeeze(), X2.squeeze())
-        a = torch.ones(self.n1) / self.n1
-        b = torch.ones(self.n2) / self.n2
+        a = X1.new_full((len(X1),), 1 / len(X1))
+        b = X2.new_full((len(X2),), 1 / len(X2))
         M = ot.dist(X1, X2, metric="sqeuclidean")
         return ot.sinkhorn2(a, b, M, self.sinkhorn_wasserstein_reg).item()  # type: ignore
 
@@ -185,8 +194,8 @@ class AnalyzeDrift:
         if X1.shape[1] == 1:
             # For 1D, just use regular Wasserstein
             return self._wasserstein_1d(X1.squeeze(), X2.squeeze())
-        a = torch.ones(self.n1) / self.n1
-        b = torch.ones(self.n2) / self.n2
+        a = X1.new_full((len(X1),), 1 / len(X1))
+        b = X2.new_full((len(X2),), 1 / len(X2))
         M = ot.dist(X1, X2, metric="sqeuclidean")
         return ot.emd2(a, b, M).item()  # type: ignore
 
@@ -203,16 +212,14 @@ class AnalyzeDrift:
         # Combine samples for permutation
         if self.X1_scaled is None or self.X2_scaled is None:
             raise ValueError("self.X1_scaled and self.X2_scaled must not be None.")
-        if method == "mmd":
-            observed_stat = self._mmd_unbiased(self.X1_scaled, self.X2_scaled)
-        elif method == "energy":
-            observed_stat = self._energy_statistic(self.X1_scaled, self.X2_scaled)
-        elif method == "max_sliced_wasserstein":
-            observed_stat = self._max_sliced_wasserstein(self.X1_scaled, self.X2_scaled)
-        elif method == "sinkhorn_wasserstein":
-            observed_stat = self._sinkhorn_wasserstein(self.X1_scaled, self.X2_scaled)
-        else:
-            observed_stat = self._wasserstein_distance(self.X1_scaled, self.X2_scaled)
+        statistic = {
+            "mmd": self._mmd_unbiased,
+            "energy": self._energy_statistic,
+            "max_sliced_wasserstein": self._max_sliced_wasserstein,
+            "sinkhorn_wasserstein": self._sinkhorn_wasserstein,
+            "wasserstein": self._wasserstein_distance,
+        }[method]
+        observed_stat = statistic(self.X1_scaled, self.X2_scaled)
 
         # Permutation test
         Z = torch.cat([self.X1_scaled, self.X2_scaled], dim=0)
@@ -227,12 +234,7 @@ class AnalyzeDrift:
             Y_perm = Z[perm_idx[self.n1 :]]
 
             # Compute statistic for permuted data
-            if method == "mmd":
-                perm_stat = self._mmd_unbiased(X_perm, Y_perm)
-            elif method == "energy":
-                perm_stat = self._energy_statistic(X_perm, Y_perm)
-            else:
-                perm_stat = self._wasserstein_distance(X_perm, Y_perm)
+            perm_stat = statistic(X_perm, Y_perm)
 
             null_stats.append(perm_stat)
             # Check if current permuted stat is >= observed
@@ -416,9 +418,7 @@ class AnalyzeDrift:
         }
         methods = list(available_methods.keys())
         for method in methods:
-            arg1, arg2 = (
-                (X1_scaled, X2_scaled) if method in ["pairwise", "pca"] else (X1, X2)
-            )
+            arg1, arg2 = (X1_scaled, X2_scaled) if method != "marginals" else (X1, X2)
             if arg1 is not None and arg2 is not None:
                 available_methods[method](arg1, arg2)
             else:
@@ -449,7 +449,7 @@ class AnalyzeDrift:
             X_dists,
             bins=50,
             alpha=0.7,
-            label=f"Within Train (mean={X_dists.mean():.2f})",
+            label=f"Within Reference (mean={X_dists.mean():.2f})",
             density=True,
         )
         axes[0].hist(
@@ -463,10 +463,10 @@ class AnalyzeDrift:
             cross_dists,
             bins=50,
             alpha=0.7,
-            label=f"Cross Train-Pred (mean={np.mean(cross_dists):.2f})",
+            label=f"Cross Reference-Pred (mean={np.mean(cross_dists):.2f})",
             density=True,
         )
-        axes[0].set_xlabel("Euclidean Distance")
+        axes[0].set_xlabel("Euclidean Distance (model feature space)")
         axes[0].set_ylabel("Density")
         axes[0].set_title("Distance Distributions")
         axes[0].legend()
@@ -476,8 +476,10 @@ class AnalyzeDrift:
         axes[1].boxplot(
             [X_dists, Y_dists, cross_dists],
         )
-        axes[1].set_xticklabels(["Within Train", "Within Pred", "Cross Train-Pred"])
-        axes[1].set_ylabel("Euclidean Distance")
+        axes[1].set_xticklabels(
+            ["Within Reference", "Within Pred", "Cross Reference-Pred"]
+        )
+        axes[1].set_ylabel("Euclidean Distance (model feature space)")
         axes[1].set_title("Distance Box Plots")
         axes[1].grid(True, alpha=0.3)
 
@@ -497,19 +499,22 @@ class AnalyzeDrift:
         cols = min(3, self.n_features)
         rows = (self.n_features + cols - 1) // cols
 
-        fig, axes = pyplot.subplots(rows, cols, figsize=(5 * cols, 4 * rows))
-        if self.n_features == 1:
-            axes = [axes]
-        elif rows == 1:
-            axes = axes.reshape(1, -1)
+        fig, axes = pyplot.subplots(
+            rows, cols, figsize=(5 * cols, 4 * rows), squeeze=False
+        )
 
         for i in range(self.n_features):
             row, col = i // cols, i % cols
-            ax = axes[row][col] if rows > 1 else axes[col]
+            ax = axes[row, col]
 
             # Histograms
             ax.hist(
-                X1[:, i], bins=30, alpha=0.6, label="Train", density=True, color="blue"
+                X1[:, i],
+                bins=30,
+                alpha=0.6,
+                label="Reference",
+                density=True,
+                color="blue",
             )
             ax.hist(
                 X2[:, i], bins=30, alpha=0.6, label="Pred", density=True, color="red"
@@ -524,7 +529,7 @@ class AnalyzeDrift:
                 color="blue",
                 linestyle="--",
                 alpha=0.8,
-                label=f"Train mean: {x_mean:.2f}",
+                label=f"Reference mean: {x_mean:.2f}",
             )
             ax.axvline(
                 y_mean,
@@ -554,10 +559,7 @@ class AnalyzeDrift:
         # Hide empty subplots
         for i in range(self.n_features, rows * cols):
             row, col = i // cols, i % cols
-            if rows > 1:
-                axes[row][col].set_visible(False)
-            else:
-                axes[col].set_visible(False)
+            axes[row, col].set_visible(False)
 
         pyplot.tight_layout()
         pyplot.show()
@@ -577,7 +579,7 @@ class AnalyzeDrift:
 
         # X correlation
         im1 = axes[0].imshow(X_mi, cmap="coolwarm", vmin=0, vmax=1)
-        axes[0].set_title("Train Features Mutual Information Matrix")
+        axes[0].set_title("Reference Features Mutual Information Matrix")
         axes[0].set_xticks(range(len(self.feature_names)))
         axes[0].set_yticks(range(len(self.feature_names)))
         axes[0].set_xticklabels(
@@ -645,11 +647,14 @@ class AnalyzeDrift:
         pca_pairs = [(0, 1), (0, 2), (1, 2)]
         pca_labels = [("PC1", "PC2"), ("PC1", "PC3"), ("PC2", "PC3")]
         for idx, (i, j) in enumerate(pca_pairs):
+            if j >= X_pca.shape[1]:
+                axes[0, idx].set_visible(False)
+                continue
             axes[0, idx].scatter(
                 X_pca[:, i],
                 X_pca[:, j],
                 alpha=0.5,
-                label="Train",
+                label="Reference",
                 color="blue",
                 marker="o",
             )
@@ -671,11 +676,14 @@ class AnalyzeDrift:
         kpca_pairs = [(0, 1), (0, 2), (1, 2)]
         kpca_labels = [("KPCA1", "KPCA2"), ("KPCA1", "KPCA3"), ("KPCA2", "KPCA3")]
         for idx, (i, j) in enumerate(kpca_pairs):
+            if j >= X_kpca.shape[1]:
+                axes[1, idx].set_visible(False)
+                continue
             axes[1, idx].scatter(
                 X_kpca[:, i],
                 X_kpca[:, j],
                 alpha=0.5,
-                label="Train",
+                label="Reference",
                 color="blue",
                 marker="^",
             )
@@ -748,13 +756,7 @@ class AnalyzeDrift:
 
         The results are only exported if save_path was specified during initialization.
         """
-        methods = ["mmd", "energy"]
-        if self.use_max_sliced_wasserstein:
-            methods.append("max_sliced_wasserstein")
-        elif self.use_sinkhorn_wasserstein:
-            methods.append("sinkhorn_wasserstein")
-        else:
-            methods.append("wasserstein")
+        methods = ["mmd", "energy", self.wasserstein_method]
         if self.save_path is not None:
             results = []
             for method in methods:
@@ -770,11 +772,11 @@ class AnalyzeDrift:
                     f.write(f"p-value: {p_value}\n")
                     if p_value < 0.05:
                         f.write(
-                            f"Domain shift detected between train and prediction datasets using {method} method.\n"
+                            f"Domain shift detected between reference and prediction datasets using {method} method.\n"
                         )
                     else:
                         f.write(
-                            f"No domain shift detected between train and prediction datasets using {method} method.\n"
+                            f"No domain shift detected between reference and prediction datasets using {method} method.\n"
                         )
                 f.write("\n")
 

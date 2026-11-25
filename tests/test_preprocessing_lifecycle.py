@@ -1,5 +1,8 @@
 """Verify the model-bound preprocessing lifecycle with tiny synthetic artifacts."""
 
+import hashlib
+import json
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -7,6 +10,8 @@ import numpy as np
 import pandas as pd
 import pytest
 import torch
+from matplotlib import pyplot
+from matplotlib.figure import Figure
 from sklearn.preprocessing import StandardScaler
 from torch import nn
 from torch_geometric.data import Data
@@ -23,9 +28,15 @@ from src.stages import (
 from src.utilities import eval_utils, pred_utils
 from src.utilities.calibration_utils import CalibratedModel
 from src.utilities.data_utils import construct_graph
+from src.utilities.drift_detection_utils import AnalyzeDrift
 from src.utilities.general_utils import load_data, load_params
-from src.utilities.preprocessing import TrainingPartition, load_preprocessing
-from src.utilities.raw_graphs import load_cycle_data, read_raw_graph
+from src.utilities.model_bundle import publish_model
+from src.utilities.preprocessing import (
+    TrainingPartition,
+    fit_preprocessing,
+    load_preprocessing,
+)
+from src.utilities.raw_graphs import load_cycle_data, read_raw_graph, stamp_raw_graph
 
 
 def _observations(
@@ -313,6 +324,240 @@ def test_legacy_and_incompatible_artifacts_fail_explicitly(
     with pytest.raises(ValueError, match="row order"):
         load_cycle_data(base)
 
-    with pytest.raises(ValueError, match="temporarily unavailable"):
-        analyze_drift.run_analyze_drift({"output": tmp_path / "drift"}, params)
-    assert not (tmp_path / "drift").exists()
+
+def _drift_bundle(
+    generated: tuple[dict, Path, Path], tmp_path: Path, scaler_type: str | None
+) -> tuple[dict, dict]:
+    params, base, incoming = generated
+    raw, folds, _, _ = load_cycle_data(base)
+    partition = TrainingPartition(
+        raw.dataset_sha256, 0, folds[0][0].original_node_indices.numpy()
+    )
+    trained = tmp_path / "trained"
+    trained.mkdir()
+    publish_model(
+        trained, RecordingModel([]), fit_preprocessing(raw, partition, scaler_type)
+    )
+    params["analyze_drift"].update(n_permutations=2, early_stopping={"enabled": False})
+    return params, {
+        "base_data": base,
+        "prediction_data": incoming,
+        "model": trained,
+        "output": tmp_path / "drift",
+    }
+
+
+@pytest.mark.parametrize("scaler_type", ["StandardScaler", None])
+def test_drift_uses_raw_marginals_and_shared_multivariate_transform(
+    generated: tuple[dict, Path, Path],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scaler_type: str | None,
+) -> None:
+    """Exercise both representations and real drift statistics with two permutations."""
+    params, paths = _drift_bundle(generated, tmp_path, scaler_type)
+    reference = read_raw_graph(load_data(paths["base_data"] / "base_data.pt", "Base"))
+    incoming = read_raw_graph(
+        load_data(paths["prediction_data"] / "pred_data.pt", "Pred")
+    )
+    raw_inputs = (reference.features, incoming.features)
+    if scaler_type is None:
+        transformed = raw_inputs
+        params["analyze_drift"]["gamma"] = 0.25
+    else:
+        state = load_preprocessing(
+            paths["model"] / "preprocessing.json",
+            paths["model"] / "model.pt",
+            feature_names=reference.feature_names,
+            class_names=reference.class_names,
+        )
+        transformed = tuple((rows - state.center) / state.scale for rows in raw_inputs)
+        assert transformed[1][:, 0].std() > 4 * transformed[0][:, 0].std()
+
+    def unexpected_fit(*_args, **_kwargs):
+        pytest.fail("Drift analysis attempted to fit a feature scaler.")
+
+    monkeypatch.setattr(StandardScaler, "fit", unexpected_fit)
+    calls = {}
+
+    def capture(name: str) -> None:
+        original = getattr(AnalyzeDrift, name)
+
+        def record(self, left, right):
+            calls.setdefault(name, []).append(
+                (np.asarray(left).copy(), np.asarray(right).copy())
+            )
+            return original(self, left, right)
+
+        monkeypatch.setattr(AnalyzeDrift, name, record)
+
+    for method in (
+        "_median_heuristic_gamma",
+        "_mmd_unbiased",
+        "_energy_statistic",
+        "_wasserstein_distance",
+        "_plot_marginal_distributions",
+        "_plot_distance_distributions",
+        "_plot_pairwise_relationships",
+        "_plot_pca_comparison",
+    ):
+        capture(method)
+
+    original_savefig = Figure.savefig
+
+    def small_figure(figure, path, **kwargs):
+        return original_savefig(figure, path, **(kwargs | {"dpi": 30}))
+
+    monkeypatch.setattr(Figure, "savefig", small_figure)
+    monkeypatch.setattr(pyplot, "show", Mock())
+    with torch.random.fork_rng(devices=[]):
+        torch.random.default_generator.manual_seed(42)
+        try:
+            analyze_drift.run_analyze_drift(paths, params, 1)
+        finally:
+            pyplot.close("all")
+
+    for name, inputs in calls.items():
+        expected = raw_inputs if name == "_plot_marginal_distributions" else transformed
+        for actual, wanted in zip(inputs[0], expected, strict=True):
+            assert actual.dtype == np.float64
+            np.testing.assert_allclose(actual, wanted)
+        if name in ("_mmd_unbiased", "_energy_statistic", "_wasserstein_distance"):
+            assert len(inputs) == 3
+            combined = sorted(map(tuple, np.vstack(transformed)))
+            for left, right in inputs[1:]:
+                np.testing.assert_allclose(
+                    sorted(map(tuple, np.vstack((left, right)))), combined
+                )
+
+    assert ("_median_heuristic_gamma" in calls) == (scaler_type is not None)
+    assert len(calls) == (8 if scaler_type is not None else 7)
+    output = paths["output"]
+    metadata = json.loads((output / "drift_metadata.json").read_text(encoding="utf-8"))
+    assert metadata["reference_policy"] == "all_previous_base_observations"
+    assert metadata["reference_dataset_sha256"] == reference.dataset_sha256
+    assert metadata["incoming_dataset_sha256"] == incoming.dataset_sha256
+    assert metadata["feature_names"] == list(reference.feature_names)
+    assert metadata["model_cycle"] == 1
+    assert metadata["scaler_type"] == scaler_type
+    assert metadata["representations"] == {
+        "marginal": "canonical_raw_float64",
+        "multivariate": "frozen_model_transform_float64",
+    }
+    for filename, field in (
+        ("preprocessing.json", "preprocessing_sha256"),
+        ("model.pt", "weights_sha256"),
+    ):
+        assert (
+            metadata[field]
+            == hashlib.sha256((paths["model"] / filename).read_bytes()).hexdigest()
+        )
+    assert metadata["configuration"]["n_permutations"] == 2
+    if scaler_type is None:
+        assert metadata["effective_gamma"] == 0.25
+    else:
+        values = torch.from_numpy(np.vstack(transformed))
+        distances = torch.cdist(values, values)
+        mask = ~torch.eye(len(values), dtype=torch.bool)
+        expected_gamma = 1 / (2 * (distances[mask].median().item() + 1e-8) ** 2)
+        assert metadata["effective_gamma"] == pytest.approx(expected_gamma)
+    assert (output / "drift_results.txt").read_text(encoding="utf-8").count(
+        "Statistic:"
+    ) == 3
+    assert len(list(output.glob("*.png"))) == 4
+    np.testing.assert_array_equal(
+        load_cycle_data(paths["base_data"])[0].features, raw_inputs[0]
+    )
+    persisted = read_raw_graph(
+        load_data(paths["prediction_data"] / "pred_data.pt", "Pred")
+    )
+    np.testing.assert_array_equal(persisted.features, raw_inputs[1])
+
+
+def test_drift_rejects_stale_missing_and_incompatible_artifacts(
+    generated: tuple[dict, Path, Path], tmp_path: Path
+) -> None:
+    """Reject broken bindings, reordered features and wrong source datasets."""
+    params, paths = _drift_bundle(generated, tmp_path, "StandardScaler")
+    sidecar = paths["model"] / "preprocessing.json"
+    original = sidecar.read_bytes()
+    sidecar.unlink()
+    with pytest.raises(ValueError, match=r"preprocessing\.json.*Retrain"):
+        analyze_drift.run_analyze_drift(paths, params, 1)
+    sidecar.write_bytes(original)
+
+    artifact = json.loads(original)
+    artifact["state"]["feature_names"].reverse()
+    sidecar.write_text(json.dumps(artifact), encoding="utf-8")
+    with pytest.raises(ValueError, match="Feature order mismatch"):
+        analyze_drift.run_analyze_drift(paths, params, 1)
+
+    artifact = json.loads(original)
+    artifact["state"]["dataset_sha256"] = "0" * 64
+    sidecar.write_text(json.dumps(artifact), encoding="utf-8")
+    with pytest.raises(ValueError, match="reference does not match"):
+        analyze_drift.run_analyze_drift(paths, params, 1)
+
+    sidecar.write_bytes(original)
+    (paths["model"] / "model.pt").write_bytes(b"wrong weights")
+    with pytest.raises(ValueError, match="Model weights digest mismatch"):
+        analyze_drift.run_analyze_drift(paths, params, 1)
+    assert not paths["output"].exists()
+
+
+def test_drift_rejects_wrong_incoming_schema_or_parent(
+    generated: tuple[dict, Path, Path], tmp_path: Path
+) -> None:
+    """Validate incoming schema and provenance before attempting model loading."""
+    params, base, incoming = generated
+    paths = {
+        "base_data": base,
+        "prediction_data": incoming,
+        "model": tmp_path / "unused",
+        "output": tmp_path / "drift",
+    }
+    path = incoming / "pred_data.pt"
+    graph = load_data(path, "Prediction")
+    raw = read_raw_graph(graph)
+    source = graph.source_parent_sha256
+    stamp_raw_graph(
+        graph, replace(raw, class_names=raw.class_names[::-1]), source_parent=source
+    )
+    torch.save(graph, path)
+    with pytest.raises(ValueError, match="class mapping"):
+        analyze_drift.run_analyze_drift(paths, params, 1)
+
+    stamp_raw_graph(graph, raw, source_parent="0" * 64)
+    torch.save(graph, path)
+    with pytest.raises(ValueError, match="does not match the historical base"):
+        analyze_drift.run_analyze_drift(paths, params, 1)
+    assert not paths["output"].exists()
+
+
+@pytest.mark.parametrize("method", ["max_sliced_wasserstein", "sinkhorn_wasserstein"])
+def test_configured_wasserstein_used_for_observed_and_permuted_inputs(
+    method: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Use the requested statistic with both original and permuted populations."""
+    reference = torch.tensor([[0.0, 0.0], [1.0, 1.0]], dtype=torch.float64)
+    incoming = reference + 2
+    analyzer = AnalyzeDrift(
+        Data(x=reference, unscaled_features=reference),
+        Data(x=incoming, unscaled_features=incoming),
+        use_max_sliced_wasserstein=method == "max_sliced_wasserstein",
+        use_sinkhorn_wasserstein=method == "sinkhorn_wasserstein",
+        sinkhorn_wasserstein_reg=1.0,
+        n_projections=3,
+        n_permutations=2,
+    )
+    assert analyzer.wasserstein_method == method
+    original = getattr(analyzer, f"_{method}")
+    spy = Mock(wraps=original)
+    monkeypatch.setattr(analyzer, f"_{method}", spy)
+    with torch.random.fork_rng(devices=[]):
+        torch.random.default_generator.manual_seed(42)
+        observed, _ = analyzer._perform_permutation_test(method)
+    assert np.isfinite(observed) and observed > 0
+    assert spy.call_count == 3
+    torch.testing.assert_close(spy.call_args_list[0].args[0], reference)
+    torch.testing.assert_close(spy.call_args_list[0].args[1], incoming)
