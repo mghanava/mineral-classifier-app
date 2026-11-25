@@ -20,6 +20,7 @@ stages:
     - results/data/base/cycle_0/calib_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
+    - results/data/base/cycle_0/tsne_comparison.png
     - results/data/base/cycle_0/base_data_graph.html
     - results/data/base/cycle_0/base_data_graph.json
     - results/data/base/cycle_0/test_graph.html
@@ -43,6 +44,7 @@ stages:
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
+    - src/utilities/calibration_utils.py
     - src/utilities/early_stopping.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
@@ -56,7 +58,9 @@ stages:
     - results/data/base/cycle_0/fold_data.pt
     - results/data/base/cycle_0/test_data.pt
     - results/data/base/cycle_0/calib_data.pt
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     params:
     - models.gcn
     - add_self_loops
@@ -79,6 +83,7 @@ stages:
     - src/utilities/eval_utils.py
     - src/utilities/general_utils.py
     - src/utilities/calibration_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/model_bundle.py
     - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
@@ -90,7 +95,9 @@ stages:
     - results/data/base/cycle_0/fold_data.pt
     - results/data/base/cycle_0/test_data.pt
     - results/data/base/cycle_0/calib_data.pt
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     - results/trained/cycle_1/model.pt
     - results/trained/cycle_1/preprocessing.json
     - results/trained/cycle_1/graph_binding.json
@@ -137,6 +144,7 @@ stages:
     - src/utilities/general_utils.py
     - results/data/prediction/cycle_1/pred_data.pt
     - src/utilities/calibration_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/eval_utils.py
     - src/utilities/model_bundle.py
     - src/utilities/training_schedule.py
@@ -150,7 +158,9 @@ stages:
     - results/trained/cycle_1/graph_binding.json
     - results/evaluation/cycle_1/calibrator.pt
     - results/evaluation/cycle_1/calibration_binding.json
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     params:
     - models.gcn
     - add_self_loops
@@ -214,6 +224,7 @@ stages:
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
     - results/data/base/cycle_1/calib_data.pt
+    - results/data/base/cycle_1/tsne_comparison.png
     - results/data/base/cycle_1/base_data_graph.html
     - results/data/base/cycle_1/base_data_graph.json
     - results/data/base/cycle_1/test_graph.html
@@ -237,6 +248,7 @@ stages:
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
+    - src/utilities/calibration_utils.py
     - src/utilities/early_stopping.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
@@ -250,7 +262,9 @@ stages:
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
     - results/data/base/cycle_1/calib_data.pt
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     params:
     - models.gcn
     - add_self_loops
@@ -273,6 +287,7 @@ stages:
     - src/utilities/eval_utils.py
     - src/utilities/general_utils.py
     - src/utilities/calibration_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/model_bundle.py
     - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
@@ -284,7 +299,9 @@ stages:
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
     - results/data/base/cycle_1/calib_data.pt
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     - results/trained/cycle_2/model.pt
     - results/trained/cycle_2/preprocessing.json
     - results/trained/cycle_2/graph_binding.json
@@ -331,6 +348,7 @@ stages:
     - src/utilities/general_utils.py
     - results/data/prediction/cycle_2/pred_data.pt
     - src/utilities/calibration_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/eval_utils.py
     - src/utilities/model_bundle.py
     - src/utilities/training_schedule.py
@@ -344,7 +362,9 @@ stages:
     - results/trained/cycle_2/graph_binding.json
     - results/evaluation/cycle_2/calibrator.pt
     - results/evaluation/cycle_2/calibration_binding.json
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     params:
     - models.gcn
     - add_self_loops
@@ -408,6 +428,7 @@ stages:
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
     - results/data/base/cycle_2/calib_data.pt
+    - results/data/base/cycle_2/tsne_comparison.png
     - results/data/base/cycle_2/base_data_graph.html
     - results/data/base/cycle_2/base_data_graph.json
     - results/data/base/cycle_2/test_graph.html
@@ -431,6 +452,7 @@ stages:
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
+    - src/utilities/calibration_utils.py
     - src/utilities/early_stopping.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
@@ -444,7 +466,9 @@ stages:
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
     - results/data/base/cycle_2/calib_data.pt
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     params:
     - models.gcn
     - add_self_loops
@@ -467,6 +491,7 @@ stages:
     - src/utilities/eval_utils.py
     - src/utilities/general_utils.py
     - src/utilities/calibration_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/model_bundle.py
     - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
@@ -478,7 +503,9 @@ stages:
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
     - results/data/base/cycle_2/calib_data.pt
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     - results/trained/cycle_3/model.pt
     - results/trained/cycle_3/preprocessing.json
     - results/trained/cycle_3/graph_binding.json
@@ -525,6 +552,7 @@ stages:
     - src/utilities/general_utils.py
     - results/data/prediction/cycle_3/pred_data.pt
     - src/utilities/calibration_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/eval_utils.py
     - src/utilities/model_bundle.py
     - src/utilities/training_schedule.py
@@ -538,7 +566,9 @@ stages:
     - results/trained/cycle_3/graph_binding.json
     - results/evaluation/cycle_3/calibrator.pt
     - results/evaluation/cycle_3/calibration_binding.json
-    - src/models/
+    - src/models/__init__.py
+    - src/models/gat.py
+    - src/models/gcn.py
     params:
     - models.gcn
     - add_self_loops
@@ -602,6 +632,7 @@ stages:
     - results/data/base/cycle_3/fold_data.pt
     - results/data/base/cycle_3/test_data.pt
     - results/data/base/cycle_3/calib_data.pt
+    - results/data/base/cycle_3/tsne_comparison.png
     - results/data/base/cycle_3/base_data_graph.html
     - results/data/base/cycle_3/base_data_graph.json
     - results/data/base/cycle_3/test_graph.html
@@ -621,17 +652,16 @@ stages:
     - results/data/base/cycle_3/val_graph_3.html
     - results/data/base/cycle_3/val_graph_3.json
   analyze_cycles_performance:
-    cmd: python src/stages/analyze_cycles_performance.py
+    cmd: python src/stages/analyze_cycles_performance.py --cycles 3
     deps:
     - src/stages/analyze_cycles_performance.py
     - src/utilities/cycles_performance_utils.py
+    - src/utilities/general_utils.py
     - results/evaluation/cycle_1/metrics.json
     - results/prediction/cycle_1/metrics.json
     - results/evaluation/cycle_2/metrics.json
     - results/prediction/cycle_2/metrics.json
     - results/evaluation/cycle_3/metrics.json
     - results/prediction/cycle_3/metrics.json
-    params:
-    - cycles
     outs:
     - results/cycles_performance_analysis/cycles_performance.png

@@ -27,6 +27,8 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Fixed
 
+- Include base-cycle t-SNE diagnostics in DVC outputs, track shared calibration and model source dependencies, and keep performance aggregation within the declared cycle range. Verify selective invalidation and fixture cache restoration across two cycles.
+
 - Render stored graph edges once per physical link and report unique-edge diagnostics, including for partitions with non-contiguous class labels.
 
 - Use the selected Wasserstein statistic for both the observed comparison and its permutations.

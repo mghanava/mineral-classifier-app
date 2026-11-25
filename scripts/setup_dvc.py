@@ -22,27 +22,27 @@ def generate_performance_analysis_stage(cycles):
 
     return {
         "analyze_cycles_performance": {
-            "cmd": "python src/stages/analyze_cycles_performance.py",
+            "cmd": f"python src/stages/analyze_cycles_performance.py --cycles {len(cycles)}",
             "deps": [
                 "src/stages/analyze_cycles_performance.py",
                 "src/utilities/cycles_performance_utils.py",
+                "src/utilities/general_utils.py",
                 *metrics_files,
             ],
-            "params": ["cycles"],
             "outs": ["results/cycles_performance_analysis/cycles_performance.png"],
         }
     }
 
 
-def base_graph_figures(directory: str, n_splits: int) -> list[str]:
-    """List the dashboard's Plotly graph outputs for a base cycle."""
+def base_diagnostics(directory: str, n_splits: int) -> list[str]:
+    """List the dashboard's graph and feature diagnostics for a base cycle."""
     stems = ["base_data_graph", "test_graph", "calib_graph"]
     stems += [
         f"{role}_graph_{fold}"
         for fold in range(1, n_splits + 1)
         for role in ("train", "val")
     ]
-    return [
+    return [f"{directory}/tsne_comparison.png"] + [
         f"{directory}/{stem}.{extension}"
         for stem in stems
         for extension in ("html", "json")
@@ -72,6 +72,11 @@ def generate_fine_grained_dvc_yaml():
         "src/utilities/model_bundle.py",
         "src/utilities/training_schedule.py",
         *raw_helpers,
+    ]
+    model_sources = ["src/models/__init__.py", "src/models/gat.py", "src/models/gcn.py"]
+    calibration_helpers = [
+        "src/utilities/calibration_utils.py",
+        "src/utilities/early_stopping.py",
     ]
     model_schema = [
         "data.base.n_features",
@@ -105,7 +110,7 @@ def generate_fine_grained_dvc_yaml():
                     "results/data/base/cycle_0/calib_data.pt",
                     "results/data/base/cycle_0/hotspots.npy",
                     "results/data/base/cycle_0/prototypes.npy",
-                    *base_graph_figures("results/data/base/cycle_0", n_splits),
+                    *base_diagnostics("results/data/base/cycle_0", n_splits),
                 ],
             }
         }
@@ -129,11 +134,11 @@ def generate_fine_grained_dvc_yaml():
             "deps": [
                 "src/stages/train.py",
                 "src/utilities/train_utils.py",
-                "src/utilities/early_stopping.py",
+                *calibration_helpers,
                 "src/utilities/general_utils.py",
                 *bundle_helpers,
                 *cycle_partitions,
-                "src/models/",
+                *model_sources,
             ],
             "params": [
                 f"models.{model}",
@@ -153,10 +158,10 @@ def generate_fine_grained_dvc_yaml():
                 "src/stages/evaluate.py",
                 "src/utilities/eval_utils.py",
                 "src/utilities/general_utils.py",
-                "src/utilities/calibration_utils.py",
+                *calibration_helpers,
                 *bundle_helpers,
                 *cycle_partitions,
-                "src/models/",
+                *model_sources,
                 *model_bundle,
             ],
             "params": [
@@ -197,13 +202,13 @@ def generate_fine_grained_dvc_yaml():
                 "src/utilities/pred_utils.py",
                 "src/utilities/general_utils.py",
                 f"results/data/prediction/cycle_{cycle}/pred_data.pt",
-                "src/utilities/calibration_utils.py",
+                *calibration_helpers,
                 "src/utilities/eval_utils.py",
                 *bundle_helpers,
                 *model_bundle,
                 f"{evaluation}/calibrator.pt",
                 f"{evaluation}/calibration_binding.json",
-                "src/models/",
+                *model_sources,
             ],
             "params": [
                 f"models.{model}",
@@ -240,9 +245,7 @@ def generate_fine_grained_dvc_yaml():
                 "src/stages/prepare_next_cycle_data.py",
                 "src/utilities/general_utils.py",
                 *raw_helpers,
-                f"results/data/base/cycle_{cycle - 1}/base_data.pt"
-                if cycle > 1
-                else "results/data/base/cycle_0/base_data.pt",
+                f"{base}/base_data.pt",
                 f"results/data/prediction/cycle_{cycle}/pred_data.pt",
             ],
             "params": ["data.base", *edge_settings],
@@ -251,7 +254,7 @@ def generate_fine_grained_dvc_yaml():
                 f"results/data/base/cycle_{cycle}/fold_data.pt",
                 f"results/data/base/cycle_{cycle}/test_data.pt",
                 f"results/data/base/cycle_{cycle}/calib_data.pt",
-                *base_graph_figures(f"results/data/base/cycle_{cycle}", n_splits),
+                *base_diagnostics(f"results/data/base/cycle_{cycle}", n_splits),
             ],
         }
     # Add performance analysis stage

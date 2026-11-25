@@ -6,6 +6,7 @@ This module provides functions to:
 """
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -14,22 +15,18 @@ import seaborn as sns
 from matplotlib.ticker import MaxNLocator
 
 
-def load_metrics_from_cycles(results_dir: Path):
-    """Load metrics from evaluation and prediction directories."""
+def load_metrics_from_cycles(
+    results_dir: Path, cycles: Iterable[int]
+) -> dict[str, list[dict[str, int | float | None]]]:
+    """Load available metrics for the requested cycles in ascending order."""
     cycles_data = {"evaluation": [], "prediction": []}
+    cycle_numbers = sorted(cycles)
 
     for stage in ["evaluation", "prediction"]:
         stage_dir = results_dir / stage
 
-        # Find all cycle directories
-        cycle_dirs = sorted(
-            [d for d in stage_dir.glob("cycle_*") if d.is_dir()],
-            key=lambda x: int(x.name.split("_")[1]),
-        )
-
-        for cycle_dir in cycle_dirs:
-            cycle_num = int(cycle_dir.name.split("_")[1])
-            metrics_file = cycle_dir / "metrics.json"
+        for cycle_num in cycle_numbers:
+            metrics_file = stage_dir / f"cycle_{cycle_num}" / "metrics.json"
 
             if metrics_file.exists():
                 with open(metrics_file) as f:
@@ -57,16 +54,16 @@ def plot_metrics(cycles_data, output_dir: Path):
         sns.set_style("whitegrid")
     except ImportError:
         plt.style.use("ggplot")
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    _, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
     # Define colors for consistent plotting
     colors = ["#2ecc71", "#3498db", "#e74c3c"]
 
-    for idx, (stage, ax) in enumerate([("evaluation", ax1), ("prediction", ax2)]):
-        df = pd.DataFrame(cycles_data[stage])
-        if not df.empty:
+    for stage, ax in [("evaluation", ax1), ("prediction", ax2)]:
+        metrics = pd.DataFrame(cycles_data[stage])
+        if not metrics.empty:
             for i, column in enumerate(["accuracy", "f1", "mcc"]):
-                df.plot(
+                metrics.plot(
                     x="cycle",
                     y=column,
                     marker="o",
@@ -83,7 +80,7 @@ def plot_metrics(cycles_data, output_dir: Path):
             # Set x-axis to show integer ticks
             ax.xaxis.set_major_locator(MaxNLocator(integer=True))
             # Ensure x-axis limits are slightly padded
-            x_min, x_max = df["cycle"].min(), df["cycle"].max()
+            x_min, x_max = metrics["cycle"].min(), metrics["cycle"].max()
             ax.set_xlim(x_min - 0.2, x_max + 0.2)
 
     plt.tight_layout()

@@ -37,7 +37,7 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
   - [x] **M1.4-i — Standalone graph utilities.** Implemented and tested partition-local connectivity, explicit loop ownership, bounded or unit affinities, and unique-edge diagnostics.
   - [x] **M1.4-ii — Production graph integration.** Built and verified independent production graphs, explicit model loop weights, versioned graph bindings, stored-edge visualizations and DVC dependencies.
 - [x] **M1.4a — Full development-pool retraining.** Refit a fresh model and scaler on the verified development graph for the rounded median CV best epoch. Replay a representative fold's learning rates without validation. Bind the deployed weights and preprocessing to the development population and refit diagnostics.
-- [ ] **M1.5 — DVC dependencies and artifact declarations.** Declare required source, parameter and artifact dependencies. Verify restoration of artifacts used by downstream stages and the dashboard.
+- [x] **M1.5 — DVC dependencies and artifact declarations.** Audited stage inputs and outputs, corrected missing diagnostics and source dependencies, and scoped performance aggregation to declared cycles. Verified selective invalidation and cache restoration in isolated fixtures. See the [DVC integrity audit](docs/dvc_integrity.md) for production verification requirements.
 - [ ] **M1.6 — Reproducibility and error handling.** Record relevant seeds and configuration, test repeatability where feasible and propagate pipeline failures to the dashboard.
 - [ ] **M1.7 — Small end-to-end pipeline verification.** Run an isolated CPU synthetic cycle and verify training, evaluation, calibration, prediction and drift artifacts.
 
