@@ -268,3 +268,62 @@ def test_run_blocks_invalid_active_configuration(dashboard, tmp_path, monkeypatc
     _click(dashboard, "Generate & Run Full Pipeline")
     assert any("data.base.n_splits" in item.value for item in dashboard.error)
     assert not dashboard.success
+
+
+def test_other_session_cannot_apply_during_reproduction(
+    dashboard, tmp_path, monkeypatch
+):
+    """Keep the active configuration fixed until the running command exits."""
+    active = tmp_path / "params.yaml"
+    original = active.read_bytes()
+    popen = subprocess.Popen
+    attempted = []
+    apply_in_other_session = """
+import sys
+from streamlit.testing.v1 import AppTest
+
+dashboard = AppTest.from_file(sys.argv[1]).run()
+draft = dashboard.text_area[0].value.replace("cycles: 3", "cycles: 2")
+dashboard.text_area[0].set_value(draft).run()
+for label in ("Validate & Preview", "Apply configuration"):
+    next(button for button in dashboard.button if button.label == label).click().run()
+assert not dashboard.exception
+for error in dashboard.error:
+    print(error.value)
+"""
+
+    def fixture_process(command, *args, **kwargs):
+        if command[2:] != ["dvc", "repro"]:
+            return popen([sys.executable, "-c", "pass"], *args, **kwargs)
+        process = popen(
+            [sys.executable, "-c", "import sys; sys.stdin.read()"],
+            *args,
+            stdin=subprocess.PIPE,
+            **kwargs,
+        )
+        try:
+            with popen(
+                [sys.executable, "-c", apply_in_other_session, str(APP)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env={**os.environ, "PYTHONPATH": str(APP.parent)},
+            ) as other:
+                output, errors = other.communicate(timeout=15)
+                assert other.returncode == 0, errors
+            attempted.append((active.read_bytes(), output))
+        finally:
+            process.stdin.close()
+        return process
+
+    monkeypatch.setattr(subprocess, "Popen", fixture_process)
+    _click(dashboard, "Generate & Run Full Pipeline")
+    assert not dashboard.exception
+    assert attempted and attempted[0][0] == original
+    assert "pipeline run is active" in attempted[0][1]
+
+    draft = dashboard.text_area[0].value.replace("cycles: 3", "cycles: 2")
+    dashboard.text_area[0].set_value(draft).run()
+    _click(dashboard, "Validate & Preview")
+    _click(dashboard, "Apply configuration")
+    assert "cycles: 2\n" in active.read_text()

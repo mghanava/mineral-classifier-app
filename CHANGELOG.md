@@ -8,6 +8,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Verify production configuration workflows for Quick demo and Standard on CPU, Research default equivalence, and legacy CLI and dashboard compatibility. Record the measured runtimes and artifact checks in the [configuration verification report](docs/configuration_verification.md).
 - Add shared preset and legacy configuration resolution, scientific YAML diffs and atomic export through `python -m scripts.configure`.
 - Distribute version-1 Quick demo, Standard and Research presets with a read-only application API and shared static validation. Quick demo matches the verified M1.7 Experiment A settings, and Research inherits the complete canonical configuration.
 - Pin the v0.2.0.dev1 configuration in `config/defaults.yaml` and add a shared static validator for the complete resolved synthetic configuration. Return path-specific errors, warnings and informational findings while preserving active YAML, scientific defaults and existing pipeline behavior.
@@ -18,6 +19,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Fixed
 
+- Prevent another dashboard session or cooperative CLI export from changing the applied configuration during a dashboard reproduction.
 - Apply each fitted isotonic map to its matching multiclass logit column. Normalize positive rows by their actual sum and report undefined zero-mass rows. Existing fitted isotonic artifacts remain readable, but affected reports and predictions need regeneration.
 
 ## [0.2.0.dev1]

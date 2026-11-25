@@ -259,7 +259,7 @@ An override file is a partial scientific mapping. For example, `{device: cpu, da
 
 In Parameters, selecting a preset leaves the current session draft intact. **Load preset into draft** explicitly replaces the draft with the chosen preset's full resolved YAML. Edit that YAML or use the draft initialized from the active file. **Validate & Preview** runs compatibility resolution on the draft and shows the complete scientific YAML, findings and differences against the active file. **Apply configuration** writes a valid preview for the current draft to `params.yaml`. A change to the draft or active file requires a current preview. Warnings are permitted. Apply leaves DVC execution to the separate run controls.
 
-Preview and validation are read-only. The diff compares scientific values with stable key ordering and ignores comments and formatting. Persistence writes a temporary file in the destination directory, checks the exact serialized YAML and uses atomic publication. Replacements compare the active bytes to the preview snapshot. App and CLI writers cooperate through a directory lock. An external editor can write independently of that lock. YAML export preserves values and types used by the stages. Comments and presentation are outside the resolved record.
+Preview and validation are read-only. The diff compares scientific values with stable key ordering and ignores comments and formatting. Persistence writes a temporary file in the destination directory, checks the exact serialized YAML and uses atomic publication. Replacements compare the active bytes to the preview snapshot. Dashboard runs and app and CLI writers share a directory lock. Competing operations report that the workspace is busy and can be retried after the holder finishes. An external editor can write independently of that lock. YAML export preserves values and types used by the stages. Comments and presentation are outside the resolved record.
 
 ### DVC boundary
 
@@ -267,9 +267,9 @@ Preview and validation are read-only. The diff compares scientific values with s
 
 ### Remaining limitations
 
-Validation is static. Realized partition feasibility, device availability and other data-dependent checks still run in the stages. Basic and Advanced forms belong to the interface redesign. Completing an omitted setting can change DVC's recorded parameter payload even when the effective scientific setting is equivalent. The application checks for changes during pipeline generation. Stage commands subsequently read the live active configuration, so keep that file fixed during a run. Atomic persistence uses local POSIX filesystem operations, as in the supported Linux and Docker environments.
+Validation is static. Realized partition feasibility, device availability and other data-dependent checks still run in the stages. Basic and Advanced forms belong to the interface redesign. Completing an omitted setting can change DVC's recorded parameter payload even when the effective scientific setting is equivalent. The dashboard holds the directory lock through pipeline generation and reproduction. Stage commands read the live active file. Keep it fixed if editing directly or running DVC outside the dashboard. Atomic persistence uses local POSIX filesystem operations, as in the supported Linux and Docker environments.
 
-M2.5 covers reduced production runs and preset budget verification, including Standard's CPU runtime and realized calibration populations.
+The [M2.5 verification report](configuration_verification.md) records production and configuration workflow checks, including Standard's CPU runtime and realized calibration populations.
 
 ### M2.1a multiclass isotonic verification
 

@@ -18,6 +18,7 @@ import streamlit.components.v1 as components
 
 from src.configuration import ValidationResult, validate_configuration
 from src.configuration_files import (
+    configuration_operation,
     persist_configuration,
     preview_configuration,
     snapshot_configuration,
@@ -85,17 +86,22 @@ def reproduce(*targets: str, announce_success: bool = True) -> int:
     """Regenerate DVC definitions from the active file before reproduction."""
     params_file = Path("params.yaml")
     try:
-        active = snapshot_configuration(params_file)
-        if active.contents is None:
-            raise ValueError(
-                "Apply a configuration in Parameters to create params.yaml."
-            )
-        validation = validate_configuration(
-            parse_configuration_yaml(active.contents, source="active params.yaml")
-        )
+        with configuration_operation(params_file):
+            return _reproduce_active(params_file, targets, announce_success)
     except (OSError, ValueError) as error:
         st.error(str(error))
         return 1
+
+
+def _reproduce_active(
+    params_file: Path, targets: tuple[str, ...], announce_success: bool
+) -> int:
+    active = snapshot_configuration(params_file)
+    if active.contents is None:
+        raise ValueError("Apply a configuration in Parameters to create params.yaml.")
+    validation = validate_configuration(
+        parse_configuration_yaml(active.contents, source="active params.yaml")
+    )
     if not validation.is_valid:
         st.error(
             "Resolve and apply a valid configuration in Parameters before running DVC."
@@ -107,14 +113,10 @@ def reproduce(*targets: str, announce_success: bool = True) -> int:
     )
     if status:
         return status
-    try:
-        if snapshot_configuration(params_file) != active:
-            raise ValueError(
-                "The active configuration changed during DVC generation. Start the run again."
-            )
-    except (OSError, ValueError) as error:
-        st.error(str(error))
-        return 1
+    if snapshot_configuration(params_file) != active:
+        raise ValueError(
+            "The active configuration changed during DVC generation. Start the run again."
+        )
     return run_command(
         [sys.executable, "-m", "dvc", "repro", *targets],
         announce_success=announce_success,

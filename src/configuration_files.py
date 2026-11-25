@@ -4,7 +4,8 @@ import difflib
 import fcntl
 import os
 import stat
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -104,6 +105,23 @@ def preview_configuration(
     )
 
 
+@contextmanager
+def configuration_operation(path: Path) -> Iterator[None]:
+    """Reserve the configuration directory for a write or dashboard run."""
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        try:
+            fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError(
+                "A pipeline run is active or a configuration write is in progress. "
+                "Try again after it finishes."
+            ) from error
+        yield
+    finally:
+        os.close(directory)
+
+
 def persist_configuration(
     preview: ConfigurationPreview,
     target: ConfigurationSnapshot,
@@ -121,11 +139,16 @@ def persist_configuration(
         target = preview.active
 
     path = target.path
-    # Serialize competing app and CLI writers without leaving a lock file.
-    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    with configuration_operation(path):
+        _publish_configuration(preview.yaml, target, overwrite=overwrite)
+
+
+def _publish_configuration(
+    yaml: str, target: ConfigurationSnapshot, *, overwrite: bool
+) -> None:
+    path = target.path
     temporary = None
     try:
-        fcntl.flock(directory, fcntl.LOCK_EX)
         current = snapshot_configuration(path)
         if current.contents != target.contents:
             raise ValueError(
@@ -139,7 +162,7 @@ def persist_configuration(
             temporary = Path(stream.name)
             if current.contents is not None:
                 os.fchmod(stream.fileno(), stat.S_IMODE(path.stat().st_mode))
-            stream.write(preview.yaml.encode("utf-8"))
+            stream.write(yaml.encode("utf-8"))
             stream.flush()
             os.fsync(stream.fileno())
         if snapshot_configuration(path).contents != current.contents:
@@ -152,8 +175,5 @@ def persist_configuration(
             # Atomic create-if-absent even if another tool ignores the lock.
             os.link(temporary, path)
     finally:
-        try:
-            if temporary is not None:
-                temporary.unlink(missing_ok=True)
-        finally:
-            os.close(directory)
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
