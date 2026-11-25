@@ -24,6 +24,12 @@ from sklearn.utils.class_weight import compute_class_weight
 from torch_geometric.data import Data
 
 from src.utilities.early_stopping import EarlyStopping
+from src.utilities.reproducibility import (
+    SEED_SCHEME,
+    derive_seed,
+    torch_seed,
+    validate_seed,
+)
 
 
 class CalibrationStats(NamedTuple):
@@ -781,7 +787,8 @@ class CalibratedModel:
         patience_early_stopping: int = 50,
         min_delta_early_stopping: float = 0.001,
         save_path: str | None = None,
-        seed: int = 42,
+        seed: int | None = 42,
+        cycle_num: int = 1,
     ):
         """Initialize the calibration model.
 
@@ -804,7 +811,8 @@ class CalibratedModel:
             patience_early_stopping (int): Number of epochs with no improvement before early stopping.
             min_delta_early_stopping (float): Minimum change in monitored quantity to qualify as an improvement.
             save_path (str, optional): Directory path to save training plots and model parameters.
-            seed (int): Random seed for reproducibility.
+            seed: Calibration split seed or None for unseeded fitting.
+            cycle_num: Cycle used to derive the calibration initialization seed.
 
         """
         if method not in self.VALID_METHODS:
@@ -832,7 +840,11 @@ class CalibratedModel:
         self.patience_early_stopping = patience_early_stopping
         self.min_delta_early_stopping = min_delta_early_stopping
         self.save_path = save_path
-        self.seed = seed
+        self.seed = validate_seed(seed, "evaluate.seed")
+        self.cycle_num = cycle_num
+        self.initialization_seed = derive_seed(
+            self.seed, "calibration", cycle_num, "init"
+        )
 
     def fit(
         self,
@@ -886,7 +898,8 @@ class CalibratedModel:
 
     def _fit_parametric(self, logits, labels, sample_weights):
         # 1. Initialize model and split data
-        self.model = self._create_parametric_model()
+        with torch_seed(self.initialization_seed, self.device):
+            self.model = self._create_parametric_model()
         assert self.model is not None, "model is not properly initialized!"
         (
             logits_train,
@@ -1138,6 +1151,13 @@ class CalibratedModel:
             "calibrated": self.calibrated,
             "model_state": None,
             "iso_calibrators": None,
+            "seed_provenance": {
+                "scheme": SEED_SCHEME,
+                "cycle": self.cycle_num,
+                "split_seed": self.seed,
+                "initialization_seed": self.initialization_seed,
+                "device": str(self.device),
+            },
         }
 
         # Save parametric model state
@@ -1424,7 +1444,8 @@ class CalibratedModel:
         instance.device = device or torch.device("cpu")
         instance.method = state["method"]
         instance.use_binary_calibration = state["use_binary_calibration"]
-        instance.classes = state["classes"]
+        classes = state["classes"]
+        instance.classes = classes.to(instance.device) if classes is not None else None
         instance.n_classes = state["n_classes"]
         instance.eps = state["eps"]
         instance.calibrated = state["calibrated"]
@@ -1460,6 +1481,10 @@ class CalibratedModel:
 
         # Restore isotonic calibrators
         instance.iso_calibrators = state.get("iso_calibrators")
+        provenance = state.get("seed_provenance", {})
+        instance.seed = provenance.get("split_seed")
+        instance.cycle_num = provenance.get("cycle", 1)
+        instance.initialization_seed = provenance.get("initialization_seed")
 
         print(f"Calibrated model loaded from {filepath}.")
         return instance

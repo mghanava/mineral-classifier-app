@@ -247,6 +247,7 @@ def bundle_files(cycle: int, folds: int) -> dict[str, tuple[str, ...]]:
     }
 
 
+@pytest.mark.integration
 def test_selective_invalidation_and_artifact_restoration(isolated_dvc: Path) -> None:
     """Exercise the generated DAG and restore complete disposable artifact sets."""
     params = Path("params.yaml")
@@ -346,6 +347,16 @@ for output in stage["outs"]:
     reproduce(per_cycle("evaluate", "predict") | performance)
     change("analyze_drift.n_permutations", 20)
     reproduce(per_cycle("analyze_drift"))
+    change("analyze_drift.seed", 2026)
+    reproduce(per_cycle("analyze_drift"))
+    change("train.seed", 2026)
+    reproduce(model_consumers | performance)
+    change("evaluate.seed", 2026)
+    reproduce(per_cycle("evaluate", "predict") | performance)
+    change("data.pred.seed", 2026)
+    reproduce(set(stages) - {"bootstrap", "train_cycle_1", "evaluate_cycle_1"})
+    change("device", "cpu")
+    reproduce(model_consumers | performance)
     change("data.edge_affinity.scale", 461.0)
     reproduce(set(stages))
 

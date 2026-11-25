@@ -212,6 +212,8 @@ def test_final_model_evaluation_and_prediction_share_frozen_state(
 ) -> None:
     """Train via a controlled double and run the real calibration and scoring path."""
     params, base, incoming = generated
+    params["device"] = "cpu"
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     raw, folds, test_graph, calibration_graph = load_cycle_data(
         base, resolve_graph_protocol(params)
     )
@@ -597,6 +599,11 @@ def test_drift_uses_raw_marginals_and_shared_multivariate_transform(
             == hashlib.sha256((paths["model"] / filename).read_bytes()).hexdigest()
         )
     assert metadata["configuration"]["n_permutations"] == 2
+    assert (
+        metadata["seed_provenance"]["configured_seed"]
+        == params["analyze_drift"]["seed"]
+    )
+    assert isinstance(metadata["seed_provenance"]["effective_seed"], int)
     if scaler_type is None:
         assert metadata["effective_gamma"] == 0.25
     else:
@@ -711,3 +718,106 @@ def test_configured_wasserstein_used_for_observed_and_permuted_inputs(
     assert spy.call_count == 3
     torch.testing.assert_close(spy.call_args_list[0].args[0], reference)
     torch.testing.assert_close(spy.call_args_list[0].args[1], incoming)
+
+
+def test_seeded_producers_replay_raw_data_and_partition_membership(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Replay the real generators and compare split indices and seed metadata."""
+    params = load_params()
+    params["data"]["base"].update(n_samples=120, min_samples_per_class=12, n_splits=2)
+    params["data"]["pred"].update(n_samples=40, seed=31)
+    for stage in (generate_base_data, generate_pred_data, prepare_next_cycle_data):
+        monkeypatch.setattr(stage, "export_graph_to_html", Mock())
+    for stage in (generate_base_data, prepare_next_cycle_data):
+        monkeypatch.setattr(stage, "export_all_graphs_to_html", Mock())
+        monkeypatch.setattr(stage, "analyze_feature_discrimination", Mock())
+
+    first, second = tmp_path / "first", tmp_path / "second"
+    for directory in (first, second):
+        base = directory / "base"
+        incoming = directory / "incoming"
+        generate_base_data.prepare_base_data(base, params)
+        generate_pred_data.prepare_pred_data(
+            {"base_data": base, "bootstrap_data": base, "output": incoming}, params
+        )
+        prepare_next_cycle_data.combine_split_data(
+            {"base_data": base, "prediction": incoming, "output": directory / "next"},
+            params,
+        )
+
+    for relative in ("base/base_data.pt", "incoming/pred_data.pt", "next/base_data.pt"):
+        a, b = (load_data(directory / relative, "Raw") for directory in (first, second))
+        assert a.dataset_sha256 == b.dataset_sha256
+        assert a.graph_sha256 == b.graph_sha256
+        assert a.seed_provenance == b.seed_provenance
+        assert a.x.device.type == "cpu"
+    for name in ("hotspots.npy", "prototypes.npy"):
+        np.testing.assert_array_equal(
+            np.load(first / "base" / name), np.load(second / "base" / name)
+        )
+
+    protocol = resolve_graph_protocol(params)
+    base_seed = params["data"]["base"]["seed"]
+    for base in ("base", "next"):
+        graph = load_data(first / base / "base_data.pt", "Base")
+        assert graph.seed_provenance["partition"] == base_seed
+        a, b = (
+            load_cycle_data(directory / base, protocol) for directory in (first, second)
+        )
+        _, folds_a, test_a, calib_a = a
+        _, folds_b, test_b, calib_b = b
+        for pair_a, pair_b in zip(folds_a, folds_b, strict=True):
+            for graph_a, graph_b in zip(pair_a, pair_b, strict=True):
+                torch.testing.assert_close(
+                    graph_a.original_node_indices, graph_b.original_node_indices
+                )
+        for graph_a, graph_b in ((test_a, test_b), (calib_a, calib_b)):
+            torch.testing.assert_close(
+                graph_a.original_node_indices, graph_b.original_node_indices
+            )
+    assert (
+        load_data(first / "base/base_data.pt", "Base").seed_provenance["generation"]
+        == base_seed
+    )
+    assert load_data(first / "incoming/pred_data.pt", "Prediction").seed_provenance == {
+        "generation": 31
+    }
+
+
+def test_training_replays_independent_torch_streams(
+    generated: tuple[dict, Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Replay model initialization and training draws on each fold and refit."""
+    params, base, _ = generated
+    params["train"].update(seed=17, n_epochs=1)
+    params["device"] = "cpu"
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(train, "get_model", lambda *_: nn.Linear(2, 2))
+    draws = []
+
+    def record_training(_graph, model, **_kwargs):
+        draws.append((model.weight.detach().clone(), torch.rand(8)))
+        return FoldTrainingResult(0.1, 1, None, [0.0005])
+
+    monkeypatch.setattr(train, "train", record_training)
+    monkeypatch.setattr(train, "train_final", record_training)
+    provenances = []
+    for index, cycle in enumerate((1, 1, 2)):
+        output = tmp_path / f"trained_{index}"
+        train.run_training({"base_data": base, "output": output}, params, "gcn", cycle)
+        binding = json.loads(
+            (output / "graph_binding.json").read_text(encoding="utf-8")
+        )
+        provenances.append(binding["training"]["seed_provenance"])
+
+    for first, repeated in zip(draws[:3], draws[3:6], strict=True):
+        torch.testing.assert_close(first[0], repeated[0], rtol=0, atol=0)
+        torch.testing.assert_close(first[1], repeated[1], rtol=0, atol=0)
+    assert len({tuple(weights.flatten().tolist()) for weights, _ in draws}) == 6
+    assert provenances[0] == provenances[1]
+    assert provenances[0]["device"] == "cpu"
+    assert (
+        len(set(provenances[0]["cv_seeds"]) | {provenances[0]["final_refit_seed"]}) == 3
+    )
+    assert provenances[0]["cv_seeds"] != provenances[2]["cv_seeds"]

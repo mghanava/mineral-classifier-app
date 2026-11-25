@@ -67,6 +67,7 @@ def generate_fine_grained_dvc_yaml():
         "src/utilities/graph_protocol.py",
         "src/utilities/spatial_graph.py",
         "src/utilities/data_utils.py",
+        "src/utilities/reproducibility.py",
     ]
     bundle_helpers = [
         "src/utilities/model_bundle.py",
@@ -74,6 +75,7 @@ def generate_fine_grained_dvc_yaml():
         *raw_helpers,
     ]
     model_sources = ["src/models/__init__.py", "src/models/gat.py", "src/models/gcn.py"]
+    device_source = "src/utilities/device.py"
     calibration_helpers = [
         "src/utilities/calibration_utils.py",
         "src/utilities/early_stopping.py",
@@ -139,11 +141,13 @@ def generate_fine_grained_dvc_yaml():
                 *bundle_helpers,
                 *cycle_partitions,
                 *model_sources,
+                device_source,
             ],
             "params": [
                 f"models.{model}",
                 *graph_consumer_settings,
                 "train",
+                "device",
                 *model_schema,
                 "data.scaler_type",
                 "data.scaler_params",
@@ -162,11 +166,13 @@ def generate_fine_grained_dvc_yaml():
                 *bundle_helpers,
                 *cycle_partitions,
                 *model_sources,
+                device_source,
                 *model_bundle,
             ],
             "params": [
                 f"models.{model}",
                 "evaluate",
+                "device",
                 *graph_consumer_settings,
                 *model_schema,
             ],
@@ -209,9 +215,11 @@ def generate_fine_grained_dvc_yaml():
                 f"{evaluation}/calibrator.pt",
                 f"{evaluation}/calibration_binding.json",
                 *model_sources,
+                device_source,
             ],
             "params": [
                 f"models.{model}",
+                "device",
                 *graph_consumer_settings,
                 *model_schema,
             ],

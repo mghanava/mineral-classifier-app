@@ -7,9 +7,8 @@ then runs predictions and saves the results for a given cycle.
 import argparse
 from pathlib import Path
 
-import torch
-
 from src.models import get_model
+from src.utilities.device import select_device
 from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
@@ -54,6 +53,8 @@ def run_prediction(paths: dict, params: dict, model_name: str):
         If required files (model, prediction data, calibrator) are missing.
 
     """
+    device = select_device(params.get("device", "auto"))
+    print(f"Using device {device} ...")
     base_params = params["data"]["base"]
     protocol = resolve_graph_protocol(params)
     settings = model_graph_settings(protocol, model_name, params)
@@ -80,8 +81,6 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     )
 
     # Run prediction
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device {device} ...")
 
     prediction(
         pred_data=model_graph(pred_data, raw, state, settings).to(device),

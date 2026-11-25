@@ -43,7 +43,8 @@ class LogTime:
         """End timing and print the execution time of the code block."""
         self.end_time = time.time()
         self.execution_time = self.end_time - self.start_time
-        print(f"{self.task_name} executed in {self.execution_time:.3f} seconds.\n")
+        outcome = "completed" if exc_type is None else "failed"
+        print(f"{self.task_name} {outcome} after {self.execution_time:.3f} seconds.\n")
         return False  # Propagate any exceptions
 
 
@@ -53,11 +54,11 @@ def load_params(path: str = "params.yaml"):
         return yaml.safe_load(f)
 
 
-def load_data(path: str, data_type: str, load_numpy: bool = False):
-    """Load data from a given path.
+def load_data(path: str | Path, data_type: str, load_numpy: bool = False):
+    """Load a trusted local artifact with tensor storage mapped to CPU.
 
     Args:
-        path (str): Path to the data file.
+        path: Path to the data file.
         data_type (str): Description of the data type for logging.
         load_numpy (bool): Whether to load a NumPy file.
 
@@ -68,7 +69,7 @@ def load_data(path: str, data_type: str, load_numpy: bool = False):
     if not os.path.exists(path):
         raise FileNotFoundError(f"{data_type} data not found at {path}!")
     if not load_numpy:
-        data = torch.load(path, weights_only=False)
+        data = torch.load(path, weights_only=False, map_location="cpu")
     else:
         with open(path, "rb") as f:
             data = np.load(f)
@@ -104,7 +105,7 @@ def load_model_weights(model, path):
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Model weights not found at {path}!")
-    model.load_state_dict(torch.load(path, weights_only=True))
+    model.load_state_dict(torch.load(path, weights_only=True, map_location="cpu"))
     print(f"📥 Model weights from {path} loaded successfully!")
 
 

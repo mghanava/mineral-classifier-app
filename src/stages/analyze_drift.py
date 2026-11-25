@@ -19,6 +19,12 @@ from src.utilities.general_utils import (
 from src.utilities.graph_protocol import resolve_graph_protocol, verify_graph
 from src.utilities.model_bundle import read_model_bundle
 from src.utilities.raw_graphs import read_raw_graph, synthetic_schema
+from src.utilities.reproducibility import (
+    DEFAULT_SEED,
+    SEED_SCHEME,
+    derive_seed,
+    validate_seed,
+)
 
 
 def get_cycle_paths(cycle_num):
@@ -33,6 +39,9 @@ def get_cycle_paths(cycle_num):
 
 def run_analyze_drift(paths: dict, params: dict, cycle_num: int) -> None:
     """Compare the historical base and incoming batch in approved feature spaces."""
+    config = params["analyze_drift"]
+    seed = validate_seed(config.get("seed", DEFAULT_SEED), "analyze_drift.seed")
+    effective_seed = derive_seed(seed, "drift", cycle_num)
     reference_graph = load_data(Path(paths["base_data"]) / "base_data.pt", "Base")
     incoming_graph = load_data(
         Path(paths["prediction_data"]) / "pred_data.pt", "Prediction"
@@ -74,7 +83,6 @@ def run_analyze_drift(paths: dict, params: dict, cycle_num: int) -> None:
     ]
     output = Path(paths["output"])
     output.mkdir(parents=True, exist_ok=True)
-    config = params["analyze_drift"]
     analyzer = AnalyzeDrift(
         *populations,
         feature_names=list(reference.feature_names),
@@ -86,6 +94,7 @@ def run_analyze_drift(paths: dict, params: dict, cycle_num: int) -> None:
         sinkhorn_wasserstein_reg=config["sinkhorn_wasserstein_reg"],
         early_stopping_config=config.get("early_stopping", {}),
         save_path=str(output),
+        seed=effective_seed,
     )
     analyzer.export_drift_analysis_to_file()
     analyzer.export_drift_analysis_plots()
@@ -106,6 +115,11 @@ def run_analyze_drift(paths: dict, params: dict, cycle_num: int) -> None:
         "scaler_type": state.scaler_type,
         **bundle,
         "configuration": config,
+        "seed_provenance": {
+            "scheme": SEED_SCHEME,
+            "configured_seed": seed,
+            "effective_seed": effective_seed,
+        },
         "effective_early_stopping": analyzer.early_stopping,
         "effective_gamma": analyzer.gamma,
         "wasserstein_method": analyzer.wasserstein_method,

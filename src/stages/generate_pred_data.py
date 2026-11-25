@@ -28,6 +28,7 @@ from src.utilities.raw_graphs import (
     synthetic_raw,
     synthetic_schema,
 )
+from src.utilities.reproducibility import DEFAULT_SEED, validate_seed
 
 
 def get_cycle_paths(cycle_num):
@@ -51,6 +52,9 @@ def prepare_pred_data(paths: dict, params: dict):
     base_params = params["data"]["base"]
     protocol = resolve_graph_protocol(params)
     pred_params = params["data"]["pred"]
+    seed = validate_seed(
+        pred_params.get("seed", DEFAULT_SEED), "data.pred.seed", maximum=None
+    )
 
     bootstrap_path = paths["bootstrap_data"]
     base_path = paths["base_data"]
@@ -100,7 +104,7 @@ def prepare_pred_data(paths: dict, params: dict):
         prototype_evolution_rate=base_params.get("prototype_evolution_rate", 0.3),
         n_samples=pred_params.get("n_samples", 200),
         min_samples_per_class=pred_params.get("min_samples_per_class", None),
-        seed=pred_params["seed"],
+        seed=seed,
     )
 
     # Verify no overlap with existing data
@@ -117,6 +121,7 @@ def prepare_pred_data(paths: dict, params: dict):
     pred_data = build_raw_graph(
         raw, protocol, "prediction", source_parent=parent.dataset_sha256
     )
+    pred_data.seed_provenance = {"generation": seed}
     save_data(pred_data, os.path.join(output_path, "pred_data.pt"), "Prediction")
     # export the interactive 3D plots
     # Handle class names and labels

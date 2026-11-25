@@ -18,7 +18,7 @@ logs:  ## Follow container logs
 # ============================================================
 
 install:  ## Create venv and install all dependencies (including dev)
-	uv sync --extra dev
+	uv sync --locked --extra dev
 
 dev:  ## Start in development mode (bind mount)
 	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
@@ -34,19 +34,19 @@ shell:  ## Open a shell inside the running container
 # ============================================================
 
 lint:  ## Run ruff linter
-	uv run ruff check .
+	uv run --frozen --no-sync ruff check .
 
 fmt:  ## Run ruff formatter
-	uv run ruff format .
+	uv run --frozen --no-sync ruff format .
 
 test:  ## Run tests
-	uv run pytest
+	uv run --frozen --no-sync pytest
 
 hooks:  ## Install pre-commit hooks
-	uv run pre-commit install
+	uv run --frozen --no-sync pre-commit install
 
 check:  ## Run all pre-commit hooks on all files
-	uv run pre-commit run --all-files
+	uv run --frozen --no-sync pre-commit run --all-files
 
 # ============================================================
 #  DVC / Pipeline

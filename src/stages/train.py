@@ -7,9 +7,8 @@ including independent cross-validation and a fresh development-pool refit.
 import argparse
 from pathlib import Path
 
-import torch
-
 from src.models import get_model
+from src.utilities.device import select_device
 from src.utilities.general_utils import (
     LogTime,
     ensure_directory_exists,
@@ -23,6 +22,13 @@ from src.utilities.raw_graphs import (
     load_cycle_data,
     model_graph,
     synthetic_schema,
+)
+from src.utilities.reproducibility import (
+    DEFAULT_SEED,
+    SEED_SCHEME,
+    derive_seed,
+    torch_seed,
+    validate_seed,
 )
 from src.utilities.train_utils import train, train_final
 from src.utilities.training_schedule import final_training_plan
@@ -56,6 +62,9 @@ def run_training(paths, params, model_name, cycle_num):
 
     """
     train_params = params["train"]
+    seed = validate_seed(train_params.get("seed", DEFAULT_SEED), "train.seed")
+    device = select_device(params.get("device", "auto"))
+    print(f"Using device {device} ...")
     protocol = resolve_graph_protocol(params)
     settings = model_graph_settings(protocol, model_name, params)
     model_params = settings["model_parameters"]
@@ -71,10 +80,8 @@ def run_training(paths, params, model_name, cycle_num):
             "Training configuration does not match the canonical raw schema."
         )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device {device} ...")
-
     diagnostics = []
+    fold_seeds = []
     for fold_index, (training, validation) in enumerate(fold_data):
         fold_idx = fold_index + 1
         if training.num_nodes == 1 and model_params.get("batch_norm", True):
@@ -95,26 +102,29 @@ def run_training(paths, params, model_name, cycle_num):
             model_graph(training, raw, preprocessing, settings),
             model_graph(validation, raw, preprocessing, settings),
         )
-        model = get_model(model_name, model_params).to(device)
-        result = train(
-            fold,
-            model,
-            n_classes=n_classes,
-            n_epochs=train_params["n_epochs"],
-            lr=train_params["lr"],
-            max_grad_norm=train_params["max_grad_norm"],
-            weight_decay=train_params["weight_decay_adam_optimizer"],
-            factor_learning_rate_scheduler=train_params[
-                "factor_learning_rate_scheduler"
-            ],
-            patience_learning_rate_scheduler=train_params[
-                "patience_learning_rate_scheduler"
-            ],
-            patience_early_stopping=train_params["patience_early_stopping"],
-            min_delta_early_stopping=train_params["min_delta_early_stopping"],
-            save_path=output_path,
-            dataset_idx=fold_idx,
-        )
+        fold_seed = derive_seed(seed, "train", cycle_num, "cv", fold_index)
+        fold_seeds.append(fold_seed)
+        with torch_seed(fold_seed, device):
+            model = get_model(model_name, model_params).to(device)
+            result = train(
+                fold,
+                model,
+                n_classes=n_classes,
+                n_epochs=train_params["n_epochs"],
+                lr=train_params["lr"],
+                max_grad_norm=train_params["max_grad_norm"],
+                weight_decay=train_params["weight_decay_adam_optimizer"],
+                factor_learning_rate_scheduler=train_params[
+                    "factor_learning_rate_scheduler"
+                ],
+                patience_learning_rate_scheduler=train_params[
+                    "patience_learning_rate_scheduler"
+                ],
+                patience_early_stopping=train_params["patience_early_stopping"],
+                min_delta_early_stopping=train_params["min_delta_early_stopping"],
+                save_path=output_path,
+                dataset_idx=fold_idx,
+            )
 
         diagnostics.append(result)
 
@@ -129,21 +139,31 @@ def run_training(paths, params, model_name, cycle_num):
         params["data"]["scaler_type"],
         params["data"].get("scaler_params"),
     )
-    final_model = get_model(model_name, model_params).to(device)
-    train_final(
-        model_graph(development, raw, preprocessing, settings),
-        final_model,
-        n_classes=n_classes,
-        learning_rates=plan["learning_rates"],
-        max_grad_norm=train_params["max_grad_norm"],
-        weight_decay=train_params["weight_decay_adam_optimizer"],
-    )
+    refit_seed = derive_seed(seed, "train", cycle_num, "final_refit")
+    with torch_seed(refit_seed, device):
+        final_model = get_model(model_name, model_params).to(device)
+        train_final(
+            model_graph(development, raw, preprocessing, settings),
+            final_model,
+            n_classes=n_classes,
+            learning_rates=plan["learning_rates"],
+            max_grad_norm=train_params["max_grad_norm"],
+            weight_decay=train_params["weight_decay_adam_optimizer"],
+        )
     training = {
         "strategy": "full_development_pool",
         "dataset_sha256": raw.dataset_sha256,
         "partition_sha256": partition.partition_sha256,
         "observation_count": development.num_nodes,
         **plan,
+        "seed_provenance": {
+            "scheme": SEED_SCHEME,
+            "cycle": cycle_num,
+            "configured_seed": seed,
+            "cv_seeds": fold_seeds,
+            "final_refit_seed": refit_seed,
+            "device": str(device),
+        },
     }
     publish_model(
         Path(output_path),

@@ -2,6 +2,7 @@
 cycles: 3
 add_self_loops: true
 default_model: gcn
+device: auto # auto, cpu, cuda or cuda:N
 # Data generation parameters
 data:
   scaler_type: RobustScaler # Options: RobustScaler, StandardScaler, MinMaxScaler
@@ -45,7 +46,7 @@ data:
   pred:
     n_samples: 200
     min_samples_per_class:
-    seed:
+    seed: 42 # Set null to draw a new batch when generation executes
 
 # Model parameters
 models:
@@ -68,6 +69,7 @@ models:
 
 # Training parameters
 train:
+  seed: 42
   n_epochs: 1500
   lr: 0.0005
   max_grad_norm: 1.0
@@ -97,6 +99,7 @@ evaluate:
 
 # Drift detection parameters
 analyze_drift:
+  seed: 42
   n_permutations: 1000
   use_max_sliced_wasserstein:
   n_projections: 100

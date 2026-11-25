@@ -15,6 +15,9 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Changed
 
+- Seed synthetic prediction by default and record reproducible model, calibration and drift streams in artifact metadata. Preserve the configured partition seed and explicit unseeded mode.
+- Use the locked project Ruff for pre-commit and project checks. Register an opt-in Pytest filter for faster local runs while keeping integration coverage in the default suite.
+
 - Deploy a fresh model and scaler trained on the complete development population after independent CV. Record fold best epochs, stopping epochs, learning rates and final refit provenance, and verify the new bundle in evaluation, calibration, prediction and drift.
 
 - Build independent training, validation, calibration, test and prediction graphs from canonical coordinates. Keep the fifth-percentile default, use bounded affinities with a 460-unit synthetic scale and bind the protocol to model and calibration artifacts. Legacy graph settings and bundles require explicit migration.
@@ -26,6 +29,9 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 - Removed executable permissions from `AGENTS.md`, `ROADMAP.md` and `CHANGELOG.md`.
 
 ### Fixed
+
+- Support explicit CPU or visible CUDA selection, and load CUDA-tagged graph and checkpoint storage on CPU before moving model inputs to the selected device.
+- Report unsuccessful dashboard commands with their context and stop full reproduction when pipeline generation fails.
 
 - Include base-cycle t-SNE diagnostics in DVC outputs, track shared calibration and model source dependencies, and keep performance aggregation within the declared cycle range. Verify selective invalidation and fixture cache restoration across two cycles.
 

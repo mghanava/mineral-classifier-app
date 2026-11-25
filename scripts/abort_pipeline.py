@@ -10,7 +10,7 @@ import signal
 import time
 
 SIGINT_GRACE_SECONDS = 3
-STAGE_PATTERNS = ["dvc repro", "src/stages/", "setup_dvc.py"]
+STAGE_PATTERNS = ["dvc repro", "src/stages/", "setup_dvc.py", "-m scripts.setup_dvc"]
 
 
 def find_pipeline_processes():

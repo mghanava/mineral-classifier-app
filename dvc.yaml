@@ -9,6 +9,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     params:
     - data.base
     - add_self_loops
@@ -54,6 +55,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/fold_data.pt
     - results/data/base/cycle_0/test_data.pt
@@ -61,6 +63,7 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     params:
     - models.gcn
     - add_self_loops
@@ -69,6 +72,7 @@ stages:
     - data.base.connection_radius
     - data.base.distance_percentile
     - train
+    - device
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -91,6 +95,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/fold_data.pt
     - results/data/base/cycle_0/test_data.pt
@@ -98,12 +103,14 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     - results/trained/cycle_1/model.pt
     - results/trained/cycle_1/preprocessing.json
     - results/trained/cycle_1/graph_binding.json
     params:
     - models.gcn
     - evaluate
+    - device
     - add_self_loops
     - data.edge_affinity
     - data.base.k_nearest
@@ -124,6 +131,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
@@ -153,6 +161,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/trained/cycle_1/model.pt
     - results/trained/cycle_1/preprocessing.json
     - results/trained/cycle_1/graph_binding.json
@@ -161,8 +170,10 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     params:
     - models.gcn
+    - device
     - add_self_loops
     - data.edge_affinity
     - data.base.k_nearest
@@ -186,6 +197,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/trained/cycle_1/model.pt
     - results/trained/cycle_1/preprocessing.json
     - results/trained/cycle_1/graph_binding.json
@@ -213,6 +225,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_0/base_data.pt
     - results/data/prediction/cycle_1/pred_data.pt
     params:
@@ -258,6 +271,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
@@ -265,6 +279,7 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     params:
     - models.gcn
     - add_self_loops
@@ -273,6 +288,7 @@ stages:
     - data.base.connection_radius
     - data.base.distance_percentile
     - train
+    - device
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -295,6 +311,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_1/fold_data.pt
     - results/data/base/cycle_1/test_data.pt
@@ -302,12 +319,14 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     - results/trained/cycle_2/model.pt
     - results/trained/cycle_2/preprocessing.json
     - results/trained/cycle_2/graph_binding.json
     params:
     - models.gcn
     - evaluate
+    - device
     - add_self_loops
     - data.edge_affinity
     - data.base.k_nearest
@@ -328,6 +347,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
@@ -357,6 +377,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/trained/cycle_2/model.pt
     - results/trained/cycle_2/preprocessing.json
     - results/trained/cycle_2/graph_binding.json
@@ -365,8 +386,10 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     params:
     - models.gcn
+    - device
     - add_self_loops
     - data.edge_affinity
     - data.base.k_nearest
@@ -390,6 +413,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/trained/cycle_2/model.pt
     - results/trained/cycle_2/preprocessing.json
     - results/trained/cycle_2/graph_binding.json
@@ -417,6 +441,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_1/base_data.pt
     - results/data/prediction/cycle_2/pred_data.pt
     params:
@@ -462,6 +487,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
@@ -469,6 +495,7 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     params:
     - models.gcn
     - add_self_loops
@@ -477,6 +504,7 @@ stages:
     - data.base.connection_radius
     - data.base.distance_percentile
     - train
+    - device
     - data.base.n_features
     - data.base.n_classes
     - data.base.class_names
@@ -499,6 +527,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_2/fold_data.pt
     - results/data/base/cycle_2/test_data.pt
@@ -506,12 +535,14 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     - results/trained/cycle_3/model.pt
     - results/trained/cycle_3/preprocessing.json
     - results/trained/cycle_3/graph_binding.json
     params:
     - models.gcn
     - evaluate
+    - device
     - add_self_loops
     - data.edge_affinity
     - data.base.k_nearest
@@ -532,6 +563,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/base/cycle_0/hotspots.npy
     - results/data/base/cycle_0/prototypes.npy
@@ -561,6 +593,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/trained/cycle_3/model.pt
     - results/trained/cycle_3/preprocessing.json
     - results/trained/cycle_3/graph_binding.json
@@ -569,8 +602,10 @@ stages:
     - src/models/__init__.py
     - src/models/gat.py
     - src/models/gcn.py
+    - src/utilities/device.py
     params:
     - models.gcn
+    - device
     - add_self_loops
     - data.edge_affinity
     - data.base.k_nearest
@@ -594,6 +629,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/trained/cycle_3/model.pt
     - results/trained/cycle_3/preprocessing.json
     - results/trained/cycle_3/graph_binding.json
@@ -621,6 +657,7 @@ stages:
     - src/utilities/graph_protocol.py
     - src/utilities/spatial_graph.py
     - src/utilities/data_utils.py
+    - src/utilities/reproducibility.py
     - results/data/base/cycle_2/base_data.pt
     - results/data/prediction/cycle_3/pred_data.pt
     params:

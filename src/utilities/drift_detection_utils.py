@@ -23,6 +23,8 @@ from sklearn.decomposition import PCA, KernelPCA
 from sklearn.feature_selection import mutual_info_regression
 from torch_geometric.data import Data
 
+from src.utilities.reproducibility import DEFAULT_SEED, derive_seed, torch_generator
+
 
 class AnalyzeDrift:
     """A class for analyzing distribution drift between datasets.
@@ -45,6 +47,8 @@ class AnalyzeDrift:
         sinkhorn_wasserstein_reg: float = 0.1,
         early_stopping_config: dict | None = None,
         save_path: str | None = None,
+        *,
+        seed: int | None = DEFAULT_SEED,
     ):
         """Initialize the AnalyzeDrift class with two datasets to compare.
 
@@ -60,6 +64,7 @@ class AnalyzeDrift:
             sinkhorn_wasserstein_reg: Regularization in squared feature-space units.
             early_stopping_config: Permutation early-stopping settings.
             save_path: Directory path to save analysis results. If None, results aren't saved.
+            seed: Effective analysis seed, or None to use entropy.
 
         """
         if use_max_sliced_wasserstein:
@@ -82,6 +87,10 @@ class AnalyzeDrift:
         X2 = pred_data.unscaled_features
         # Ensure tensors are on same device
         self.device, self.n_features = X1.device, X1.shape[1]
+        self.seed = seed
+        self._projection_rng = torch_generator(
+            self.device, derive_seed(seed, "max_sliced_projections")
+        )
         self.n1, self.n2 = X1.shape[0], X2.shape[0]
         self.X1 = X1
         self.X2 = X2.to(self.device)
@@ -167,8 +176,16 @@ class AnalyzeDrift:
             return self._wasserstein_1d(X1.squeeze(), X2.squeeze())
         a = X1.new_full((len(X1),), 1 / len(X1))
         b = X2.new_full((len(X2),), 1 / len(X2))
+        # Draw fresh unit vectors per statistic, as POT does by default.
+        projections = torch.randn(
+            (X1.shape[1], self.n_projections),
+            dtype=X1.dtype,
+            device=X1.device,
+            generator=self._projection_rng,
+        )
+        projections /= torch.sqrt((projections**2).sum(dim=0, keepdim=True))
         return ot.max_sliced_wasserstein_distance(
-            X1, X2, a, b, self.n_projections
+            X1, X2, a, b, self.n_projections, projections=projections
         ).item()  # type: ignore
 
     def _sinkhorn_wasserstein(self, X1: torch.Tensor, X2: torch.Tensor) -> float:
@@ -225,10 +242,15 @@ class AnalyzeDrift:
         Z = torch.cat([self.X1_scaled, self.X2_scaled], dim=0)
         null_stats = []
         significant_count = 0
+        permutation_rng = torch_generator(
+            self.device, derive_seed(self.seed, "permutations", method)
+        )
 
         for i in range(self.n_permutations):
             # Random permutation
-            perm_idx = torch.randperm(self.n1 + self.n2, device=self.device)
+            perm_idx = torch.randperm(
+                self.n1 + self.n2, device=self.device, generator=permutation_rng
+            )
             # Split permuted data
             X_perm = Z[perm_idx[: self.n1]]
             Y_perm = Z[perm_idx[self.n1 :]]
@@ -572,8 +594,12 @@ class AnalyzeDrift:
         return fig
 
     def _plot_pairwise_relationships(self, X1: np.ndarray, X2: np.ndarray):
-        X_mi = self._normalized_mutual_info_matrix(X1)
-        Y_mi = self._normalized_mutual_info_matrix(X2)
+        X_mi = self._normalized_mutual_info_matrix(
+            X1, random_state=derive_seed(self.seed, "mutual_information", "reference")
+        )
+        Y_mi = self._normalized_mutual_info_matrix(
+            X2, random_state=derive_seed(self.seed, "mutual_information", "incoming")
+        )
         mi_diff = X_mi - Y_mi
         fig, axes = pyplot.subplots(1, 3, figsize=(15, 4))
 
@@ -627,14 +653,19 @@ class AnalyzeDrift:
         # Combine data for consistent PCA transformation
         X_combined_scaled = np.vstack([X1, X2])
         # Fit PCA
-        pca = PCA()
+        pca = PCA(random_state=derive_seed(self.seed, "pca"))
         pca.fit(X_combined_scaled)
 
         # Transform both datasets
         X_pca = pca.transform(X1)
         Y_pca = pca.transform(X2)
 
-        kpca = KernelPCA(n_components=self.n_features, kernel="rbf", gamma=self.gamma)
+        kpca = KernelPCA(
+            n_components=self.n_features,
+            kernel="rbf",
+            gamma=self.gamma,
+            random_state=derive_seed(self.seed, "kernel_pca"),
+        )
         kpca.fit(X_combined_scaled)
 
         # Transform both datasets

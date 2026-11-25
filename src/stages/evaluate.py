@@ -7,9 +7,8 @@ import argparse
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-import torch
-
 from src.models import get_model
+from src.utilities.device import select_device
 from src.utilities.eval_utils import evaluate_with_calibration
 from src.utilities.general_utils import (
     LogTime,
@@ -29,6 +28,7 @@ from src.utilities.raw_graphs import (
     model_graph,
     synthetic_schema,
 )
+from src.utilities.reproducibility import DEFAULT_SEED
 
 
 def get_cycle_paths(cycle_num):
@@ -40,7 +40,7 @@ def get_cycle_paths(cycle_num):
     }
 
 
-def run_evaluation(paths: dict, params: dict, model_name: str):
+def run_evaluation(paths: dict, params: dict, model_name: str, *, cycle_num: int = 1):
     """Evaluate a trained model for a specific cycle using calibration.
 
     Parameters
@@ -51,6 +51,8 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
         Dictionary of configuration parameters for data, evaluation, and models.
     model_name : str
         Name of the model to evaluate.
+    cycle_num : int
+        Cycle used to derive the calibration initialization seed.
 
     Raises
     ------
@@ -58,6 +60,8 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
         If the required test data or model file is not found.
 
     """
+    device = select_device(params.get("device", "auto"))
+    print(f"Using device {device} ...")
     base_params = params["data"]["base"]
     eval_params = params["evaluate"]
     protocol = resolve_graph_protocol(params)
@@ -88,8 +92,6 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
         )
 
     # Run evaluation
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device {device} ...")
 
     destination = Path(output_path)
     with TemporaryDirectory(dir=destination) as temporary:
@@ -116,7 +118,8 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
             patience_early_stopping=eval_params["patience_early_stopping"],
             min_delta_early_stopping=eval_params["min_delta_early_stopping"],
             verbose=eval_params["verbose"],
-            seed=eval_params["seed"],
+            seed=eval_params.get("seed", DEFAULT_SEED),
+            cycle_num=cycle_num,
             save_path=temporary,
         )
         staged = Path(temporary)
@@ -151,7 +154,7 @@ def main():
     params = load_params()
     # Run evaluation
     with LogTime(task_name=f"\nEvaluation cycle {cycle_num}"):
-        run_evaluation(paths, params, model_name)
+        run_evaluation(paths, params, model_name, cycle_num=cycle_num)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ from src.utilities.general_utils import (
 )
 from src.utilities.graph_protocol import resolve_graph_protocol
 from src.utilities.raw_graphs import build_cycle_graphs, synthetic_raw
+from src.utilities.reproducibility import DEFAULT_SEED, validate_seed
 
 
 def prepare_base_data(
@@ -44,6 +45,7 @@ def prepare_base_data(
     # load parameters
     base_params = params["data"]["base"]
     protocol = resolve_graph_protocol(params)
+    seed = validate_seed(base_params.get("seed", DEFAULT_SEED), "data.base.seed")
 
     # Handle class names and labels
     class_names = base_params["class_names"] or [
@@ -71,13 +73,14 @@ def prepare_base_data(
         mineral_noise_level=base_params.get("mineral_noise_level", 0.1),
         exp_decay_factor=base_params.get("exp_decay_factor", 0.01),
         feature_noise_level=base_params.get("feature_noise_level", 0.5),
-        seed=base_params.get("seed", 42),
+        seed=seed,
     )
 
     raw = synthetic_raw(features, coordinates, labels, base_params)
     base_data, fold_data, test_data, calib_data = build_cycle_graphs(
         raw, protocol, base_params
     )
+    base_data.seed_provenance["generation"] = seed
     export_graph_to_html(base_data, output_path, labels_map, dataset_tag="base_data")
     export_all_graphs_to_html(fold_data, test_data, calib_data, labels_map, output_path)
 

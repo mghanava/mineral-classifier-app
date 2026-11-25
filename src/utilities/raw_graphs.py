@@ -17,6 +17,7 @@ from src.utilities.preprocessing import (
     RawDataset,
     synthetic_sample_ids,
 )
+from src.utilities.reproducibility import DEFAULT_SEED, validate_seed
 from src.utilities.spatial_graph import build_spatial_graph
 
 RAW_SCHEMA_VERSION = 1
@@ -206,12 +207,13 @@ def build_cycle_graphs(
     raw: RawDataset, protocol: dict, base_params: dict
 ) -> tuple[Data, list[tuple[Data, Data]], Data, Data]:
     """Establish membership first and build each population independently."""
+    seed = validate_seed(base_params.get("seed", DEFAULT_SEED), "data.base.seed")
     folds, test, calibration = partition_indices(
         raw.labels,
         base_params["n_splits"],
         base_params.get("test_size"),
         base_params.get("calib_size"),
-        base_params.get("seed", 42),
+        seed,
     )
     _verify_membership(
         len(raw.sample_ids),
@@ -219,8 +221,10 @@ def build_cycle_graphs(
         set(test),
         set(calibration),
     )
+    overview = build_raw_graph(raw, protocol, "overview")
+    overview.seed_provenance = {"partition": seed}
     return (
-        build_raw_graph(raw, protocol, "overview"),
+        overview,
         [
             (
                 build_raw_graph(raw, protocol, "train", indices=train, fold=index),

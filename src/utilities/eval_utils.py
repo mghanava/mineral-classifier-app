@@ -57,8 +57,10 @@ def evaluate_with_calibration(
     patience_early_stopping: int,
     min_delta_early_stopping: float,
     verbose: bool = False,
-    seed: int = 42,
+    seed: int | None = 42,
     save_path: str | None = None,
+    *,
+    cycle_num: int = 1,
 ):
     """Evaluate a model's performance with and without calibration, and save results.
 
@@ -67,7 +69,8 @@ def evaluate_with_calibration(
     and metrics to disk.
 
     Args:
-        data: PyTorch Geometric data object containing the graph data and masks
+        test_data: Prepared PyTorch Geometric graph for held-out testing.
+        calibration_data: Prepared PyTorch Geometric graph for calibration.
         model: PyTorch model to evaluate
         calibration_method (str): Method used for calibration ('temperature_scaling', 'vector_scaling', etc.)
         initial_temperature (float): Initial temperature parameter for temperature scaling
@@ -76,7 +79,6 @@ def evaluate_with_calibration(
         lr (float): Learning rate for calibration optimization
         n_epochs (int): Number of epochs to train calibration
         weight_decay_adam_optimizer (float): Weight decay parameter for Adam optimizer during calibration
-        device (torch.device): Device to run computations on
         reg_lambda (float): Regularization parameter for calibration
         reg_mu (float): Regularization parameter for calibration
         eps (float): Small value to avoid division by zero in calibration
@@ -86,7 +88,8 @@ def evaluate_with_calibration(
         min_delta_early_stopping (float): Minimum change in loss for early stopping
         verbose (bool): Whether to print progress during calibration
         save_path (str): Directory path to save outputs
-        seed (int): Random seed for reproducibility
+        seed: Calibration split seed or None for unseeded fitting.
+        cycle_num: Cycle used to derive the calibration initialization seed.
 
     Returns:
         dict: Dictionary containing metrics before and after calibration:
@@ -109,7 +112,7 @@ def evaluate_with_calibration(
         - Saves reliability diagram plot to '{save_path}/reliability_diagram.png'
         - Saves confusion matrix plot to '{save_path}/confusion_matrix.png'
         - Saves metrics to '{save_path}/metrics.json'
-        - Saves calibrator model to '{save_path}/calibrator.pkl'
+        - Saves calibrator model to '{save_path}/calibrator.pt'
 
     """
     device = next(model.parameters()).device
@@ -125,8 +128,9 @@ def evaluate_with_calibration(
     )
     # Get base model predictions
     model.eval()
-    test_logits = model(test_data)
-    calib_logits = model(calibration_data)
+    with torch.no_grad():
+        test_logits = model(test_data)
+        calib_logits = model(calibration_data)
     # Calculate metrics before calibration
     uncalibrated_probs = F.softmax(test_logits, dim=1)
     uncalibrated_pred = uncalibrated_probs.argmax(dim=1)
@@ -180,6 +184,7 @@ def evaluate_with_calibration(
         patience_early_stopping=patience_early_stopping,
         min_delta_early_stopping=min_delta_early_stopping,
         seed=seed,
+        cycle_num=cycle_num,
         save_path=save_path,
     ).save(filepath=save_path)
     calibrated_probs = pipeline.predict_from_logits(test_logits)
