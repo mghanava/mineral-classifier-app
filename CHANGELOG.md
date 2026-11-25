@@ -8,6 +8,8 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Verified reduced production DVC runs for CPU GCN, CPU GAT and CUDA GCN. Recorded real cache restoration, seeded CPU recomputation, populated dashboard rendering and CPU loading of the CUDA-trained bundle in the [end-to-end report](docs/end_to_end_verification.md).
+
 - Deterministic CPU regression tests for GCN and GAT forward passes, graph edges, dataset partition disjointness, feature and label alignment, and induced subgraphs.
 - Isolated DVC pipeline generation checks and a Streamlit rendering test for missing artifacts.
 - Standalone fold-local preprocessing for RobustScaler, StandardScaler, MinMaxScaler and disabled scaling, with immutable raw data and partition contracts, validated model-bound JSON and deterministic CPU coverage.
