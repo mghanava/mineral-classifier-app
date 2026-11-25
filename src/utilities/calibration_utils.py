@@ -1121,15 +1121,27 @@ class CalibratedModel:
         )._predict_isotonic_calibration(self.iso_calibrators[0], logits)
 
     def _isotonic_predict_multiclass(self, logits):
+        """Apply each fitted isotonic map and normalize positive row mass."""
         if self.iso_calibrators is None:
             raise RuntimeError(
                 "Calibration model was not properly initialized during fitting"
             )
-        """Isotonic multi-class prediction"""
+        if len(self.iso_calibrators) != logits.shape[1]:
+            raise ValueError(
+                "Multiclass isotonic calibration requires one fitted calibrator per logit column."
+            )
+        isotonic = IsotonicRegressionCalibration(device=self.device)
         probs = torch.zeros(logits.shape, device=self.device)
-        for i, _ in enumerate(self.iso_calibrators):
-            probs[:, i] = self._isotonic_predict_binary(logits[:, i])
-        return probs / probs.sum(dim=1, keepdim=True).clamp(min=self.eps)
+        for i, calibrator in enumerate(self.iso_calibrators):
+            probs[:, i] = isotonic._predict_isotonic_calibration(
+                calibrator, logits[:, i]
+            )
+        totals = probs.sum(dim=1, keepdim=True)
+        if not torch.isfinite(totals).all() or torch.any(totals <= 0):
+            raise ValueError(
+                "Multiclass isotonic calibration produced a row with zero total probability or non-finite scores."
+            )
+        return probs / totals
 
     def save_calibrated_model(self, filepath: str) -> None:
         """Save the complete calibrated model state for pipeline deployment.

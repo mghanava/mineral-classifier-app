@@ -50,6 +50,7 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 ### Milestone 2 — Configuration management (`0.2.0.dev2`)
 
 - [x] **M2.1 — Configuration inventory and design.** Document all existing parameters, actual consumers, conditional behavior, preset recommendations and compatibility in the [configuration design](docs/configuration_design.md).
+- [x] **M2.1a — Multiclass isotonic calibration.** Verified and corrected per-class inference, row normalization and handling of undefined rows. Confirmed existing artifact compatibility.
 - [ ] **M2.2 — Centralized configuration validation.** Add a shared validation layer for types, ranges and conditional combinations while preserving resolved YAML compatibility.
 - [ ] **M2.3 — Experiment presets.** Implement Quick demo, Standard and Research using explicit overlays and coordinated budgets.
 - [ ] **M2.4 — Configuration resolution and integration.** Resolve defaults, presets and overrides for Streamlit and CLI use. Preserve expert editing and preview the complete configuration before applying it.

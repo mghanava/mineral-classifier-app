@@ -6,6 +6,10 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
+### Fixed
+
+- Apply each fitted isotonic map to its matching multiclass logit column. Normalize positive rows by their actual sum and report undefined zero-mass rows. Existing fitted isotonic artifacts remain readable, but affected reports and predictions need regeneration.
+
 ## [0.2.0.dev1]
 
 Scientific stabilization is complete for the verified reduced synthetic workflow. The full suite has 147 passing regression tests. Production-path checks covered CPU GCN and GAT, host CUDA GCN, CPU loading of the GPU-trained bundle, seeded recomputation, byte-for-byte restoration of 124 DVC artifacts, and all seven dashboard tabs. See the [end-to-end verification report](docs/end_to_end_verification.md).
