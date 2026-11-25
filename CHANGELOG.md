@@ -6,6 +6,10 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
+## [0.2.0.dev1]
+
+Scientific stabilization is complete for the verified reduced synthetic workflow. The full suite has 147 passing regression tests. Production-path checks covered CPU GCN and GAT, host CUDA GCN, CPU loading of the GPU-trained bundle, seeded recomputation, byte-for-byte restoration of 124 DVC artifacts, and all seven dashboard tabs. See the [end-to-end verification report](docs/end_to_end_verification.md).
+
 ### Added
 
 - Verified reduced production DVC runs for CPU GCN, CPU GAT and CUDA GCN. Recorded real cache restoration, seeded CPU recomputation, populated dashboard rendering and CPU loading of the CUDA-trained bundle in the [end-to-end report](docs/end_to_end_verification.md).
@@ -44,6 +48,17 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 - Initialize a fresh model for each cross-validation fold alongside its own optimizer, learning-rate scheduler and early stopper.
 - Copy best-epoch weights independently of live CPU parameters and include the stopping epoch in fold diagnostics.
 - Restore training mode before every epoch so dropout and batch normalization use training behavior after each validation pass. A three-epoch CPU test checks the model mode and gradient state of every forward pass.
+
+### Removed
+
+- Removed the obsolete tracked `dvc.lock`. The same file is preserved at the `v0.1.0` tag. DVC reproduction generates a new lockfile for the configuration it runs. Reduced production configurations were verified, and full default-budget reproduction is pending. Use a lock generated from the corresponding configuration. A smoke-test lock is valid only for its smoke configuration.
+
+### Known limitations
+
+- Validation uses random stratified splits, so generalization to unseen regions is unverified. Evaluation populations also change across learning cycles, limiting longitudinal comparisons.
+- Percentile-based graph degree depends on batch size. The CV-informed final training duration remains a heuristic.
+- Spatial dependence limits interpretation of drift permutation p-values. No accuracy improvement has been established by benchmarking.
+- Full default-budget production reproduction and container deployment are unverified. User-uploaded data workflows and UI simplification remain future milestones.
 
 ## [0.1.0]
 

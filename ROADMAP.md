@@ -6,7 +6,7 @@ Transform the v0.1.0 research prototype into an accessible spatial machine learn
 
 ## Release strategy
 
-The `v0.1.0` tag preserves the original application at `d00c2cd`. The development foundation is recorded at `55aeacf`. Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below identify milestones. The current project version is `0.2.0.dev0`. The owner approves version changes, commits, tags and merges. Check off milestones and work items after verification.
+The `v0.1.0` tag preserves the original application at `d00c2cd`. The development foundation is recorded at `55aeacf`. Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below identify milestones. The current project version is `0.2.0.dev1`. The owner approves version changes, commits, tags and merges. Check off milestones and work items after verification.
 
 ## v0.2.0 — Accessible classification application
 
@@ -43,7 +43,9 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 
 **Final checkpoint policy.** Independent CV folds retain best-epoch and early-stopping diagnostics. The stage then saves the fresh full-development model after its fixed CV-informed duration. The separate calibration and test graphs remain reserved. See the [final-model strategy](docs/graph_design.md#m14a-development-pool-final-model).
 
-**Acceptance:** The CPU regression suite passes, scientific protocol changes are documented and tested, and a small synthetic run verifies the path from data generation through prediction and drift analysis.
+**Acceptance met.** All 147 regression tests passed. Reduced production runs verified CPU GCN and GAT, host CUDA GCN, seeded recomputation, DVC cache restoration, and the populated dashboard. See the [verification report](docs/end_to_end_verification.md).
+
+**Release boundary.** The obsolete tracked DVC lockfile was removed and remains available at `v0.1.0`. Generate a new lock by reproducing the corresponding configuration. The full default-budget run and container deployment remain unverified. A reduced-run lock applies only to the reduced configuration. The [changelog](CHANGELOG.md) records the remaining scientific and workflow limitations.
 
 ### Milestone 2 — Configuration management (`0.2.0.dev2`)
 

@@ -60,7 +60,7 @@ The same isolated two-cycle fixture removed its entire disposable `results/` tre
 
 ## Legacy lockfile and M1.7 procedure
 
-The tracked `dvc.lock` uses schema 2.0 and has 122 records. All 20 current names are present. Another 102 records belong to cycles 4–20, six per cycle. Comparing commands, dependency paths, tracked parameter keys and output paths found zero exact matches among the 20 overlapping records. For example, bootstrap has hashes for four tensor outputs, evaluation's first-cycle record depends on the test graph and weights without the calibration graph or binding files, and the performance command predates the explicit cycle argument. There are no explicit hashes for the bootstrap arrays, t-SNE diagnostics or binding sidecars. Directory hashes alone cannot establish the exact contents or provenance of those historical bundles. These records predate canonical raw data, independent split graphs, bound preprocessing and the full development-pool refit. Treat the lockfile and any matching artifacts as historical.
+The historical `dvc.lock` used schema 2.0 and had 122 records. All 20 current names are present. Another 102 records belong to cycles 4–20, six per cycle. Comparing commands, dependency paths, tracked parameter keys and output paths found zero exact matches among the 20 overlapping records. For example, bootstrap has hashes for four tensor outputs, evaluation's first-cycle record depends on the test graph and weights without the calibration graph or binding files, and the performance command predates the explicit cycle argument. There are no explicit hashes for the bootstrap arrays, t-SNE diagnostics or binding sidecars. Directory hashes alone cannot establish the exact contents or provenance of those historical bundles. These records predate canonical raw data, independent split graphs, bound preprocessing and the full development-pool refit. Treat the lockfile and any matching artifacts as historical.
 
 For the authorized M1.7 run:
 
@@ -70,3 +70,5 @@ For the authorized M1.7 run:
 4. In the disposable run, snapshot the result paths and hashes, remove the disposable results, restore from that run's local cache and verify the real bundle consumers again. Confirm a subsequent reproduction is current. Review the clean lockfile together with the exact generated definition and configuration. A reduced CPU test lock cannot serve as the default production lock. Any checked-in replacement needs an approved reproduction of the matching configuration.
 
 M1.5 leaves the production lockfile, cache and generated results in place.
+
+Release preparation for `0.2.0.dev1` removed the obsolete tracked lockfile. The identical file remains available at `v0.1.0:dvc.lock`. [M1.7](end_to_end_verification.md) verified reduced production configurations. Reproducing a corresponding configuration generates its new lockfile. The default-budget configuration still needs its own reproduction and lockfile.
