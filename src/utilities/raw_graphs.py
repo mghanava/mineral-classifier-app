@@ -182,7 +182,7 @@ def _verify_membership(
     folds: list[tuple[set[int], set[int]]],
     test_rows: set[int],
     calibration_rows: set[int],
-) -> None:
+) -> set[int]:
     if test_rows & calibration_rows:
         raise ValueError("Calibration and test partitions overlap.")
     development = set(range(row_count)) - (test_rows | calibration_rows)
@@ -199,6 +199,7 @@ def _verify_membership(
         validated_rows.update(val_rows)
     if validated_rows != development:
         raise ValueError("Validation folds do not cover the development pool.")
+    return development
 
 
 def build_cycle_graphs(
@@ -318,6 +319,34 @@ def load_cycle_data(
         )
     _verify_membership(len(raw.sample_ids), verified, test_rows, calibration_rows)
     return raw, folds, test, calibration
+
+
+def build_development_graph(
+    raw: RawDataset,
+    folds: list[tuple[Data, Data]],
+    test: Data,
+    calibration: Data,
+    protocol: dict,
+) -> Data:
+    """Reconstruct the development pool in parent order from verified graphs."""
+    development = _verify_membership(
+        len(raw.sample_ids),
+        [
+            (
+                set(training.original_node_indices.tolist()),
+                set(validation.original_node_indices.tolist()),
+            )
+            for training, validation in folds
+        ],
+        set(test.original_node_indices.tolist()),
+        set(calibration.original_node_indices.tolist()),
+    )
+    return build_raw_graph(
+        raw,
+        protocol,
+        "development",
+        indices=np.array(sorted(development), dtype=np.int64),
+    )
 
 
 def model_graph(

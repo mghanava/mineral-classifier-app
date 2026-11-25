@@ -102,7 +102,6 @@ def run_analyze_drift(paths: dict, params: dict, cycle_num: int) -> None:
             "multivariate": "frozen_model_transform_float64",
         },
         "model_cycle": cycle_num,
-        "fold_index": state.fold_index,
         "training_partition_sha256": state.partition_sha256,
         "scaler_type": state.scaler_type,
         **bundle,

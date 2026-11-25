@@ -93,6 +93,7 @@ def model_graph_settings(protocol: dict, model_name: str, params: dict) -> dict:
     return {
         "protocol": protocol,
         "model": model_name,
+        "model_parameters": {**model, "add_self_loops": False},
         "effective_loop_affinity": (
             loops["improved_gcn_affinity"] if improved else loops["stored_affinity"]
         )

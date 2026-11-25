@@ -276,8 +276,8 @@ def test_rejects_malformed_numeric_state(
         ('{"version": 1, "version": 1}', "Duplicate JSON keys"),
         ("{}", "Unsupported or legacy"),
         ('{"version": true}', "Unsupported or legacy"),
-        ('{"version": 2}', "Unsupported or legacy"),
-        ('{"version": 1}', "Malformed preprocessing artifact"),
+        ('{"version": 1}', "Unsupported or legacy"),
+        ('{"version": 2}', "Malformed preprocessing artifact"),
     ],
 )
 def test_rejects_malformed_or_legacy_sidecar(

@@ -11,7 +11,7 @@ import numpy as np
 from numpy.typing import NDArray
 from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
 
-ARTIFACT_VERSION = 1
+ARTIFACT_VERSION = 2
 _SCALERS = {
     "RobustScaler": RobustScaler,
     "StandardScaler": StandardScaler,
@@ -38,9 +38,11 @@ def _check_digest(value: str, name: str) -> None:
         raise ValueError(f"{name} must be a lowercase SHA-256 digest.")
 
 
-def _check_fold(fold_index: int) -> None:
-    if type(fold_index) is not int or fold_index < 0:
-        raise ValueError("Fold index must be a non-negative zero-based integer.")
+def _check_fold(fold_index: int | None) -> None:
+    if fold_index is not None and (type(fold_index) is not int or fold_index < 0):
+        raise ValueError(
+            "Fold index must be zero-based or null for the complete development pool."
+        )
 
 
 def _matrix(values: NDArray[np.float64], name: str) -> NDArray[np.float64]:
@@ -192,19 +194,19 @@ class RawDataset:
 
 @dataclass(frozen=True, eq=False)
 class TrainingPartition:
-    """Bind a fold's ordered training rows to their exact raw parent dataset.
+    """Bind ordered training rows to their exact raw parent dataset.
 
     The fitted-state artifact records the partition digest. The partition
     indices themselves remain in the dataset artifacts.
 
     Args:
         dataset_sha256: Digest of the raw parent dataset.
-        fold_index: Zero-based fold index.
+        fold_index: Zero-based fold index or None for the development pool.
         training_indices: Unique int64 row indices in training order.
 
     Attributes:
         dataset_sha256: Digest of the raw parent dataset.
-        fold_index: Zero-based fold index.
+        fold_index: Zero-based fold index or None for the development pool.
         training_indices: Read-only training row indices.
         partition_sha256: Digest of the parent, fold and ordered training indices.
 
@@ -218,7 +220,7 @@ class TrainingPartition:
     """
 
     dataset_sha256: str
-    fold_index: int
+    fold_index: int | None
     training_indices: NDArray[np.int64]
     partition_sha256: str = field(init=False)
 
@@ -231,7 +233,12 @@ class TrainingPartition:
             raise ValueError("Training indices must be unique and non-negative.")
         object.__setattr__(self, "training_indices", _immutable_array(indices))
 
-        digest = hashlib.sha256(b"mineral-training-partition-v1\n")
+        domain = (
+            b"mineral-development-pool-v1\n"
+            if self.fold_index is None
+            else b"mineral-training-partition-v1\n"
+        )
+        digest = hashlib.sha256(domain)
         digest.update(f"{self.dataset_sha256}:{self.fold_index}:".encode("ascii"))
         _update_array_digest(digest, self.training_indices, "<i8")
         object.__setattr__(self, "partition_sha256", digest.hexdigest())
@@ -254,7 +261,7 @@ def _numeric_tuple(values: Sequence[float], count: int, name: str) -> tuple[floa
 
 @dataclass(frozen=True)
 class FittedPreprocessing:
-    """Describe one fold's immutable numerical feature transform.
+    """Describe a training population's immutable numerical feature transform.
 
     Fit estimators through `fit_preprocessing`. The persisted numeric state
     defines transform behavior independently of estimator deserialization.
@@ -265,7 +272,7 @@ class FittedPreprocessing:
         class_names: Class names in integer-label order.
         dataset_sha256: Digest of the raw parent dataset.
         partition_sha256: Digest of the exact training partition.
-        fold_index: Zero-based fold index.
+        fold_index: Zero-based fold index or None for the development pool.
         center: Optional subtraction vector for Standard or Robust scaling.
             Defaults to None.
         scale: Optional divisor for Standard or Robust scaling, or required
@@ -279,7 +286,7 @@ class FittedPreprocessing:
         class_names: Expected class mapping.
         dataset_sha256: Bound dataset provenance.
         partition_sha256: Bound training partition provenance.
-        fold_index: Zero-based fitted fold.
+        fold_index: Zero-based fitted fold or None for the development pool.
         center: Fitted subtraction vector, when used.
         scale: Fitted divisor or multiplier, when used.
         offset: Fitted MinMax offset, when used.
@@ -297,7 +304,7 @@ class FittedPreprocessing:
     class_names: tuple[str, ...]
     dataset_sha256: str
     partition_sha256: str
-    fold_index: int
+    fold_index: int | None
     center: tuple[float, ...] | None = None
     scale: tuple[float, ...] | None = None
     offset: tuple[float, ...] | None = None
@@ -431,7 +438,7 @@ def fit_preprocessing(
     scaler_type: str | None,
     scaler_params: Mapping[str, Any] | None = None,
 ) -> FittedPreprocessing:
-    """Fit a new scaler using only the designated fold training rows.
+    """Fit a new scaler using only the designated training rows.
 
     The selected indices must refer to the same raw parent. The caller
     designates eligible training rows through the partition contract.
@@ -526,7 +533,7 @@ def save_preprocessing(
 
     Args:
         path: Destination for the versioned JSON sidecar.
-        state: Fitted preprocessing for the model's training fold.
+        state: Fitted preprocessing for the model's training population.
         weights_path: Path to the existing checkpoint to bind.
 
     Raises:

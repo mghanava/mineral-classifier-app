@@ -57,7 +57,7 @@ def run_prediction(paths: dict, params: dict, model_name: str):
     base_params = params["data"]["base"]
     protocol = resolve_graph_protocol(params)
     settings = model_graph_settings(protocol, model_name, params)
-    model_params = {**params["models"][model_name], "add_self_loops": False}
+    model_params = settings["model_parameters"]
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 

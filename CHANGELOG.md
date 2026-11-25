@@ -15,9 +15,11 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Changed
 
+- Deploy a fresh model and scaler trained on the complete development population after independent CV. Record fold best epochs, stopping epochs, learning rates and final refit provenance, and verify the new bundle in evaluation, calibration, prediction and drift.
+
 - Build independent training, validation, calibration, test and prediction graphs from canonical coordinates. Keep the fifth-percentile default, use bounded affinities with a 460-unit synthetic scale and bind the protocol to model and calibration artifacts. Legacy graph settings and bundles require explicit migration.
 
-- Store canonical float64 synthetic observations and stable sample IDs across cycles. Training publishes the winning fold's scaler with its weights, and evaluation and prediction verify and reuse that scaler. Calibration records its fitted split and exact bundle digests.
+- Store canonical float64 synthetic observations and stable sample IDs across cycles. Evaluation and prediction verify and reuse model-bound preprocessing. Calibration records its fitted split and exact bundle digests.
 - Restored drift analysis using raw marginal features and the same frozen model transform for both populations' multivariate statistics and plots. Drift records dataset, checkpoint and representation provenance.
 - Updated preprocessing-related DVC dependencies and verified invalidation and sidecar restoration with a temporary fixture pipeline. Legacy generated data and checkpoints require regeneration.
 - Added a scientific stabilization milestone with seven work items before configuration management.
@@ -30,7 +32,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 - Use the selected Wasserstein statistic for both the observed comparison and its permutations.
 
 - Initialize a fresh model for each cross-validation fold alongside its own optimizer, learning-rate scheduler and early stopper.
-- Copy best-epoch weights independently of live CPU parameters and include the stopping epoch in fold diagnostics. The existing `model.pt` now contains the restored weights of the independently trained fold with the lowest validation loss.
+- Copy best-epoch weights independently of live CPU parameters and include the stopping epoch in fold diagnostics.
 - Restore training mode before every epoch so dropout and batch normalization use training behavior after each validation pass. A three-epoch CPU test checks the model mode and gradient state of every forward pass.
 
 ## [0.1.0]

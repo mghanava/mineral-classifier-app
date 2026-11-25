@@ -16,6 +16,47 @@ from sklearn.utils.class_weight import compute_class_weight, compute_sample_weig
 
 from src.utilities.calibration_utils import CalibrationMetrics
 from src.utilities.early_stopping import EarlyStopping
+from src.utilities.training_schedule import FoldTrainingResult
+
+
+def _weighted_loss(labels, n_classes: int) -> nn.CrossEntropyLoss:
+    weights = compute_class_weight(
+        class_weight="balanced", classes=np.arange(n_classes), y=labels.cpu().numpy()
+    )
+    return nn.CrossEntropyLoss(
+        weight=torch.as_tensor(weights, dtype=torch.float32, device=labels.device)
+    )
+
+
+def _training_step(data, model, optimizer, criterion, max_grad_norm: float):
+    model.train()
+    optimizer.zero_grad()
+    loss = criterion(model(data), data.y)
+    loss.backward()
+    grad_norm = nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+    optimizer.step()
+    return loss.item(), grad_norm.item()
+
+
+def train_final(
+    data,
+    model: nn.Module,
+    n_classes: int,
+    learning_rates: list[float],
+    max_grad_norm: float,
+    weight_decay: float,
+) -> None:
+    """Train the fresh development model for exactly the replay schedule length."""
+    if not learning_rates:
+        raise ValueError("Final training requires at least one scheduled epoch.")
+    data = data.to(next(model.parameters()).device)
+    criterion = _weighted_loss(data.y, n_classes)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=learning_rates[0], weight_decay=weight_decay
+    )
+    for rate in learning_rates:
+        optimizer.param_groups[0]["lr"] = rate
+        _training_step(data, model, optimizer, criterion, max_grad_norm)
 
 
 def train(
@@ -32,7 +73,7 @@ def train(
     min_delta_early_stopping: float,
     dataset_idx: int,
     save_path: str,
-):
+) -> FoldTrainingResult:
     """Train a Graph Neural Network model with early stopping and learning rate scheduling.
 
     This function implements a training loop for a GNN model with various features including
@@ -54,9 +95,8 @@ def train(
         save_path (str): Directory path where training plots will be saved
 
     Returns:
-        tuple: (trained_model, best_validation_loss)
-            - trained_model: The trained GNN model
-            - best_validation_loss: The lowest validation loss achieved during training
+        Fold diagnostics with one-based completed epoch counts. The model is
+        restored in place to its best validation epoch.
 
     The function tracks multiple metrics during training:
         - Training and validation losses
@@ -72,6 +112,8 @@ def train(
         - Comprehensive training visualization plots
 
     """
+    if type(n_epochs) is not int or n_epochs < 1:
+        raise ValueError("Cross-validation requires a positive integer epoch budget.")
     device = next(model.parameters()).device
 
     train_data, val_data = data
@@ -80,28 +122,16 @@ def train(
     y_true_train = train_data.y
     y_true_val = val_data.y
 
-    class_weights_train = compute_class_weight(
-        class_weight="balanced",
-        classes=np.arange(n_classes),
-        y=y_true_train.cpu().numpy(),
-    )
-    criterion_train = nn.CrossEntropyLoss(
-        weight=torch.tensor(class_weights_train, dtype=torch.float32).to(device)
-    )
-
-    class_weights_val = compute_class_weight(
-        class_weight="balanced",
-        classes=np.arange(n_classes),
-        y=y_true_val.cpu().numpy(),
-    )
-    criterion_val = nn.CrossEntropyLoss(
-        weight=torch.tensor(class_weights_val, dtype=torch.float32).to(device)
-    )
+    criterion_train = _weighted_loss(y_true_train, n_classes)
+    criterion_val = _weighted_loss(y_true_val, n_classes)
 
     sample_weights_val = compute_sample_weight("balanced", y_true_val.cpu())
 
     best_model_state = None
     best_loss_val = float("inf")
+    best_validation_epoch = None
+    early_stopping_epoch = None
+    learning_rates = []
     initial_lr = lr
 
     # Initialize optimizer
@@ -132,28 +162,11 @@ def train(
     )
     # Training phase
     for epoch in range(n_epochs):
-        model.train()
-        optimizer.zero_grad()
-        logits_train = model(train_data)
-        loss = criterion_train(logits_train, y_true_train)
-        loss.backward()
-
-        # Calculate the total gradient norm (magnitude) across all parameters in
-        # the model before clipping to see if gradients are exploding or vanishing
-        total_norm = 0.0
-        # Iterate through all parameters in the model
-        for p in model.parameters():
-            # Check if parameter has gradients (some layers might not)
-            if p.grad is not None:
-                # Calculate L2 norm (Euclidean norm) of gradients for this parameter
-                param_norm = p.grad.detach().data.norm(2)
-                total_norm += param_norm.item() ** 2
-        total_norm = total_norm**0.5
-        grad_norms.append(total_norm)
-        # apply Gradient clipping
-        nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
-
-        optimizer.step()
+        learning_rates.append(optimizer.param_groups[0]["lr"])
+        loss, grad_norm = _training_step(
+            train_data, model, optimizer, criterion_train, max_grad_norm
+        )
+        grad_norms.append(grad_norm)
 
         # Evaluation phase
         model.eval()
@@ -191,14 +204,15 @@ def train(
             )
 
         validation_loss = loss_val.item()
-        if validation_loss < best_loss_val:
+        if np.isfinite(validation_loss) and validation_loss < best_loss_val:
             best_loss_val = validation_loss
+            best_validation_epoch = epoch + 1
             best_model_state = {
                 name: value.detach().to(device="cpu", copy=True)
                 for name, value in model.state_dict().items()
             }
 
-        training_losses.append(loss.item())
+        training_losses.append(loss)
         validation_losses.append(validation_loss)
         validation_accuracies.append(acc)
         validation_f1_scores.append(f1)
@@ -218,8 +232,11 @@ def train(
         # Check early stopping
         early_stopping(loss_val)
         if early_stopping.early_stop:
+            early_stopping_epoch = epoch + 1
             print(f"\nEarly stopping triggered after {epoch + 1} epochs!")
-            print(f"Best validation loss achieved: {early_stopping.best_score:.4f}.")
+            print(
+                f"Best validation loss {best_loss_val:.4f} at epoch {best_validation_epoch}."
+            )
             break
 
     training_plots_path = os.path.join(
@@ -241,12 +258,12 @@ def train(
         save_path=training_plots_path,
     )
 
-    # Load the best model state
-    if best_model_state is not None:
-        model.load_state_dict(best_model_state)
-        return model, best_loss_val
-
-    return model, min(validation_losses)
+    if best_model_state is None or best_validation_epoch is None:
+        raise ValueError(f"CV fold {dataset_idx} has no finite best validation epoch.")
+    model.load_state_dict(best_model_state)
+    return FoldTrainingResult(
+        best_loss_val, best_validation_epoch, early_stopping_epoch, learning_rates
+    )
 
 
 def plot_training(

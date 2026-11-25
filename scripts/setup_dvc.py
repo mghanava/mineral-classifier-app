@@ -68,7 +68,11 @@ def generate_fine_grained_dvc_yaml():
         "src/utilities/spatial_graph.py",
         "src/utilities/data_utils.py",
     ]
-    bundle_helpers = ["src/utilities/model_bundle.py", *raw_helpers]
+    bundle_helpers = [
+        "src/utilities/model_bundle.py",
+        "src/utilities/training_schedule.py",
+        *raw_helpers,
+    ]
     model_schema = [
         "data.base.n_features",
         "data.base.n_classes",
@@ -125,6 +129,7 @@ def generate_fine_grained_dvc_yaml():
             "deps": [
                 "src/stages/train.py",
                 "src/utilities/train_utils.py",
+                "src/utilities/early_stopping.py",
                 "src/utilities/general_utils.py",
                 *bundle_helpers,
                 *cycle_partitions,

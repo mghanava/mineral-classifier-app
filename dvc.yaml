@@ -43,8 +43,10 @@ stages:
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -78,6 +80,7 @@ stages:
     - src/utilities/general_utils.py
     - src/utilities/calibration_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -136,6 +139,7 @@ stages:
     - src/utilities/calibration_utils.py
     - src/utilities/eval_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -166,6 +170,7 @@ stages:
     - src/utilities/drift_detection_utils.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -232,8 +237,10 @@ stages:
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -267,6 +274,7 @@ stages:
     - src/utilities/general_utils.py
     - src/utilities/calibration_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -325,6 +333,7 @@ stages:
     - src/utilities/calibration_utils.py
     - src/utilities/eval_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -355,6 +364,7 @@ stages:
     - src/utilities/drift_detection_utils.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -421,8 +431,10 @@ stages:
     deps:
     - src/stages/train.py
     - src/utilities/train_utils.py
+    - src/utilities/early_stopping.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -456,6 +468,7 @@ stages:
     - src/utilities/general_utils.py
     - src/utilities/calibration_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -514,6 +527,7 @@ stages:
     - src/utilities/calibration_utils.py
     - src/utilities/eval_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py
@@ -544,6 +558,7 @@ stages:
     - src/utilities/drift_detection_utils.py
     - src/utilities/general_utils.py
     - src/utilities/model_bundle.py
+    - src/utilities/training_schedule.py
     - src/utilities/raw_graphs.py
     - src/utilities/preprocessing.py
     - src/utilities/graph_protocol.py

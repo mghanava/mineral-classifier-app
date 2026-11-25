@@ -15,6 +15,7 @@ from src.utilities.preprocessing import (
     load_preprocessing,
     save_preprocessing,
 )
+from src.utilities.training_schedule import FoldTrainingResult, final_training_plan
 
 GRAPH_BINDING = "graph_binding.json"
 CALIBRATION_BINDING = "calibration_binding.json"
@@ -26,8 +27,10 @@ def publish_model(
     state: FittedPreprocessing,
     settings: dict,
     training_graph_sha256: str,
+    training: dict,
 ) -> None:
     """Publish the model and preprocessing with their graph binding last."""
+    _verify_training(training, state)
     with TemporaryDirectory(dir=directory) as temporary:
         weights = Path(temporary) / "model.pt"
         sidecar = weights.with_name("preprocessing.json")
@@ -35,7 +38,8 @@ def publish_model(
         save_preprocessing(sidecar, state, weights)
         graph = weights.with_name(GRAPH_BINDING)
         binding = {
-            "version": 1,
+            "version": 2,
+            "training": training,
             "settings": settings,
             "training_graph_sha256": training_graph_sha256,
             "weights_sha256": hashlib.sha256(weights.read_bytes()).hexdigest(),
@@ -56,6 +60,29 @@ def _read_artifact(path: Path, recovery: str) -> bytes:
         raise ValueError(f"Cannot read required artifact {path}. {recovery}") from exc
 
 
+def _verify_training(training: dict, state: FittedPreprocessing) -> None:
+    try:
+        if (
+            state.fold_index is not None
+            or training["strategy"] != "full_development_pool"
+            or training["dataset_sha256"] != state.dataset_sha256
+            or training["partition_sha256"] != state.partition_sha256
+            or type(training["observation_count"]) is not int
+            or training["observation_count"] < 1
+        ):
+            raise ValueError("Training population does not match preprocessing.")
+        folds = [FoldTrainingResult(**fold) for fold in training["cv_folds"]]
+        plan = final_training_plan(folds, training["epoch_budget"])
+        if json_digest({key: training[key] for key in plan}) != json_digest(plan):
+            raise ValueError(
+                "Training duration or schedule does not match CV diagnostics."
+            )
+    except (KeyError, OverflowError, TypeError, ValueError) as exc:
+        raise ValueError(
+            f"Invalid development-pool training provenance. Retrain the final model: {exc}"
+        ) from exc
+
+
 def read_model_bundle(
     directory: Path,
     feature_names: tuple[str, ...],
@@ -63,10 +90,14 @@ def read_model_bundle(
     protocol: dict,
     *,
     settings: dict | None = None,
-) -> tuple[FittedPreprocessing, dict[str, str], bytes]:
+) -> tuple[FittedPreprocessing, dict[str, str | int], bytes]:
     """Verify the exact checkpoint and sidecar bytes without loading a model."""
-    weights = _read_artifact(directory / "model.pt", "Retrain for M1.3.")
-    sidecar = _read_artifact(directory / "preprocessing.json", "Retrain for M1.3.")
+    weights = _read_artifact(
+        directory / "model.pt", "Retrain the development-pool model."
+    )
+    sidecar = _read_artifact(
+        directory / "preprocessing.json", "Retrain the development-pool model."
+    )
     state = load_preprocessing(
         sidecar, weights, feature_names=feature_names, class_names=class_names
     )
@@ -85,9 +116,10 @@ def read_model_bundle(
         ) from exc
     if (
         not isinstance(binding, dict)
-        or binding.keys() != {"version", "settings", "training_graph_sha256", *digests}
+        or binding.keys()
+        != {"version", "settings", "training_graph_sha256", "training", *digests}
         or type(binding["version"]) is not int
-        or binding["version"] != 1
+        or binding["version"] != 2
         or any(binding[key] != value for key, value in digests.items())
     ):
         raise ValueError(
@@ -106,7 +138,11 @@ def read_model_bundle(
         raise ValueError(
             "Model graph protocol does not match the requested graph settings. Use a matching bundle."
         )
+    training = binding["training"]
+    _verify_training(training, state)
     digests.update(
+        training_strategy=training["strategy"],
+        training_observation_count=training["observation_count"],
         graph_binding_sha256=hashlib.sha256(payload).hexdigest(),
         graph_protocol_sha256=json_digest(protocol),
         training_graph_sha256=training_graph,
@@ -120,7 +156,7 @@ def load_model_bundle(
     feature_names: tuple[str, ...],
     class_names: tuple[str, ...],
     settings: dict,
-) -> tuple[FittedPreprocessing, dict[str, str]]:
+) -> tuple[FittedPreprocessing, dict[str, str | int]]:
     """Verify the sidecar against the same checkpoint bytes loaded into the model."""
     state, digests, weights = read_model_bundle(
         directory, feature_names, class_names, settings["protocol"], settings=settings
@@ -133,7 +169,7 @@ def load_model_bundle(
 
 def write_calibration_binding(
     directory: Path,
-    bundle: dict[str, str],
+    bundle: dict[str, str | int],
     dataset_sha256: str,
     split_sha256: str,
 ) -> None:
@@ -152,7 +188,7 @@ def write_calibration_binding(
 
 
 def verified_calibrator(
-    directory: Path, bundle: dict[str, str], dataset_sha256: str
+    directory: Path, bundle: dict[str, str | int], dataset_sha256: str
 ) -> BytesIO:
     """Verify a trusted local calibrator before returning its exact byte snapshot."""
     payload = _read_artifact(directory / CALIBRATION_BINDING, "Re-run evaluation.")

@@ -1,8 +1,7 @@
 """Training module for GNN models in different cycles.
 
 This module provides functionality to train GNN models in a cycle-based approach,
-including loading data, training models with cross-validation, and saving the best
-performing model.
+including independent cross-validation and a fresh development-pool refit.
 """
 
 import argparse
@@ -19,8 +18,14 @@ from src.utilities.general_utils import (
 from src.utilities.graph_protocol import model_graph_settings, resolve_graph_protocol
 from src.utilities.model_bundle import publish_model
 from src.utilities.preprocessing import TrainingPartition, fit_preprocessing
-from src.utilities.raw_graphs import load_cycle_data, model_graph, synthetic_schema
-from src.utilities.train_utils import train
+from src.utilities.raw_graphs import (
+    build_development_graph,
+    load_cycle_data,
+    model_graph,
+    synthetic_schema,
+)
+from src.utilities.train_utils import train, train_final
+from src.utilities.training_schedule import final_training_plan
 
 
 def get_cycle_paths(cycle_num):
@@ -53,15 +58,14 @@ def run_training(paths, params, model_name, cycle_num):
     train_params = params["train"]
     protocol = resolve_graph_protocol(params)
     settings = model_graph_settings(protocol, model_name, params)
-    model_params = {
-        **params["models"][model_name],
-        "add_self_loops": False,
-    }
+    model_params = settings["model_parameters"]
     n_classes = params["data"]["base"]["n_classes"]
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
 
-    raw, fold_data, _, _ = load_cycle_data(Path(paths["base_data"]), protocol)
+    raw, fold_data, test, calibration = load_cycle_data(
+        Path(paths["base_data"]), protocol
+    )
     if (raw.feature_names, raw.class_names) != synthetic_schema(params["data"]["base"]):
         raise ValueError(
             "Training configuration does not match the canonical raw schema."
@@ -70,7 +74,7 @@ def run_training(paths, params, model_name, cycle_num):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device {device} ...")
 
-    best_fold = None
+    diagnostics = []
     for fold_index, (training, validation) in enumerate(fold_data):
         fold_idx = fold_index + 1
         if training.num_nodes == 1 and model_params.get("batch_norm", True):
@@ -92,7 +96,7 @@ def run_training(paths, params, model_name, cycle_num):
             model_graph(validation, raw, preprocessing, settings),
         )
         model = get_model(model_name, model_params).to(device)
-        trained_model, best_loss_val = train(
+        result = train(
             fold,
             model,
             n_classes=n_classes,
@@ -112,27 +116,46 @@ def run_training(paths, params, model_name, cycle_num):
             dataset_idx=fold_idx,
         )
 
-        if best_fold is None or best_loss_val < best_fold[1]:
-            best_fold = (
-                fold_idx,
-                best_loss_val,
-                trained_model,
-                preprocessing,
-                training.graph_sha256,
-            )
+        diagnostics.append(result)
 
-    if best_fold is None:
-        raise ValueError("At least one train-validation fold is required.")
-
-    # Preserve the evaluation and prediction checkpoint contract until a refit is available.
-    fold_idx, best_loss_val, best_model, preprocessing, training_graph = best_fold
-    model_save_path = Path(output_path) / "model.pt"
+    plan = final_training_plan(diagnostics, train_params["n_epochs"])
+    development = build_development_graph(raw, fold_data, test, calibration, protocol)
+    partition = TrainingPartition(
+        raw.dataset_sha256, None, development.original_node_indices.numpy()
+    )
+    preprocessing = fit_preprocessing(
+        raw,
+        partition,
+        params["data"]["scaler_type"],
+        params["data"].get("scaler_params"),
+    )
+    final_model = get_model(model_name, model_params).to(device)
+    train_final(
+        model_graph(development, raw, preprocessing, settings),
+        final_model,
+        n_classes=n_classes,
+        learning_rates=plan["learning_rates"],
+        max_grad_norm=train_params["max_grad_norm"],
+        weight_decay=train_params["weight_decay_adam_optimizer"],
+    )
+    training = {
+        "strategy": "full_development_pool",
+        "dataset_sha256": raw.dataset_sha256,
+        "partition_sha256": partition.partition_sha256,
+        "observation_count": development.num_nodes,
+        **plan,
+    }
     publish_model(
-        model_save_path.parent, best_model, preprocessing, settings, training_graph
+        Path(output_path),
+        final_model,
+        preprocessing,
+        settings,
+        development.graph_sha256,
+        training,
     )
     print(
-        f"✓ Fold {fold_idx} model (validation loss {best_loss_val:.6g}) "
-        f"saved to {model_save_path}."
+        f"✓ Final development-pool model ({development.num_nodes} nodes, "
+        f"{plan['epochs']} epochs) saved to {Path(output_path) / 'model.pt'}."
     )
 
 

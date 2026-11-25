@@ -23,7 +23,12 @@ from src.utilities.model_bundle import (
     write_calibration_binding,
 )
 from src.utilities.preprocessing import TrainingPartition
-from src.utilities.raw_graphs import load_cycle_data, model_graph, synthetic_schema
+from src.utilities.raw_graphs import (
+    build_development_graph,
+    load_cycle_data,
+    model_graph,
+    synthetic_schema,
+)
 
 
 def get_cycle_paths(cycle_num):
@@ -57,7 +62,7 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
     eval_params = params["evaluate"]
     protocol = resolve_graph_protocol(params)
     settings = model_graph_settings(protocol, model_name, params)
-    model_params = {**params["models"][model_name], "add_self_loops": False}
+    model_params = settings["model_parameters"]
     # Ensure output directory exists
     output_path = ensure_directory_exists(paths["output"])
     raw, folds, test_data, calib_data = load_cycle_data(Path(paths["base"]), protocol)
@@ -68,21 +73,18 @@ def run_evaluation(paths: dict, params: dict, model_name: str):
         )
     model = get_model(model_name, model_params)
     state, bundle = load_model_bundle(Path(paths["model"]), model, *schema, settings)
-    if state.dataset_sha256 != raw.dataset_sha256 or state.fold_index >= len(folds):
-        raise ValueError(
-            "Model preprocessing does not match this evaluation dataset and fold."
-        )
-    training, _ = folds[state.fold_index]
-    if bundle["training_graph_sha256"] != training.graph_sha256:
-        raise ValueError(
-            "Model training graph does not match the evaluation cycle. Retrain on these graphs."
-        )
+    development = build_development_graph(raw, folds, test_data, calib_data, protocol)
     partition = TrainingPartition(
-        raw.dataset_sha256, state.fold_index, training.original_node_indices.numpy()
+        raw.dataset_sha256, None, development.original_node_indices.numpy()
     )
-    if state.partition_sha256 != partition.partition_sha256:
+    if (
+        state.dataset_sha256 != raw.dataset_sha256
+        or state.partition_sha256 != partition.partition_sha256
+        or bundle["training_observation_count"] != development.num_nodes
+        or bundle["training_graph_sha256"] != development.graph_sha256
+    ):
         raise ValueError(
-            "Model preprocessing does not match the evaluation cycle's fit provenance."
+            "Final model does not match the verified development pool. Retrain for this cycle."
         )
 
     # Run evaluation

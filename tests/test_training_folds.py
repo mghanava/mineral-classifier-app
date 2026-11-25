@@ -1,5 +1,6 @@
 """Regression coverage for isolated fold training and checkpoint selection."""
 
+import json
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -29,7 +30,7 @@ class FoldModel(nn.Module):
 
     def forward(self, data: Data) -> torch.Tensor:
         """Make the first epoch best and identify the validation input."""
-        if data.is_validation:
+        if getattr(data, "is_validation", False):
             self.validation_folds.append(data.fold_idx)
             self.validation_weights.append(self.weight.detach().clone())
             margin = 3 if self.fold_idx == 1 else 1
@@ -38,10 +39,10 @@ class FoldModel(nn.Module):
         return self.weight * data.x
 
 
-def test_folds_train_independently_and_save_winning_epoch(
+def test_folds_and_refit_have_independent_models_and_training_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Run two tiny folds and verify metrics and weights come from the correct fold."""
+    """Run two tiny folds and a fresh refit with independent optimizer state."""
     params = load_params()
     params["data"]["base"]["n_classes"] = 2
     params["train"].update(
@@ -127,13 +128,13 @@ def test_folds_train_independently_and_save_winning_epoch(
         {"base_data": tmp_path, "output": tmp_path}, params, "gcn", cycle_num=1
     )
 
-    assert len(models) == 2
-    assert len(optimizers) == len(schedulers) == len(stoppers) == 2
+    assert len(models) == len(optimizers) == 3
+    assert len(schedulers) == len(stoppers) == 2
     assert optimizers[0] is not optimizers[1]
     assert schedulers[0] is not schedulers[1]
     assert stoppers[0] is not stoppers[1]
     assert plot_training.call_count == 2
-    for fold_idx, model in enumerate(models, 1):
+    for fold_idx, model in enumerate(models[:2], 1):
         optimizer = optimizers[fold_idx - 1]
         assert optimizer.param_groups[0]["params"][0] is model.weight
         assert optimizer.state[model.weight]["step"].item() == 2
@@ -156,14 +157,38 @@ def test_folds_train_independently_and_save_winning_epoch(
         assert plot.args[1] == pytest.approx(expected_losses)
         assert all(len(series) == 2 for series in plot.args)
 
+    final_model = models[-1]
+    final_optimizer = optimizers[-1]
+    assert final_optimizer.param_groups[0]["params"][0] is final_model.weight
+    assert final_optimizer.state[final_model.weight]["step"].item() == 1
+    assert not final_model.validation_folds
+    assert final_model.weight.item() == pytest.approx(3 - params["train"]["lr"])
     state = torch.load(tmp_path / "model.pt", weights_only=True)
-    torch.testing.assert_close(state["weight"], models[0].validation_weights[0])
-    assert (tmp_path / "preprocessing.json").is_file()
-    assert "Fold 1 model (validation loss" in capsys.readouterr().out
+    torch.testing.assert_close(state["weight"], final_model.weight)
+    preprocessing = json.loads((tmp_path / "preprocessing.json").read_text())
+    assert preprocessing["state"]["scaler_type"] is None
+    assert preprocessing["state"]["fold_index"] is None
+    binding = json.loads((tmp_path / "graph_binding.json").read_text())
+    assert binding["training"]["fold_best_epochs"] == [1, 1]
+    assert binding["training"]["epochs"] == 1
+    assert binding["training"]["observation_count"] == 4
+    assert [
+        fold["early_stopping_epoch"] for fold in binding["training"]["cv_folds"]
+    ] == [2, 2]
+    assert binding["training"]["cv_folds"][0]["best_validation_loss"] == pytest.approx(
+        torch.nn.functional.softplus(torch.tensor(-3.0)).item()
+    )
+    assert "Final development-pool model" in capsys.readouterr().out
 
 
+@pytest.mark.parametrize(
+    ("scheduler_patience", "rates"), [(3, [0.01] * 3), (0, [0.01, 0.01, 0.005])]
+)
 def test_training_and_validation_modes_each_epoch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scheduler_patience: int,
+    rates: list[float],
 ) -> None:
     """Check the mode and gradient state of every CPU forward over three epochs."""
     model = FoldModel(fold_idx=1).eval()
@@ -178,7 +203,7 @@ def test_training_and_validation_modes_each_epoch(
     model.register_forward_pre_hook(record_forward)
     monkeypatch.setattr(train_utils, "plot_training", Mock())
 
-    train_utils.train(
+    result = train_utils.train(
         (train_data, val_data),
         model,
         n_classes=2,
@@ -187,7 +212,7 @@ def test_training_and_validation_modes_each_epoch(
         max_grad_norm=1.0,
         weight_decay=0.0,
         factor_learning_rate_scheduler=0.5,
-        patience_learning_rate_scheduler=3,
+        patience_learning_rate_scheduler=scheduler_patience,
         patience_early_stopping=3,
         min_delta_early_stopping=0.0,
         dataset_idx=1,
@@ -197,3 +222,45 @@ def test_training_and_validation_modes_each_epoch(
     training_forward = (False, True, True)
     validation_forward = (True, False, False)
     assert forwards == [training_forward, validation_forward] * 3
+    assert result.best_validation_epoch == 1
+    assert result.early_stopping_epoch is None
+    assert result.learning_rates == rates
+
+
+def test_refit_replays_each_rate_without_validation_control(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Observe real Adam updates at the predetermined rates in training mode."""
+    model = FoldModel(fold_idx=1).eval()
+    graph = Data(x=torch.eye(2), y=torch.tensor([1, 0]))
+    adam = torch.optim.Adam
+    optimizers = []
+    observed = []
+
+    def observe(optimizer, _args, _kwargs):
+        assert model.training and torch.is_grad_enabled()
+        observed.append(optimizer.param_groups[0]["lr"])
+
+    def optimizer_factory(parameters, **kwargs):
+        optimizer = adam(parameters, **kwargs)
+        assert not optimizer.state
+        optimizer.register_step_pre_hook(observe)
+        optimizers.append(optimizer)
+        return optimizer
+
+    scheduler = Mock(
+        side_effect=AssertionError("Refit must not use a plateau scheduler")
+    )
+    stopper = Mock(side_effect=AssertionError("Refit must not use early stopping"))
+    monkeypatch.setattr(torch.optim, "Adam", optimizer_factory)
+    monkeypatch.setattr(torch.optim.lr_scheduler, "ReduceLROnPlateau", scheduler)
+    monkeypatch.setattr(train_utils, "EarlyStopping", stopper)
+
+    rates = [0.02, 0.01, 0.005]
+    train_utils.train_final(graph, model, 2, rates, 1.0, 0.0)
+    assert observed == rates
+    [optimizer] = optimizers
+    assert optimizer.state[model.weight]["step"].item() == 3
+    assert not model.validation_folds
+    scheduler.assert_not_called()
+    stopper.assert_not_called()

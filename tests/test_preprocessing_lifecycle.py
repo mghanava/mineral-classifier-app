@@ -37,8 +37,14 @@ from src.utilities.preprocessing import (
     fit_preprocessing,
     load_preprocessing,
 )
-from src.utilities.raw_graphs import load_cycle_data, read_raw_graph, stamp_raw_graph
+from src.utilities.raw_graphs import (
+    build_development_graph,
+    load_cycle_data,
+    read_raw_graph,
+    stamp_raw_graph,
+)
 from src.utilities.spatial_graph import build_spatial_graph
+from src.utilities.training_schedule import FoldTrainingResult, final_training_plan
 
 
 def _observations(
@@ -201,7 +207,7 @@ def _assert_graph(
         assert actual.y is None
 
 
-def test_fold_winner_evaluation_and_prediction_share_frozen_state(
+def test_final_model_evaluation_and_prediction_share_frozen_state(
     generated: tuple[dict, Path, Path], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Train via a controlled double and run the real calibration and scoring path."""
@@ -223,6 +229,31 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
     monkeypatch.setattr(train, "get_model", model_double)
     monkeypatch.setattr(evaluate, "get_model", model_double)
     monkeypatch.setattr(predict, "get_model", model_double)
+    protocol = resolve_graph_protocol(params)
+    development = build_development_graph(
+        raw, folds, test_graph, calibration_graph, protocol
+    )
+    excluded = set(test_graph.original_node_indices.tolist()) | set(
+        calibration_graph.original_node_indices.tolist()
+    )
+    rows = development.original_node_indices.numpy()
+    expected_rows = sorted(set(range(len(raw.sample_ids))) - excluded)
+    assert rows.tolist() == expected_rows
+    assert development.sample_ids == tuple(
+        raw.sample_ids[index] for index in expected_rows
+    )
+    independent = build_spatial_graph(
+        raw.coordinates[expected_rows],
+        development.sample_ids,
+        connection_radius=25,
+        affinity_scale=460,
+        add_self_loops=True,
+    )
+    torch.testing.assert_close(development.edge_index, independent.edge_index)
+    torch.testing.assert_close(development.edge_weight, independent.edge_weight)
+    torch.testing.assert_close(development.y, torch.tensor(raw.labels[expected_rows]))
+    final_scaler = StandardScaler().fit(raw.features[expected_rows])
+    params["train"]["n_epochs"] = 4
     fit_rows = []
     original_fit = StandardScaler.fit
 
@@ -230,35 +261,56 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
         fit_rows.append(features.copy())
         return original_fit(estimator, features)
 
+    cv_models = []
+
     def mock_train(pair, model, *, dataset_idx, **_):
+        cv_models.append(model)
         for actual, original in zip(pair, folds[dataset_idx - 1], strict=True):
             _assert_graph(
                 actual, original, fitted[dataset_idx - 1].transform(original.x.numpy())
             )
         with torch.no_grad():
             model.weight.fill_(float(dataset_idx))
-        return model, float(dataset_idx)
+        if dataset_idx == 1:
+            return FoldTrainingResult(0.1, 1, 2, [0.1, 0.05])
+        return FoldTrainingResult(0.2, 4, None, [0.1, 0.08, 0.06, 0.04])
+
+    def mock_refit(graph, model, *, learning_rates, **_):
+        assert all(model is not fold_model for fold_model in cv_models)
+        assert model.weight.item() == 1
+        assert learning_rates == [0.1, 0.08, 0.06]
+        _assert_graph(
+            graph, development, final_scaler.transform(raw.features[expected_rows])
+        )
+        with torch.no_grad():
+            model.weight.fill_(3)
 
     monkeypatch.setattr(StandardScaler, "fit", record_fit)
     monkeypatch.setattr(train, "train", mock_train)
+    monkeypatch.setattr(train, "train_final", mock_refit)
     trained = tmp_path / "trained"
     train.run_training({"base_data": base, "output": trained}, params, "gcn", 1)
-    assert len(fit_rows) == 2
-    for actual, (training, _) in zip(fit_rows, folds, strict=True):
+    assert len(fit_rows) == 3
+    for actual, (training, _) in zip(fit_rows[:2], folds, strict=True):
         np.testing.assert_array_equal(actual, training.x.numpy())
 
-    first_fold = TrainingPartition(
-        raw.dataset_sha256, 0, folds[0][0].original_node_indices.numpy()
-    )
+    np.testing.assert_array_equal(fit_rows[-1], raw.features[expected_rows])
+    pool = TrainingPartition(raw.dataset_sha256, None, rows)
     state = load_preprocessing(
         trained / "preprocessing.json",
         trained / "model.pt",
         feature_names=raw.feature_names,
         class_names=raw.class_names,
-        partition=first_fold,
+        partition=pool,
     )
-    np.testing.assert_allclose(state.center, fitted[0].mean_)
-    assert torch.load(trained / "model.pt", weights_only=True)["weight"].item() == 1
+    np.testing.assert_allclose(state.center, final_scaler.mean_)
+    assert state.fold_index is None
+    assert torch.load(trained / "model.pt", weights_only=True)["weight"].item() == 3
+    artifact = json.loads((trained / "graph_binding.json").read_text())
+    assert artifact["training"]["epochs"] == 3
+    assert artifact["training"]["fold_best_epochs"] == [1, 4]
+    assert artifact["training"]["lr_source_fold_index"] == 1
+    assert artifact["training_graph_sha256"] == development.graph_sha256
 
     def unexpected_fit(*_args, **_kwargs):
         pytest.fail("Feature preprocessing was refit at inference.")
@@ -285,9 +337,9 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
     for actual, original in zip(
         model_calls, (test_graph, calibration_graph), strict=True
     ):
-        _assert_graph(actual, original, fitted[0].transform(original.x.numpy()))
+        _assert_graph(actual, original, final_scaler.transform(original.x.numpy()))
     [(logits, labels)] = calibration_fit
-    score = model_calls[1].x[:, 0]
+    score = model_calls[1].x[:, 0] * 3
     torch.testing.assert_close(logits, torch.stack((-score, score), dim=1))
     torch.testing.assert_close(labels, calibration_graph.y)
     assert (evaluation / "metrics.json").exists()
@@ -311,7 +363,10 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
     assert len(model_calls) == 4
     for actual in model_calls[2:]:
         _assert_graph(
-            actual, original, fitted[0].transform(original.x.numpy()), with_labels=False
+            actual,
+            original,
+            final_scaler.transform(original.x.numpy()),
+            with_labels=False,
         )
     results = pd.read_csv(predictions / "predictions.csv")
     np.testing.assert_array_equal(results["true_label"], original.y.numpy())
@@ -333,6 +388,14 @@ def test_fold_winner_evaluation_and_prediction_share_frozen_state(
     binding_bytes = graph_binding.read_bytes()
     graph_binding.unlink()
     with pytest.raises(ValueError, match="Retrain using independent graphs"):
+        predict.run_prediction(paths, params, "gcn")
+    graph_binding.write_bytes(binding_bytes)
+    bad_schedule = json.loads(binding_bytes)
+    bad_schedule["training"]["epochs"] = 1
+    graph_binding.write_text(json.dumps(bad_schedule), encoding="utf-8")
+    with pytest.raises(
+        ValueError, match="Invalid development-pool training provenance"
+    ):
         predict.run_prediction(paths, params, "gcn")
     graph_binding.write_bytes(binding_bytes)
     np.testing.assert_array_equal(
@@ -392,18 +455,30 @@ def _drift_bundle(
     generated: tuple[dict, Path, Path], tmp_path: Path, scaler_type: str | None
 ) -> tuple[dict, dict]:
     params, base, incoming = generated
-    raw, folds, _, _ = load_cycle_data(base, resolve_graph_protocol(params))
+    protocol = resolve_graph_protocol(params)
+    raw, folds, test, calibration = load_cycle_data(base, protocol)
+    graph = build_development_graph(raw, folds, test, calibration, protocol)
     partition = TrainingPartition(
-        raw.dataset_sha256, 0, folds[0][0].original_node_indices.numpy()
+        raw.dataset_sha256, None, graph.original_node_indices.numpy()
     )
     trained = tmp_path / "trained"
     trained.mkdir()
+    training = {
+        "strategy": "full_development_pool",
+        "dataset_sha256": raw.dataset_sha256,
+        "partition_sha256": partition.partition_sha256,
+        "observation_count": graph.num_nodes,
+        **final_training_plan(
+            [FoldTrainingResult(0.1, 1, None, [0.1])] * len(folds), 1
+        ),
+    }
     publish_model(
         trained,
         RecordingModel([]),
         fit_preprocessing(raw, partition, scaler_type),
-        model_graph_settings(resolve_graph_protocol(params), "gcn", params),
-        folds[0][0].graph_sha256,
+        model_graph_settings(protocol, "gcn", params),
+        graph.graph_sha256,
+        training,
     )
     params["analyze_drift"].update(n_permutations=2, early_stopping={"enabled": False})
     return params, {
@@ -506,6 +581,8 @@ def test_drift_uses_raw_marginals_and_shared_multivariate_transform(
     assert metadata["incoming_dataset_sha256"] == incoming.dataset_sha256
     assert metadata["feature_names"] == list(reference.feature_names)
     assert metadata["model_cycle"] == 1
+    assert metadata["training_strategy"] == "full_development_pool"
+    assert "fold_index" not in metadata
     assert metadata["scaler_type"] == scaler_type
     assert metadata["representations"] == {
         "marginal": "canonical_raw_float64",
@@ -566,6 +643,7 @@ def test_drift_rejects_stale_missing_and_incompatible_artifacts(
     graph_path = paths["model"] / "graph_binding.json"
     binding = json.loads(graph_path.read_text(encoding="utf-8"))
     binding["preprocessing_sha256"] = hashlib.sha256(sidecar.read_bytes()).hexdigest()
+    binding["training"]["dataset_sha256"] = "0" * 64
     graph_path.write_text(json.dumps(binding), encoding="utf-8")
     with pytest.raises(ValueError, match="reference does not match"):
         analyze_drift.run_analyze_drift(paths, params, 1)
