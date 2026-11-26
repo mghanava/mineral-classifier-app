@@ -62,14 +62,17 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 
 ### Milestone 3 — User interface redesign (`0.2.0.dev3`)
 
-- [ ] Extract Streamlit pages incrementally from the existing entry point.
-- [ ] Add an overview with Explore Demo and Use My Own Data entry points; clearly label unavailable workflows until implemented.
-- [ ] Organize navigation around Data, Train, Results and Predict, with advanced diagnostics separate.
-- [ ] Integrate presets with guided Basic, Advanced and Expert configuration, preserving access to existing pipeline stages.
-- [ ] Hide routine DVC setup behind application orchestration where feasible.
-- [ ] Improve empty states, errors, progress feedback and contextual help.
+- [x] **M3.1 — Design and feasibility audit.** Audited the seven-tab dashboard, captured screens, scientific output contracts, spatial alignment, DVC provenance and locked Streamlit APIs. See the [UI/UX design and feasibility audit](docs/ui_ux_design.md).
+- [ ] **M3.2 — Navigation and dashboard architecture.** Extract Home, Configure, Run and Results with shared state and artifact access.
+- [ ] **M3.3 — Guided configuration.** Integrate presets, five Basic controls, grouped Advanced options, complete Expert YAML, structured validation and explicit Apply.
+- [ ] **M3.4 — Execution experience.** Move full and targeted run actions to Run with applied settings, observed stage status, logs and the existing locking and failure handling.
+- [ ] **M3.5a — Experiment overview and cycle navigation.** Show result correspondence, separate test and batch trajectories, realized dataset growth and compact cycle drill-through.
+- [ ] **M3.5b — Spatial data and prediction explorer.** Inspect selected populations and graphs, with verified prediction overlays, sample details and downloads.
+- [ ] **M3.5c — Classification, calibration and training results.** Present population-specific metrics, calibration diagnostics, selected CV fold plots and final refit context.
+- [ ] **M3.5d — Drift and cross-cycle comparison.** Preserve drift diagnostics and support descriptive two-cycle inspection with cohort and method context.
+- [ ] **M3.6 — UI verification and visual refinement.** Verify the supported user journeys, responsive layout, accessibility, dark and light themes and legacy diagnostic coverage.
 
-**Acceptance:** A first-time visitor can understand and navigate the existing synthetic workflow; no manual DVC/YAML operations are needed for the supported basic path; existing expert functionality remains accessible.
+**Acceptance:** A first-time visitor can configure and run the synthetic workflow without manual DVC or YAML operations and explore provenance-aware Results. Page length stays bounded as cycle and fold counts grow. Existing scientific diagnostics and expert execution controls remain accessible.
 
 ### Milestone 4 — User data ingestion (`0.2.0.dev4`)
 
