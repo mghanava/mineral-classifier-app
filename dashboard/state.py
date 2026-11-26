@@ -1,0 +1,42 @@
+"""Session-owned values that survive Streamlit's page widget cleanup."""
+
+from dataclasses import dataclass
+
+import streamlit as st
+
+from src.configuration_files import ConfigurationPreview
+
+CONFIGURE_PAGE = "dashboard/views/configure.py"
+RUN_PAGE = "dashboard/views/run.py"
+RESULTS_PAGE = "dashboard/views/results.py"
+
+
+@dataclass
+class DashboardState:
+    """Hold the draft, its review binding, result selection and last run outcome."""
+
+    draft: str | None = None
+    preset: str | None = None
+    preview: ConfigurationPreview | None = None
+    applied_draft: tuple[str, bytes] | None = None
+    result_cycle: int | None = None
+    result_section: str = "Data and spatial graphs"
+    last_run: tuple[str, int] | None = None
+
+    def update_draft(self, draft: str) -> None:
+        """Discard reviews whenever the editor contents change."""
+        if self.draft != draft:
+            self.draft = draft
+            self.preview = None
+
+    def has_unapplied_draft(self, active: bytes | None) -> bool:
+        """Recognize both the original editor text and a successfully applied review."""
+        if self.draft is None:
+            return False
+        active_text = (active or b"").decode("utf-8", errors="replace")
+        return self.draft != active_text and self.applied_draft != (self.draft, active)
+
+
+def dashboard_state() -> DashboardState:
+    """Return the non-widget application state for this session."""
+    return st.session_state.setdefault("mineral_dashboard", DashboardState())

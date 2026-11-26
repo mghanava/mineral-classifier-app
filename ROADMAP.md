@@ -58,15 +58,15 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 
 **Acceptance met.** All 336 regression tests passed. Users can configure a synthetic run by loading, previewing and applying a preset without editing YAML. Existing configurations can be imported, and static validation errors block application and dashboard execution. Quick demo matched M1.7 scientifically, Research matched the canonical defaults, and the preset budgets were retained.
 
-**Release boundary.** The seven-tab dashboard and expert YAML editor remain in use. Guided configuration belongs to `0.2.0.dev3`, and geological data uploads belong to `0.2.0.dev4`. The verified workflow uses synthetic data and random stratified validation. Full-budget Research and container deployment remain unverified. Keep the active file stable during direct DVC runs. See the [release limitations](CHANGELOG.md#known-limitations).
+**Release boundary.** M2 retained the seven-tab dashboard and expert YAML editor. Guided configuration belongs to `0.2.0.dev3`, and geological data uploads belong to `0.2.0.dev4`. The verified workflow uses synthetic data and random stratified validation. Full-budget Research and container deployment remain unverified. Keep the active file stable during direct DVC runs. See the [release limitations](CHANGELOG.md#known-limitations).
 
 ### Milestone 3 — User interface redesign (`0.2.0.dev3`)
 
 - [x] **M3.1 — Design and feasibility audit.** Audited the seven-tab dashboard, captured screens, scientific output contracts, spatial alignment, DVC provenance and locked Streamlit APIs. See the [UI/UX design and feasibility audit](docs/ui_ux_design.md).
 - [x] **M3.1a — Scientific visualization labeling corrections.** Correct macro F0.5 legends, reliability annotations and the sample-weight axis. Document legacy figures and DVC invalidation in the [UI/UX design](docs/ui_ux_design.md#m31a-scientific-visualization-labels).
-- [ ] **M3.2 — Navigation and dashboard architecture.** Extract Home, Configure, Run and Results with shared state and artifact access.
+- [x] **M3.2 — Navigation and dashboard architecture.** Extract Home, Configure, Run and Results with shared state, selected-diagnostic access and preserved execution and configuration behavior. [Implementation and review](docs/ui_ux_design.md#m32-implemented-dashboard).
 - [ ] **M3.3 — Guided configuration.** Integrate presets, five Basic controls, grouped Advanced options, complete Expert YAML, structured validation and explicit Apply.
-- [ ] **M3.4 — Execution experience.** Move full and targeted run actions to Run with applied settings, observed stage status, logs and the existing locking and failure handling.
+- [ ] **M3.4 — Execution experience.** Add observed stage status and improve log presentation on Run while preserving existing locking and failure handling.
 - [ ] **M3.5a — Experiment overview and cycle navigation.** Show result correspondence, separate test and batch trajectories, realized dataset growth and compact cycle drill-through.
 - [ ] **M3.5b — Spatial data and prediction explorer.** Inspect selected populations and graphs, with verified prediction overlays, sample details and downloads.
 - [ ] **M3.5c — Classification, calibration and training results.** Present population-specific metrics, calibration diagnostics, selected CV fold plots and final refit context.

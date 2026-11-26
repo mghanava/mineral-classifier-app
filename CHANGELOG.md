@@ -6,6 +6,16 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
+### Added
+
+- Add a Home page with the Quick demo entry point, the measured M2.5 runtime reference and local workspace availability.
+- Retain the configuration draft, preset, preview, selected Results cycle and section, and last execution outcome within the dashboard session.
+
+### Changed
+
+- Replace seven eager tabs with native top navigation for Home, Configure, Run and Results. Configure retains explicit validation and Apply. Run owns all full and targeted execution actions.
+- Browse one existing diagnostic at a time across six scientific sections. Identify bootstrap, input base, incoming batch and post-append snapshots. Label correspondence with the applied settings and source revision as unverified.
+
 ### Fixed
 
 - Label validation and across-cycle figures with Macro F0.5. Place overconfidence below the identity diagonal and underconfidence above it in reliability diagrams, and label the secondary axis with the sum of sample weights per bin. Metric calculations, serialized keys and artifact filenames are preserved.

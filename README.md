@@ -30,9 +30,10 @@ Open [http://localhost:8501](http://localhost:8501)
 
 ### Using the Dashboard
 
-1. In **Parameters**, select a preset and click **Load preset into draft**. You can also edit the expert YAML draft.
-2. Choose **Validate & Preview** to review the resolved settings, findings and differences. Click **Apply configuration** to update the active `params.yaml`. Review a fresh preview if the active file changes.
-3. Use **Generate & Run Full Pipeline** or a per-stage run control. The dashboard regenerates DVC definitions from the applied settings before reproduction.
+1. **Home** shows the applied configuration and any existing workspace results. **Configure Quick demo** highlights the reduced CPU preset. **Configure an experiment** opens the same editor for a custom experiment.
+2. In **Configure**, select a preset and click **Load preset into draft**, or edit the expert YAML. Use **Validate & Preview** to review findings, resolved settings and differences. Click **Apply configuration** to update `params.yaml`. Preview again if the draft or active file changes. The draft and selected preset survive navigation within the session.
+3. In **Run**, review the applied settings and choose **Generate & Run Full Pipeline** or open **Advanced stage execution** for a targeted action. The dashboard validates the applied file and regenerates DVC definitions before reproduction.
+4. In **Results**, choose a learning cycle, scientific section and diagnostic. For spatial graphs, choose the input base, incoming batch or post-append base. Cycle 0 is the bootstrap snapshot. Existing files can be inspected even when their correspondence with the applied settings and source revision is unverified.
 
 Quick demo and Standard completed their two-cycle CPU pipelines in 74.31 s and 101.66 s on the verification host. Both retain their approved budgets. Presets set computational budgets, and predictive performance depends on the data and evaluation protocol. Research resolves to the full canonical defaults and has been checked through static validation and DVC generation. [Verification report](docs/configuration_verification.md)
 
@@ -52,7 +53,7 @@ Resolution and import preview to stdout by default. Use `--overrides` with a par
 
 ### Current scope
 
-The verified workflow uses synthetic data and random stratified validation. Generalization to unseen regions, full-budget Research execution and container deployment remain unverified. The dashboard retains seven tabs and the expert YAML editor. The guided Basic, Advanced and Expert interface is planned for `0.2.0.dev3`, and user-uploaded geological data is planned for `0.2.0.dev4`. [Roadmap](ROADMAP.md)
+The verified workflow uses synthetic data and random stratified validation. Generalization to unseen regions, full-budget Research execution and container deployment remain unverified. The dashboard uses expert YAML and a single-diagnostic Results browser. Guided configuration, DVC-backed result correspondence, user data ingestion and independent inference are planned. [Roadmap](ROADMAP.md)
 
 ### Stop
 
@@ -76,7 +77,7 @@ make dev               # start in dev mode (bind mount, hot reload)
 | Change | Action |
 |---|---|
 | Edit Python source | Save to trigger a development-mode reload |
-| Change an experiment | Preview and apply it in Parameters |
+| Change an experiment | Preview and apply it in Configure |
 | Add Python dependency | make rebuild |
 | Change Dockerfile/compose | make rebuild |
 | Something broken | make clean and make dev |
@@ -135,7 +136,8 @@ make help      Show all commands
 ## Project Structure
 
 ```
-├── app.py                       # Streamlit dashboard
+├── app.py                       # Streamlit entry point and native page registry
+├── dashboard/                   # Views, session state, workspace readers and execution
 ├── scripts/
 │   ├── configure.py             # Configuration CLI
 │   ├── setup_dvc.py             # DVC pipeline generator
