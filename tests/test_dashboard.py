@@ -58,7 +58,7 @@ def test_dashboard_renders_only_selected_page(dashboard, tmp_path, monkeypatch):
         ("home", "Mineral Classifier", {"Configure Quick demo"}),
         ("configure", "Configure", {"Load preset into draft", "Validate & Preview"}),
         ("run", "Run", {"Run full experiment", "Run stage"}),
-        ("results", "Results", {"Refresh result evidence"}),
+        ("results", "Results", {"Refresh result evidence", "Inspect cycle"}),
     ):
         _page(dashboard, page)
         assert not dashboard.exception and not dashboard.error and not dashboard.tabs
@@ -73,11 +73,16 @@ def test_dashboard_renders_only_selected_page(dashboard, tmp_path, monkeypatch):
             )
 
 
+def _explorer(dashboard: AppTest) -> AppTest:
+    return dashboard.segmented_control[0].select("Cycle explorer").run()
+
+
 def test_empty_results_and_directory_presence(dashboard, tmp_path):
     """An empty output directory provides no evidence of available diagnostics."""
     (tmp_path / "results/evaluation/cycle_1").mkdir(parents=True)
     _page(dashboard, "results")
     assert "No display artifacts found" in dashboard.info[0].value
+    _explorer(dashboard)
     assert "absent or partial" in dashboard.warning[0].value
 
 
@@ -501,6 +506,8 @@ def test_result_cycle_and_population_routing(dashboard, tmp_path, monkeypatch):
 
     monkeypatch.setattr(Workspace, "read", capture)
     _page(dashboard, "results")
+    assert not reads
+    _explorer(dashboard)
     assert reads == [bootstrap]
     _select(dashboard, "Learning cycle", 0)
     assert reads == [bootstrap, bootstrap]
@@ -606,6 +613,7 @@ def test_existing_diagnostics_are_selectable(
 
     monkeypatch.setattr(Workspace, "read", capture)
     _page(dashboard, "results")
+    _explorer(dashboard)
     _select(dashboard, "Result section", section)
     assert len(dashboard.selectbox[-1].options) == len(paths)
     for path in paths:
@@ -649,6 +657,7 @@ def test_partial_artifacts_are_reported(dashboard, tmp_path, path, section, cont
     """Incomplete writes remain inspectable as warnings rather than page errors."""
     _fixture_artifact(tmp_path, path, contents)
     _page(dashboard, "results")
+    _explorer(dashboard)
     _select(dashboard, "Result section", section)
     assert not dashboard.exception and not dashboard.error
     assert any("incomplete or malformed" in item.value for item in dashboard.warning)
@@ -671,6 +680,7 @@ def test_legacy_html_and_external_artifact_link(dashboard, tmp_path, monkeypatch
 
     monkeypatch.setattr(Workspace, "read", capture)
     _page(dashboard, "results")
+    _explorer(dashboard)
     assert dashboard.selectbox[-1].options == ["Full base graph"]
     assert not reads
     dashboard.checkbox[0].check().run()

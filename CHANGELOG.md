@@ -8,6 +8,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Add an Experiment overview with verified headline metrics, an interactive learning trajectory, realized base growth and a bounded cycle summary. Inspect a cycle in the existing diagnostic explorer and retain mode, cycle and section across navigation.
 - Add an explicit Results evidence refresh that verifies scoped DVC records, local content and scientific bindings. Distinguish availability, lock-matching bytes and correspondence with applied settings and workspace sources.
 - Add typed scientific summary readers for realized populations, final-test and incoming-batch metrics, model and calibration metadata and per-cycle completeness.
 - Show Run phases, scientific stage observations and scoped execution outcomes, including explicit unchanged skips. Keep a bounded technical log and download for the latest session action.
@@ -17,9 +18,10 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Changed
 
+- Emphasize Results coverage and headline metrics, report same-cohort ECE changes in percentage points, and add a verified partition composition view alongside base totals.
 - Show the applied and draft status, preset provenance and measured CPU references beside explicit validation and Apply. Show separate finding counts and keep blocking errors visible.
 - Replace seven eager tabs with native top navigation for Home, Configure, Run and Results. Configure retains explicit validation and Apply. Run owns all full and targeted execution actions.
-- Browse one existing diagnostic at a time across six scientific sections. Identify bootstrap, input base, incoming batch and post-append snapshots. Label correspondence with the applied settings and source revision as unverified.
+- Browse one existing diagnostic at a time across six scientific sections. Identify bootstrap, input base, incoming batch and post-append snapshots. Label the selected scope with its checked correspondence or unverified status.
 
 ### Fixed
 

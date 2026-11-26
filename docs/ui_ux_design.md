@@ -424,3 +424,33 @@ Quick demo had 124 result files and 34.3 MB of output. On the review host, its f
 M3.5a-ii owns headline cards, trajectories, bounded growth and cycle navigation. M3.5b owns exact prediction CSV-to-graph binding, aligned rows and spatial overlays. This evidence checker alone grants no positional join.
 
 Engineering verification passed with 410 tests in the full suite and 405 in the non-integration suite, with five integration tests deselected in the latter. Repository-wide Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files.
+
+## M3.5a-ii experiment overview and cycle navigation
+
+**Experiment overview** opens on the first Results visit. The mode, selected cycle and scientific section survive navigation in the current session. **Inspect cycle** opens the selected cycle in **Cycle explorer**. Choosing Bootstrap temporarily limits the available sections. Returning to a learning cycle restores the remembered scientific section. The Data population selector still opens input base c−1, incoming batch c and post-append base c, including the final appended snapshot. Cross-cycle performance remains available as an original diagnostic.
+
+The applied YAML fingerprint identifies exact file bytes. The Results header separates the applied settings, requested and recorded training device, verified cycle coverage and correspondence. A separate draft notice shows unapplied edits. **Evidence and execution details** provides the full fingerprint, the latest session action when available, verification time and stage evidence. **Refresh result evidence** performs the local DVC and scientific check. Ordinary widget reruns use the existing workspace stamp to invalidate cached evidence after changes. Historical files stay available in the explorer without joining the applied overview.
+
+The latest complete matching cycle supplies class-weighted accuracy for final test and prediction batch and the final-test ECE before and after calibration. Accuracy, Macro F0.5 and MCC compare calibrated classifications across the two separately labeled cohorts. ECE and MCE compare the two probability states on the same final-test cohort. The trajectory leaves a gap for each missing or nonmatching cycle and reports metric values and cohort sizes on hover. Changing evaluation populations limit longitudinal interpretation. The growth chart uses verified bootstrap and append producers independently of model diagnostics. Appends add incoming observations with simulator labels. The bounded table uses compact count and metric columns by default and makes the development, calibration and final-test partition counts available through **Show partition counts**.
+
+### Current-source Quick demo verification
+
+One isolated two-cycle CPU reproduction used the distributed Quick demo preset at revision `05a9a6dd85c150dfa94a11f3f4c361c78bc9fb8e` (scientific source tree `d3ace04b5c810dfc5320f736bdad758558df460c`). The locked project interpreter executed all 14 stages in **73.527 s** in `/tmp/mineral-m35aii-quick.JeKROY`, starting with no DVC lock or generated results and an independent cache. All stages and both learning cycles verified as complete and matching. The workspace contains 124 result files (34,263,685 bytes). The corrected training, reliability and cross-cycle figures were generated. Visual inspection confirmed Macro F0.5 legends, the reliability diagram's sample-weight axis and confidence annotations. The applied `params.yaml` SHA-256 is `8657a4533b5b0c80adad9dadbdc2c9a6800da0389514d3d37e9eba35cae0ade1`. The recorded training device in both cycles was CPU.
+
+| Cycle | Input base | Development | Calibration | Final test | Incoming | Post-append | Calibrated final-test accuracy | Final-test ECE before / after | Calibrated batch accuracy |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 440 | 308 | 40 | 92 | 100 | 540 | 36.30% | 0.071203 / 0.090677 | 43.82% |
+| 2 | 540 | 378 | 49 | 113 | 100 | 640 | 30.83% | 0.028284 / 0.040227 | 42.67% |
+
+The final appended base has 448 development, 58 calibration and 134 final-test observations if used as a subsequent input. The check took 1.17 s. Across 30 subsequent workspace stamp checks, the median was 5.15 ms. These are measurements on the review host.
+
+The browser capture index and measurement log are in `/tmp/mineral-m35aii-review`. The index identifies genuine results, disposable altered workspace fixtures and simulated presentation values for the 40-cycle layout.
+
+
+### Owner visual review refinement
+
+The Results header leads with verified coverage and correspondence. The applied model and device remain visible, and the full fingerprint, check time and stage evidence are available in **Evidence and execution details**. The three headline groups identify the same latest complete matching cycle. Final-test ECE uses percent units in the headline, trajectory and selected table metric, while the underlying artifact values retain their fractional units. The headline reports the before-calibration ECE and the direction and magnitude of change in percentage points on the same final-test cohort.
+
+**Dataset evolution** shows the initial and latest verified population sizes and switches between **Totals** and **Partitions** in one chart slot. The partition view stacks verified development, calibration and final-test counts with distinct patterns. Both views retain unavailable snapshot positions as gaps, distinguish the final append and keep label density bounded. The final append describes available data for future use. The cycle summary retains its bounded height, optional partition counts and **Inspect cycle** action.
+
+The updated review uses the retained Quick demo artifacts and the original DVC lock. Its capture archive and measurements are in `/tmp/mineral-m35aii-polish.vGt2dt`. The owner accepted M3.5a-ii for engineering and visual quality after reviewing the eight refined browser captures.

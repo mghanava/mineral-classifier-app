@@ -338,6 +338,8 @@ def test_results_refresh_is_explicit_and_cached_scope_is_invalidated(
     assert not app.exception and not reads
     app.button[0].click().run()
     assert not app.exception and len(reads) == 1
+    assert any("No local results" in text.value for text in app.markdown)
+    app.segmented_control[0].select("Cycle explorer").run()
     assert any(
         "Learning cycle 1 · Missing · Unverified" in text.value for text in app.markdown
     )

@@ -14,6 +14,8 @@ if TYPE_CHECKING:
 CONFIGURE_PAGE = "dashboard/views/configure.py"
 RUN_PAGE = "dashboard/views/run.py"
 RESULTS_PAGE = "dashboard/views/results.py"
+EXPERIMENT_OVERVIEW = "Experiment overview"
+CYCLE_EXPLORER = "Cycle explorer"
 
 
 @dataclass
@@ -30,10 +32,12 @@ class DashboardState:
     preview_error: str | None = None
     preview: ConfigurationPreview | None = None
     applied_draft: tuple[str, bytes] | None = None
+    result_mode: str = EXPERIMENT_OVERVIEW
     result_cycle: int | None = None
     result_section: str = "Data and spatial graphs"
     last_run: RunAttempt | None = None
     result_verification: "Verification | None" = None
+    result_evidence_notice: str | None = None
 
     def update_draft(self, draft: str, *, expert: bool = False) -> None:
         """Discard reviews whenever the editor contents change."""

@@ -256,6 +256,9 @@ def render() -> None:
             attempt = RunAttempt(target=None if full else target)
             state.last_run = attempt
             state.result_verification = None
+            state.result_evidence_notice = (
+                "Execution evidence is separate. Refresh to check workspace results."
+            )
             _execute(workspace, attempt, status, logs, applied_id)
             st.rerun()
         else:

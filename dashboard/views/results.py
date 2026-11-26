@@ -6,14 +6,17 @@ from pathlib import Path
 import streamlit as st
 
 from dashboard.artifacts import AGGREGATE, Workspace
-from dashboard.components import UNVERIFIED, applied_summary, read_active, show_artifact
+from dashboard.components import UNVERIFIED, read_active, show_artifact
+from dashboard.experiment_summary import ExperimentSummary, is_matching
+from dashboard.overview import cycle_label, render_overview
 from dashboard.provenance import (
+    AppliedConfiguration,
     Availability,
     Correspondence,
     Verification,
     verify_workspace,
 )
-from dashboard.state import CONFIGURE_PAGE, RUN_PAGE, dashboard_state
+from dashboard.state import CYCLE_EXPLORER, EXPERIMENT_OVERVIEW, dashboard_state
 
 DATA = "Data and spatial graphs"
 MODEL = "Model performance and training"
@@ -152,6 +155,19 @@ def _diagnostics(workspace: Workspace, section: str, cycle: int) -> list[Path]:
     )
 
 
+def _pick_diagnostic(choices: list[Path], section: str, cycle: int) -> Path | None:
+    if not choices:
+        return None
+    # Diagnostic labels repeat across cycles and populations. Bind the widget to the file scope.
+    path = st.selectbox(
+        "Diagnostic",
+        choices,
+        format_func=_label,
+        key=f"diagnostic:{section}:{cycle}:{choices[0].parent}",
+    )
+    return path if path in choices else choices[0]
+
+
 def _interpret(path: Path) -> None:
     if path.stem == "reliability_diagram":
         st.caption(
@@ -168,142 +184,242 @@ def _interpret(path: Path) -> None:
         )
 
 
-def _remember_section() -> None:
-    dashboard_state().result_section = st.session_state["_results_section"]
+def _inspect(cycle: int) -> None:
+    state = dashboard_state()
+    state.result_cycle = cycle
+    state.result_mode = CYCLE_EXPLORER
 
 
-def _evidence(checked: Verification, cycle: int, section: str) -> None:
-    stage = dict(checked.stages)
-    if section == PERFORMANCE:
-        evidence = checked.aggregate
-        scope = "Cross-cycle performance"
-    elif cycle == 0:
-        evidence = stage.get("bootstrap")
-        scope = "Bootstrap"
-    elif cycle in checked.declared_cycles and checked.cycles:
-        evidence = checked.cycles[cycle - 1].evidence
-        scope = f"Learning cycle {cycle}"
-    else:
-        evidence = None
-        scope = f"Learning cycle {cycle}"
-    checked_at = checked.checked_at.strftime("%Y-%m-%d %H:%M:%S UTC")
-    fingerprint = (
-        f" · Applied configuration `{checked.applied.fingerprint[:12]}`"
-        if checked.applied
+def _remember_selection(field: str, key: str) -> None:
+    setattr(dashboard_state(), field, st.session_state[key])
+
+
+def _status(
+    checked: Verification | None,
+    applied: AppliedConfiguration | None,
+    observed: set[int],
+    aggregate: bool,
+    summary: ExperimentSummary,
+) -> str:
+    if not observed and not aggregate:
+        return "No local results"
+    if (
+        applied is not None
+        and not aggregate
+        and not observed.intersection(range(applied.cycles + 1))
+    ):
+        return "Historical files only · Outside the applied scope"
+    if checked is None or not summary.evidence:
+        return "Unverified correspondence"
+    scoped = list(summary.evidence.values())
+    if checked.aggregate.availability != Availability.NOT_APPLICABLE:
+        scoped.append(checked.aggregate)
+    if all(is_matching(item) for item in scoped):
+        return "Verified matching"
+    coverage = (
+        "Partial coverage · "
+        if any(
+            item.availability in (Availability.MISSING, Availability.PARTIAL)
+            for item in scoped
+        )
         else ""
     )
-    st.caption(
-        f"Local evidence checked {checked_at} · {checked.elapsed:.2f} s{fingerprint}"
+    correspondence = (
+        Correspondence.CONFLICT
+        if any(item.correspondence == Correspondence.CONFLICT for item in scoped)
+        else Correspondence.UNKNOWN
     )
-    if evidence is None:
-        st.caption(f"{scope} · Unverified correspondence for this scope.")
-        if cycle in checked.discovered_cycles and cycle not in checked.declared_cycles:
-            st.caption("Historical cycle outside the applied configuration.")
+    return f"{coverage}{correspondence}"
+
+
+def _identity(
+    applied: AppliedConfiguration | None,
+    checked: Verification | None,
+    summary: ExperimentSummary,
+    observed: set[int],
+    aggregate: bool,
+) -> None:
+    status = _status(checked, applied, observed, aggregate, summary)
+    color = (
+        "green"
+        if status == "Verified matching"
+        else "orange"
+        if "Partial coverage" in status or Correspondence.CONFLICT in status
+        else "gray"
+    )
+    badge = f":{color}-badge[{status}]"
+    if applied:
+        declared = applied.cycles
+        coverage = f"{len(summary.learning)} of {declared} learning cycles verified"
+        if declared == 0:
+            coverage = (
+                "Bootstrap verified"
+                if 0 in summary.snapshots
+                else "Bootstrap awaiting verification"
+            )
+        st.markdown(f"**{coverage}**  ·  {badge}")
+        device = ""
+        if summary.latest is not None:
+            model = summary.learning[summary.latest].model
+            if model and model.effective_device:
+                device = f" · Recorded training device {model.effective_device} (cycle {summary.latest})"
+        st.caption(
+            f"Applied model {applied.model.upper()} · Requested device {applied.requested_device}{device}"
+        )
     else:
-        text = f"{scope} · {evidence.availability}"
-        if evidence.availability != Availability.NOT_APPLICABLE:
-            text += f" · {evidence.correspondence}"
-        st.write(text)
-        if (
-            evidence.locked_outputs_match
-            and evidence.correspondence != Correspondence.MATCHING
-        ):
-            st.caption("Declared output bytes match the on-disk lock for this scope.")
-    reasons = (*checked.reasons, *(evidence.reasons if evidence else ()))
-    if reasons:
-        with st.expander("Verification details"):
-            for reason in reasons:
+        st.markdown(badge)
+    if checked is None and (observed or aggregate):
+        st.caption(UNVERIFIED)
+
+
+def _details(
+    applied: AppliedConfiguration | None, checked: Verification | None
+) -> None:
+    attempt = dashboard_state().last_run
+    if applied is None and checked is None and attempt is None:
+        return
+    details = st.expander(
+        "Evidence and execution details",
+        key="_results_evidence_details",
+        on_change="rerun",
+        type="compact",
+    )
+    if not details.open:
+        return
+    with details:
+        if applied:
+            st.caption(
+                "Applied params.yaml fingerprint · SHA-256 of the exact file bytes"
+            )
+            st.code(applied.fingerprint, language=None)
+        if attempt:
+            identity = (
+                f" · Applied configuration at execution `{attempt.config_id}`"
+                if attempt.config_id
+                else ""
+            )
+            st.write(
+                f"**Latest execution in this session** · {attempt.status} · {attempt.scope}{identity}"
+            )
+        if checked:
+            st.write(
+                f"**Local evidence checked** · {checked.checked_at:%Y-%m-%d %H:%M:%S UTC} · {checked.elapsed:.2f} s"
+            )
+            for reason in checked.reasons:
                 st.text(reason)
+            if checked.stages:
+                by_stage = dict(checked.stages)
+                scope = st.selectbox("Evidence stage", by_stage)
+                stage = by_stage[scope]
+                st.write(f"{stage.availability} · {stage.correspondence}")
+                if stage.locked_outputs_match:
+                    st.caption("Declared output bytes match the local DVC lock.")
+                for reason in stage.reasons:
+                    st.text(reason)
 
 
-def render() -> None:
-    """Route the selected cycle, scientific section and existing diagnostic."""
-    st.title("Results")
-    workspace = Workspace(Path.cwd())
-    state = dashboard_state()
-    active = read_active(workspace.params)
-    cycles = applied_summary(active, show_targets=False)
-    observed = set(workspace.result_cycles(include_raw=True))
-    aggregate = workspace.available(AGGREGATE)
-    if observed or aggregate:
-        st.info(
-            "Existing workspace artifacts."
-            if state.result_verification is not None
-            else f"Existing workspace artifacts. {UNVERIFIED}"
+def _cycle_evidence(
+    checked: Verification | None,
+    summary: ExperimentSummary,
+    cycle: int,
+    section: str,
+    historical: bool,
+) -> None:
+    evidence = (
+        checked.aggregate
+        if checked is not None and section == PERFORMANCE
+        else summary.evidence.get(cycle)
+    )
+    scope = (
+        "Cross-cycle performance"
+        if section == PERFORMANCE
+        else "Bootstrap"
+        if cycle == 0
+        else f"Learning cycle {cycle}"
+    )
+    label = f"{scope} · "
+    if historical and section != PERFORMANCE:
+        label += "Historical cycle outside the applied configuration · "
+    if evidence is None:
+        label += Correspondence.UNKNOWN
+    elif evidence.availability == Availability.NOT_APPLICABLE:
+        label += (
+            f"{evidence.availability} · Existing files are historical for this scope"
         )
     else:
-        st.info("No display artifacts found in this workspace.")
-        if active is not None and active.contents is not None:
-            st.page_link(RUN_PAGE, label="Go to Run")
-        else:
-            st.page_link(CONFIGURE_PAGE, label="Go to Configure")
-
-    if active is not None and state.has_unapplied_draft(active.contents):
-        st.caption(
-            "Draft differs from the applied configuration. This check uses the applied file."
+        label += f"{evidence.availability} · {evidence.correspondence}"
+    st.markdown(label)
+    if evidence and evidence.reasons:
+        details = st.expander(
+            "Selected scope evidence",
+            key="_results_scope_evidence",
+            on_change="rerun",
+            type="compact",
         )
-    if st.button("Refresh result evidence"):
-        with st.spinner("Checking local DVC and scientific evidence…"):
-            state.result_verification = verify_workspace(workspace)
-    checked = state.result_verification
-    if (
-        checked is not None
-        and checked.stamp is not None
-        and not checked.still_observed(workspace)
-    ):
-        state.result_verification = checked = None
-        st.caption(
-            "Unverified correspondence. Workspace evidence changed. Refresh to check again."
-        )
+        if details.open:
+            with details:
+                for reason in evidence.reasons:
+                    st.text(reason)
 
-    scope = sorted(set(range((cycles or 0) + 1)) | observed)
+
+def _explore(
+    workspace: Workspace,
+    declared: int | None,
+    observed: set[int],
+    aggregate: bool,
+    checked: Verification | None,
+    summary: ExperimentSummary,
+) -> None:
+    state = dashboard_state()
+    scope = sorted(set(range((declared or 0) + 1)) | observed)
     if state.result_cycle not in scope:
-        state.result_cycle = next((cycle for cycle in scope if cycle > 0), 0)
-    cycle_column, section_column = st.columns(2)
+        state.result_cycle = summary.latest or next(
+            (cycle for cycle in scope if cycle > 0), 0
+        )
+    st.session_state["_results_cycle"] = state.result_cycle
+    cycle_column, section_column = st.columns(2, gap="medium")
     with cycle_column:
         cycle = st.selectbox(
             "Learning cycle",
             scope,
-            index=scope.index(state.result_cycle),
             format_func=lambda item: (
                 "Bootstrap · cycle 0"
                 if item == 0
-                else f"Cycle {item}"
-                + (" · existing files only" if item > (cycles or 0) else "")
+                else cycle_label(item)
+                + (" · existing files only" if item > (declared or 0) else "")
             ),
             key="_results_cycle",
+            on_change=_remember_selection,
+            args=("result_cycle", "_results_cycle"),
         )
-        state.result_cycle = cycle
     with section_column:
         sections = [DATA, MODEL, CALIBRATION, PREDICTION, DRIFT] if cycle else [DATA]
-        if aggregate or (cycles is not None and cycles >= 2):
+        if aggregate or (declared is not None and declared >= 2):
             sections.append(PERFORMANCE)
+        st.session_state["_results_section"] = (
+            state.result_section if state.result_section in sections else DATA
+        )
         section = st.selectbox(
             "Result section",
             sections,
-            index=sections.index(state.result_section)
-            if state.result_section in sections
-            else 0,
             key="_results_section",
-            on_change=_remember_section,
+            on_change=_remember_selection,
+            args=("result_section", "_results_section"),
         )
-    if checked is not None:
-        _evidence(checked, cycle, section)
+    _cycle_evidence(checked, summary, cycle, section, cycle > (declared or 0))
     if cycle and section != PERFORMANCE:
         st.caption(
-            f"Input base {cycle - 1}  ·  Incoming batch {cycle}  ·  Post-append base {cycle}"
+            f"**Lineage** · Input base {cycle - 1} + incoming batch {cycle} → appended base {cycle}"
         )
     if section == DATA and cycle:
         population_column, diagnostic_column = st.columns(2)
         with population_column:
             choices = _data(workspace, cycle)
         with diagnostic_column:
-            chosen = st.selectbox("Diagnostic", choices, format_func=_label)
+            chosen = _pick_diagnostic(choices, section, cycle)
     else:
         choices = _diagnostics(workspace, section, cycle)
-        chosen = (
-            st.selectbox("Diagnostic", choices, format_func=_label) if choices else None
-        )
+        chosen = _pick_diagnostic(choices, section, cycle)
     if chosen is None:
         st.warning(
             "No display files found for this selection. The output may be absent or partial."
@@ -311,6 +427,97 @@ def render() -> None:
         return
     _interpret(chosen)
     show_artifact(workspace, chosen)
+
+
+def render() -> None:
+    """Switch between the verified overview and one selected scientific diagnostic."""
+    st.html("""
+        <style>
+        .stMainBlockContainer:has(.st-key-results-toolbar) {
+            padding-top: clamp(1.5rem, 3.5vw, 3.25rem);
+        }
+        .st-key-results-headlines {
+            padding-block: 0.75rem;
+            border-block: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+        }
+        .st-key-results-headlines [data-testid="stMetricValue"] {
+            font-size: clamp(2.125rem, 2.6vw, 3rem);
+            font-weight: 650;
+            font-variant-numeric: tabular-nums;
+            line-height: 1.1;
+        }
+        </style>
+    """)
+    st.title("Results")
+    workspace = Workspace(Path.cwd())
+    state = dashboard_state()
+    active = read_active(workspace.params)
+    payload = active.contents if active else None
+    applied = None
+    if payload is not None:
+        try:
+            applied, _ = AppliedConfiguration.read(payload)
+        except ValueError as error:
+            st.caption(str(error))
+    else:
+        st.caption("No applied configuration.")
+
+    st.session_state["_results_mode"] = state.result_mode
+    with st.container(
+        key="results-toolbar",
+        horizontal=True,
+        horizontal_alignment="distribute",
+        vertical_alignment="center",
+    ):
+        mode = st.segmented_control(
+            "Results mode",
+            [EXPERIMENT_OVERVIEW, CYCLE_EXPLORER],
+            required=True,
+            key="_results_mode",
+            label_visibility="collapsed",
+            on_change=_remember_selection,
+            args=("result_mode", "_results_mode"),
+        )
+        refresh = st.button("Refresh result evidence")
+
+    checked = state.result_verification
+    if refresh:
+        with st.spinner("Checking local DVC and scientific evidence…"):
+            state.result_verification = checked = verify_workspace(workspace)
+            state.result_evidence_notice = None
+    if checked is not None and (
+        (checked.applied is not None and checked.applied != applied)
+        or (
+            not refresh
+            and checked.stamp is not None
+            and not checked.still_observed(workspace)
+        )
+    ):
+        state.result_verification = checked = None
+        state.result_evidence_notice = (
+            "Workspace evidence changed. Refresh to check correspondence again."
+        )
+
+    observed = set(workspace.result_cycles(include_raw=True))
+    aggregate = workspace.available(AGGREGATE)
+    summary = ExperimentSummary.from_verification(checked)
+    declared = applied.cycles if applied else None
+    with st.container(gap="xxsmall"):
+        _identity(applied, checked, summary, observed, aggregate)
+        if state.result_evidence_notice:
+            st.caption(state.result_evidence_notice)
+        if state.has_unapplied_draft(payload):
+            st.caption(
+                "Unapplied draft edits · Results are scoped to the applied configuration."
+            )
+        _details(applied, checked)
+
+    if mode == CYCLE_EXPLORER:
+        _explore(workspace, declared, observed, aggregate, checked, summary)
+    else:
+        render_overview(
+            summary, declared, observed, aggregate, state.result_cycle, _inspect
+        )
 
 
 render()
