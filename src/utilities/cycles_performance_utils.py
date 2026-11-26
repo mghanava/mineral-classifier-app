@@ -2,7 +2,7 @@
 
 This module provides functions to:
 - Load evaluation and prediction metrics from DVC-managed results directories.
-- Plot key performance indicators (accuracy, F1-score, MCC) over successive cycles to track performance trends.
+- Plot key performance indicators (accuracy, macro F0.5, MCC) over successive cycles to track performance trends.
 """
 
 import json
@@ -62,7 +62,9 @@ def plot_metrics(cycles_data, output_dir: Path):
     for stage, ax in [("evaluation", ax1), ("prediction", ax2)]:
         metrics = pd.DataFrame(cycles_data[stage])
         if not metrics.empty:
-            for i, column in enumerate(["accuracy", "f1", "mcc"]):
+            for i, (column, label) in enumerate(
+                [("accuracy", "ACCURACY"), ("f1", "Macro F0.5"), ("mcc", "MCC")]
+            ):
                 metrics.plot(
                     x="cycle",
                     y=column,
@@ -70,7 +72,7 @@ def plot_metrics(cycles_data, output_dir: Path):
                     ax=ax,
                     linewidth=2,
                     color=colors[i],
-                    label=column.upper(),
+                    label=label,
                 )
             ax.set_title(f"{stage.capitalize()} Metrics Across Cycles")
             ax.set_xlabel("Cycle Number")

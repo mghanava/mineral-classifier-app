@@ -6,6 +6,10 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
+### Fixed
+
+- Label validation and across-cycle figures with Macro F0.5. Place overconfidence below the identity diagonal and underconfidence above it in reliability diagrams, and label the secondary axis with the sum of sample weights per bin. Metric calculations, serialized keys and artifact filenames are preserved.
+
 ## [0.2.0.dev2] - 2026-11-25
 
 Configuration management is complete for the synthetic workflow, with 336 passing regression tests. Quick demo and Standard completed all 14 stages of their two-cycle CPU pipelines in 74.31 s and 101.66 s, respectively. Quick demo matched the retained M1.7 configuration and scientific outputs exactly for both cycles. Research matched the canonical defaults and generated an equivalent DVC definition. All three preset budgets and versions were retained after verification. Preset budgets describe computational effort. Predictive performance depends on the data and evaluation protocol. See the [configuration verification report](docs/configuration_verification.md).

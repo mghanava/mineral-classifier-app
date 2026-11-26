@@ -63,6 +63,7 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 ### Milestone 3 — User interface redesign (`0.2.0.dev3`)
 
 - [x] **M3.1 — Design and feasibility audit.** Audited the seven-tab dashboard, captured screens, scientific output contracts, spatial alignment, DVC provenance and locked Streamlit APIs. See the [UI/UX design and feasibility audit](docs/ui_ux_design.md).
+- [x] **M3.1a — Scientific visualization labeling corrections.** Correct macro F0.5 legends, reliability annotations and the sample-weight axis. Document legacy figures and DVC invalidation in the [UI/UX design](docs/ui_ux_design.md#m31a-scientific-visualization-labels).
 - [ ] **M3.2 — Navigation and dashboard architecture.** Extract Home, Configure, Run and Results with shared state and artifact access.
 - [ ] **M3.3 — Guided configuration.** Integrate presets, five Basic controls, grouped Advanced options, complete Expert YAML, structured validation and explicit Apply.
 - [ ] **M3.4 — Execution experience.** Move full and targeted run actions to Run with applied settings, observed stage status, logs and the existing locking and failure handling.

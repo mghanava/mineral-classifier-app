@@ -363,6 +363,7 @@ for output in stage["outs"]:
     for source, expected in (
         ("train_utils", model_consumers | performance),
         ("eval_utils", per_cycle("evaluate", "predict") | performance),
+        ("cycles_performance_utils", performance),
         ("calibration_utils", model_consumers | performance),
         ("drift_detection_utils", per_cycle("analyze_drift")),
         ("graph_protocol", set(stages)),

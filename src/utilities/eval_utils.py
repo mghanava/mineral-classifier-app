@@ -96,7 +96,7 @@ def evaluate_with_calibration(
             {
                 'uncalibrated': {
                     'acc': float,  # Accuracy
-                    'f1': float,   # F1 score (beta=0.5)
+                    'f1': float,   # Macro F0.5
                     'mcc': float,  # Matthews correlation coefficient
                     'ece': float,  # Expected calibration error
                     'mce': float   # Maximum calibration error
@@ -365,12 +365,12 @@ def plot_reliability_diagram(
     # Customize plot
     ax1.set_xlabel("Confidence\n(Mean Predicted Probability)")
     ax1.set_ylabel("Accuracy\n(Mean Observed Probability)")
-    ax2.set_ylabel("Sample Count")
+    ax2.set_ylabel("Sum of Sample Weights per Bin")
     lines1, labels1 = ax1.get_legend_handles_labels()
     lines2, labels2 = ax2.get_legend_handles_labels()
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
-    ax1.text(0.7, 0.3, "Under-confident", color="red", fontsize=12, ha="center")
-    ax1.text(0.3, 0.7, "Overconfident", color="red", fontsize=12, ha="center")
+    ax1.text(0.7, 0.3, "Overconfident", color="red", fontsize=12, ha="center")
+    ax1.text(0.3, 0.7, "Underconfident", color="red", fontsize=12, ha="center")
     ax1.grid(True, alpha=0.3)
     pyplot.tight_layout()
 

@@ -3,7 +3,7 @@
 This module provides a comprehensive function for running predictions on new data using a trained model. It includes functionality for:
 - Applying post-hoc calibration to model outputs.
 - Generating both calibrated and uncalibrated probability distributions.
-- Calculating key performance metrics (accuracy, F1-score, MCC).
+- Calculating key performance metrics (accuracy, macro F0.5, MCC).
 - Saving detailed prediction results, including probabilities, labels, and visualizations like confusion matrices and histograms.
 """
 

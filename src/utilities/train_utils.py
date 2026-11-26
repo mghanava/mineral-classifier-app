@@ -100,7 +100,7 @@ def train(
 
     The function tracks multiple metrics during training:
         - Training and validation losses
-        - Validation accuracy, F1 score, and Matthews correlation coefficient
+        - Validation accuracy, macro F0.5, and Matthews correlation coefficient
         - Expected and Maximum Calibration Error
         - Gradient norms
 
@@ -284,7 +284,7 @@ def plot_training(
         train_losses (list): Training losses over epochs
         val_losses (list): Validation losses over epochs
         val_accuracies (list): Validation accuracies over epochs
-        val_f1_scores (list): Validation F1 scores (beta=0.5) over epochs
+        val_f1_scores (list): Validation macro F0.5 scores over epochs
         val_mcc (list): Validation Matthews Correlation Coefficient over epochs
         train_gradients (list): Training gradient norms over epochs
         val_ece (list): Validation Expected Calibration Error over epochs
@@ -302,7 +302,7 @@ def plot_training(
     ax[0].set_ylabel("Loss")
     ax[0].legend()
 
-    ax[1].plot(val_f1_scores, label="Validation F1 scores (beta=0.5)", color="blue")
+    ax[1].plot(val_f1_scores, label="Validation Macro F0.5", color="blue")
     ax[1].plot(val_accuracies, label="Validation Accuracy", color="green")
     ax[1].plot(val_mcc, label="Validation MatthewsCorrCoef", color="red")
     ax[1].set_title("Performance Metrics")
