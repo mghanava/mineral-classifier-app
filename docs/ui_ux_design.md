@@ -352,8 +352,25 @@ Results is a transitional single-diagnostic browser. The six sections expose the
 
 Home and Results report file availability separately from evidence of correspondence. All existing result sets are labelled unverified against the applied configuration and source revision. The browser does not deserialize model, calibrator or raw graph objects. The original stored 3D graph views retain their traces and legends. The graph title and statistics appear as wrapping text below the chart. Legacy training, metrics, reliability and cross-cycle figures retain the interpretation guidance above.
 
-The approved experiment overview, DVC evidence checks, native metric summaries, joined spatial overlays and interactive trend charts remain in M3.5. M3.2 uses the original figures and standalone tables. Configure remains an expert YAML workflow and Run retains synchronous command streaming. The dashboard stores session state only. Container packaging uses the existing whole-source copy, and the source checkout launches through the same `app.py` entry point. The scientific wheel still packages `src`.
+The approved experiment overview, DVC evidence checks, native metric summaries, joined spatial overlays and interactive trend charts remain in M3.5. M3.2 uses the original figures and standalone tables. At M3.2, Configure exposed expert YAML and Run retained synchronous command streaming. The dashboard stores session state only. Container packaging uses the existing whole-source copy, and the source checkout launches through the same `app.py` entry point. The scientific wheel still packages `src`.
 
-Initial Chromium review covered 1920 × 1080, 1280 × 900 and 390 × 844 in native light and dark themes. The captures use isolated workspaces, one with empty results and one with copies of the historical M2.5 Quick demo exports. The local capture index is `/tmp/mineral-m32-review/INDEX.md`. Owner visual approval is required before committing.
+Initial Chromium review covered 1920 × 1080, 1280 × 900 and 390 × 844 in native light and dark themes. The captures use isolated workspaces, one with empty results and one with copies of the historical M2.5 Quick demo exports. The local capture index is `/tmp/mineral-m32-review/INDEX.md`. The owner accepted M3.2 following visual review.
 
 Engineering checks passed with 361 tests in the complete suite and 360 in the non-integration suite. Repository-wide Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. The container build and deployment were not exercised.
+
+
+## M3.3 guided configuration
+
+Configure starts in Basic with the applied YAML as the initial draft, when available. The compact editor is paired with Review and apply on desktop and stacked on a narrow display. The five Basic parameters are model, requested device, learning-cycle count and the bootstrap and batch observation targets. The CUDA index appears under Computing device only when applicable. Zero cycles is labelled bootstrap only. The observation targets can differ from realized counts because of placement and class top-up.
+
+Preset selection updates the description and measured reference for the selected preset. Quick demo and Standard use the M2.5 host measurements of 74.31 s and 101.66 s. Loading is an explicit replacement. Draft status identifies the loaded preset and whether its resolved values have been customized.
+
+Advanced renders one of seven groups. Its 28 inventory fields include three mutually exclusive graph keys represented by one rule selector and one parameter input. Seeds live in Reproducibility, with the calibration seed hidden for isotonic. Isotonic also hides the calibration fit budget. Graph affinity, scaler, and drift controls show only applicable inputs or Expert guidance. The Wasserstein selector represents the two internal flags and leaves a legacy pair intact until the user changes the method. The full Expert YAML remains editable and includes all inactive fields.
+
+[Guided field bindings](../dashboard/guided_configuration.py) apply typed overrides through the existing import resolver. The session stores one draft document, with the configuration level, group and preset selection stored separately. Switching views or pages leaves the exact YAML buffer intact. A malformed or semantically invalid Expert edit blocks guided editing until corrected or explicitly replaced. Actual guided edits reserialize the draft and may normalize YAML formatting and comments.
+
+Review and apply remain explicit. Validation shows separate counts for errors, warnings and information. Blocking findings and regeneration requirements are visible. Expanders hold nonblocking details, the semantic diff and resolved YAML. The existing active snapshot and workspace lock still guard atomic persistence. The successful Apply action offers a link to Run.
+
+Chromium review covered desktop widths of 1920 and 1280 px and a 390 px layout in native light and dark themes. At narrow widths, Review and apply follows the stacked editor fields. The local capture index at `/tmp/mineral-m33-review/INDEX.md` records 11 captures from a disposable workspace. Browser testing also preserved an edited malformed Expert buffer through level and page navigation. Owner visual approval is required before committing.
+
+Engineering checks passed with 375 tests in the complete suite and 374 in the non-integration suite. Repository-wide Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed.

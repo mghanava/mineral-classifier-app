@@ -39,7 +39,7 @@ def _select(dashboard: AppTest, label: str, value: str | int | Path) -> AppTest:
 @pytest.fixture
 def configure(dashboard: AppTest) -> AppTest:
     """Open the expert editor in the isolated workspace."""
-    return _page(dashboard, "configure")
+    return _page(dashboard, "configure").radio[0].set_value("Expert").run()
 
 
 def test_dashboard_renders_only_selected_page(dashboard, tmp_path, monkeypatch):
@@ -342,6 +342,7 @@ import sys
 from streamlit.testing.v1 import AppTest
 
 dashboard = AppTest.from_file(sys.argv[1]).switch_page("dashboard/views/configure.py").run()
+dashboard.radio[0].set_value("Expert").run()
 draft = dashboard.text_area[0].value.replace("cycles: 3", "cycles: 2")
 dashboard.text_area[0].set_value(draft).run()
 for label in ("Validate & Preview", "Apply configuration"):
@@ -382,7 +383,7 @@ for error in dashboard.error:
     assert attempted and attempted[0][0] == original
     assert "pipeline run is active" in attempted[0][1]
 
-    _page(dashboard, "configure")
+    _page(dashboard, "configure").radio[0].set_value("Expert").run()
     draft = dashboard.text_area[0].value.replace("cycles: 3", "cycles: 2")
     dashboard.text_area[0].set_value(draft).run()
     _click(dashboard, "Validate & Preview")

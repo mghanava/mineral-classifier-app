@@ -31,7 +31,7 @@ Open [http://localhost:8501](http://localhost:8501)
 ### Using the Dashboard
 
 1. **Home** shows the applied configuration and any existing workspace results. **Configure Quick demo** highlights the reduced CPU preset. **Configure an experiment** opens the same editor for a custom experiment.
-2. In **Configure**, select a preset and click **Load preset into draft**, or edit the expert YAML. Use **Validate & Preview** to review findings, resolved settings and differences. Click **Apply configuration** to update `params.yaml`. Preview again if the draft or active file changes. The draft and selected preset survive navigation within the session.
+2. In **Configure**, select a preset and click **Load preset into draft**, or customize the current draft. **Basic** shows model, device, cycle count and the two observation targets. **Advanced** groups scientific settings by purpose. **Expert** edits the same draft as complete YAML. Use **Validate & Preview** to review findings and differences, then **Apply configuration** to update `params.yaml`. Preview again if the draft or active file changes. The draft and selected preset survive navigation within the session.
 3. In **Run**, review the applied settings and choose **Generate & Run Full Pipeline** or open **Advanced stage execution** for a targeted action. The dashboard validates the applied file and regenerates DVC definitions before reproduction.
 4. In **Results**, choose a learning cycle, scientific section and diagnostic. For spatial graphs, choose the input base, incoming batch or post-append base. Cycle 0 is the bootstrap snapshot. Existing files can be inspected even when their correspondence with the applied settings and source revision is unverified.
 
@@ -53,7 +53,7 @@ Resolution and import preview to stdout by default. Use `--overrides` with a par
 
 ### Current scope
 
-The verified workflow uses synthetic data and random stratified validation. Generalization to unseen regions, full-budget Research execution and container deployment remain unverified. The dashboard uses expert YAML and a single-diagnostic Results browser. Guided configuration, DVC-backed result correspondence, user data ingestion and independent inference are planned. [Roadmap](ROADMAP.md)
+The verified workflow uses synthetic data and random stratified validation. Generalization to unseen regions, full-budget Research execution and container deployment remain unverified. The dashboard supports guided configuration and a single-diagnostic Results browser. DVC-backed result correspondence, user data ingestion and independent inference are planned. [Roadmap](ROADMAP.md)
 
 ### Stop
 

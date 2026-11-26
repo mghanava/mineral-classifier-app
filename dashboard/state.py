@@ -17,17 +17,25 @@ class DashboardState:
 
     draft: str | None = None
     preset: str | None = None
+    loaded_preset: tuple[str, str] | None = None
+    preset_generation: int = 0
+    configure_level: str = "Basic"
+    advanced_group: str | None = None
+    expert_edited: bool = False
+    preview_error: str | None = None
     preview: ConfigurationPreview | None = None
     applied_draft: tuple[str, bytes] | None = None
     result_cycle: int | None = None
     result_section: str = "Data and spatial graphs"
     last_run: tuple[str, int] | None = None
 
-    def update_draft(self, draft: str) -> None:
+    def update_draft(self, draft: str, *, expert: bool = False) -> None:
         """Discard reviews whenever the editor contents change."""
         if self.draft != draft:
             self.draft = draft
             self.preview = None
+            self.preview_error = None
+            self.expert_edited = expert
 
     def has_unapplied_draft(self, active: bytes | None) -> bool:
         """Recognize both the original editor text and a successfully applied review."""

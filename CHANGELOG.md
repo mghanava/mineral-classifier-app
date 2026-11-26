@@ -8,11 +8,13 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Guide configuration through five Basic settings and 28 Advanced fields across seven groups. Keep complete Expert YAML and all three views bound to the same session draft.
 - Add a Home page with the Quick demo entry point, the measured M2.5 runtime reference and local workspace availability.
 - Retain the configuration draft, preset, preview, selected Results cycle and section, and last execution outcome within the dashboard session.
 
 ### Changed
 
+- Show the applied and draft status, preset provenance and measured CPU references beside explicit validation and Apply. Show separate finding counts and keep blocking errors visible.
 - Replace seven eager tabs with native top navigation for Home, Configure, Run and Results. Configure retains explicit validation and Apply. Run owns all full and targeted execution actions.
 - Browse one existing diagnostic at a time across six scientific sections. Identify bootstrap, input base, incoming batch and post-append snapshots. Label correspondence with the applied settings and source revision as unverified.
 

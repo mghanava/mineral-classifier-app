@@ -27,11 +27,14 @@ def show_validation(validation: ValidationResult, *, compact: bool = False) -> N
         if compact and issue.severity != "error":
             secondary.append(issue)
         else:
-            display[issue.severity](f"{issue.path} — {issue.message}")
+            code = f" ({issue.code})" if compact else ""
+            display[issue.severity](f"{issue.path} — {issue.message}{code}")
     if secondary:
         with st.expander(f"Warnings and information ({len(secondary)})"):
             for issue in secondary:
-                display[issue.severity](f"{issue.path} — {issue.message}")
+                display[issue.severity](
+                    f"{issue.path} — {issue.message} ({issue.code})"
+                )
 
 
 def read_active(path: Path) -> ConfigurationSnapshot | None:
