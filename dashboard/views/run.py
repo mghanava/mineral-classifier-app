@@ -255,6 +255,7 @@ def render() -> None:
             advanced.empty()
             attempt = RunAttempt(target=None if full else target)
             state.last_run = attempt
+            state.result_verification = None
             _execute(workspace, attempt, status, logs, applied_id)
             st.rerun()
         else:

@@ -7,6 +7,12 @@ import streamlit as st
 
 from dashboard.artifacts import AGGREGATE, Workspace
 from dashboard.components import UNVERIFIED, applied_summary, read_active, show_artifact
+from dashboard.provenance import (
+    Availability,
+    Correspondence,
+    Verification,
+    verify_workspace,
+)
 from dashboard.state import CONFIGURE_PAGE, RUN_PAGE, dashboard_state
 
 DATA = "Data and spatial graphs"
@@ -166,6 +172,50 @@ def _remember_section() -> None:
     dashboard_state().result_section = st.session_state["_results_section"]
 
 
+def _evidence(checked: Verification, cycle: int, section: str) -> None:
+    stage = dict(checked.stages)
+    if section == PERFORMANCE:
+        evidence = checked.aggregate
+        scope = "Cross-cycle performance"
+    elif cycle == 0:
+        evidence = stage.get("bootstrap")
+        scope = "Bootstrap"
+    elif cycle in checked.declared_cycles and checked.cycles:
+        evidence = checked.cycles[cycle - 1].evidence
+        scope = f"Learning cycle {cycle}"
+    else:
+        evidence = None
+        scope = f"Learning cycle {cycle}"
+    checked_at = checked.checked_at.strftime("%Y-%m-%d %H:%M:%S UTC")
+    fingerprint = (
+        f" · Applied configuration `{checked.applied.fingerprint[:12]}`"
+        if checked.applied
+        else ""
+    )
+    st.caption(
+        f"Local evidence checked {checked_at} · {checked.elapsed:.2f} s{fingerprint}"
+    )
+    if evidence is None:
+        st.caption(f"{scope} · Unverified correspondence for this scope.")
+        if cycle in checked.discovered_cycles and cycle not in checked.declared_cycles:
+            st.caption("Historical cycle outside the applied configuration.")
+    else:
+        text = f"{scope} · {evidence.availability}"
+        if evidence.availability != Availability.NOT_APPLICABLE:
+            text += f" · {evidence.correspondence}"
+        st.write(text)
+        if (
+            evidence.locked_outputs_match
+            and evidence.correspondence != Correspondence.MATCHING
+        ):
+            st.caption("Declared output bytes match the on-disk lock for this scope.")
+    reasons = (*checked.reasons, *(evidence.reasons if evidence else ()))
+    if reasons:
+        with st.expander("Verification details"):
+            for reason in reasons:
+                st.text(reason)
+
+
 def render() -> None:
     """Route the selected cycle, scientific section and existing diagnostic."""
     st.title("Results")
@@ -173,16 +223,38 @@ def render() -> None:
     state = dashboard_state()
     active = read_active(workspace.params)
     cycles = applied_summary(active, show_targets=False)
-    observed = set(workspace.result_cycles())
+    observed = set(workspace.result_cycles(include_raw=True))
     aggregate = workspace.available(AGGREGATE)
     if observed or aggregate:
-        st.info(f"Existing workspace artifacts. {UNVERIFIED}")
+        st.info(
+            "Existing workspace artifacts."
+            if state.result_verification is not None
+            else f"Existing workspace artifacts. {UNVERIFIED}"
+        )
     else:
         st.info("No display artifacts found in this workspace.")
         if active is not None and active.contents is not None:
             st.page_link(RUN_PAGE, label="Go to Run")
         else:
             st.page_link(CONFIGURE_PAGE, label="Go to Configure")
+
+    if active is not None and state.has_unapplied_draft(active.contents):
+        st.caption(
+            "Draft differs from the applied configuration. This check uses the applied file."
+        )
+    if st.button("Refresh result evidence"):
+        with st.spinner("Checking local DVC and scientific evidence…"):
+            state.result_verification = verify_workspace(workspace)
+    checked = state.result_verification
+    if (
+        checked is not None
+        and checked.stamp is not None
+        and not checked.still_observed(workspace)
+    ):
+        state.result_verification = checked = None
+        st.caption(
+            "Unverified correspondence. Workspace evidence changed. Refresh to check again."
+        )
 
     scope = sorted(set(range((cycles or 0) + 1)) | observed)
     if state.result_cycle not in scope:
@@ -215,6 +287,8 @@ def render() -> None:
             key="_results_section",
             on_change=_remember_section,
         )
+    if checked is not None:
+        _evidence(checked, cycle, section)
     if cycle and section != PERFORMANCE:
         st.caption(
             f"Input base {cycle - 1}  ·  Incoming batch {cycle}  ·  Post-append base {cycle}"

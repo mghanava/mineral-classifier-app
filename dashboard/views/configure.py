@@ -183,6 +183,7 @@ def _review(
         except (OSError, ValueError) as error:
             st.error(f"Could not apply the configuration. {error}")
         else:
+            state.result_verification = None
             state.applied_draft = (state.draft, preview.yaml.encode("utf-8"))
             state.preview = None
             st.success("Configuration applied to params.yaml.")

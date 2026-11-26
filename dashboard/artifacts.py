@@ -68,13 +68,22 @@ class Workspace:
             if path.suffix in DISPLAY_FORMATS and self.available(directory / path.name)
         ]
 
-    def result_cycles(self) -> Iterator[int]:
+    def result_cycles(self, *, include_raw: bool = False) -> Iterator[int]:
         """Yield cycles with display files, including cycles beyond applied settings."""
         for family in CYCLE_FAMILIES:
             for directory in self._entries(Path(family)):
                 match = re.fullmatch(r"cycle_(0|[1-9][0-9]*)", directory.name)
-                if match and self.files(Path(family) / directory.name):
-                    yield int(match[1])
+                if match:
+                    relative = Path(family) / directory.name
+                    if self.files(relative) or (
+                        include_raw
+                        and any(
+                            path.suffix == ".pt"
+                            and self.available(relative / path.name)
+                            for path in self._entries(relative)
+                        )
+                    ):
+                        yield int(match[1])
 
     def read(self, relative: Path) -> Figure | pd.DataFrame | bytes | dict | str:
         """Read one chosen display artifact without loading executable model objects."""

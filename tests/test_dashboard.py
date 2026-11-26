@@ -58,7 +58,7 @@ def test_dashboard_renders_only_selected_page(dashboard, tmp_path, monkeypatch):
         ("home", "Mineral Classifier", {"Configure Quick demo"}),
         ("configure", "Configure", {"Load preset into draft", "Validate & Preview"}),
         ("run", "Run", {"Run full experiment", "Run stage"}),
-        ("results", "Results", set()),
+        ("results", "Results", {"Refresh result evidence"}),
     ):
         _page(dashboard, page)
         assert not dashboard.exception and not dashboard.error and not dashboard.tabs

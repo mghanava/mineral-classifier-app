@@ -49,9 +49,8 @@ def base_diagnostics(directory: str, n_splits: int) -> list[str]:
     ]
 
 
-def generate_fine_grained_dvc_yaml():
-    """Generate fine-grained DVC pipeline with individual stages."""
-    params = load_params()
+def pipeline_definition(params: dict) -> dict:
+    """Describe the fine-grained pipeline for an explicit scientific configuration."""
     cycles = range(params["cycles"] + 1)[1:]  # Skip cycle 0 (bootstrap)
     model = params["default_model"]
 
@@ -269,7 +268,12 @@ def generate_fine_grained_dvc_yaml():
     if len(cycles) > 1:
         stages["stages"].update(generate_performance_analysis_stage(cycles))
 
-    # Write to dvc.yaml
+    return stages
+
+
+def generate_fine_grained_dvc_yaml():
+    """Write the pipeline definition using the applied configuration."""
+    stages = pipeline_definition(load_params())
     with open("dvc.yaml", "w") as f:
         yaml.dump(stages, f, sort_keys=False, default_flow_style=False)
 

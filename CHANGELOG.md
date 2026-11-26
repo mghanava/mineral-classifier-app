@@ -8,6 +8,8 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Add an explicit Results evidence refresh that verifies scoped DVC records, local content and scientific bindings. Distinguish availability, lock-matching bytes and correspondence with applied settings and workspace sources.
+- Add typed scientific summary readers for realized populations, final-test and incoming-batch metrics, model and calibration metadata and per-cycle completeness.
 - Show Run phases, scientific stage observations and scoped execution outcomes, including explicit unchanged skips. Keep a bounded technical log and download for the latest session action.
 - Guide configuration through five Basic settings and 28 Advanced fields across seven groups. Keep complete Expert YAML and all three views bound to the same session draft.
 - Add a Home page with the Quick demo entry point, the measured M2.5 runtime reference and local workspace availability.
