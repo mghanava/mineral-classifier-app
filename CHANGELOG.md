@@ -8,6 +8,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Show Run phases, scientific stage observations and scoped execution outcomes, including explicit unchanged skips. Keep a bounded technical log and download for the latest session action.
 - Guide configuration through five Basic settings and 28 Advanced fields across seven groups. Keep complete Expert YAML and all three views bound to the same session draft.
 - Add a Home page with the Quick demo entry point, the measured M2.5 runtime reference and local workspace availability.
 - Retain the configuration draft, preset, preview, selected Results cycle and section, and last execution outcome within the dashboard session.

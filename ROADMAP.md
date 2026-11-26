@@ -66,7 +66,7 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 - [x] **M3.1a — Scientific visualization labeling corrections.** Correct macro F0.5 legends, reliability annotations and the sample-weight axis. Document legacy figures and DVC invalidation in the [UI/UX design](docs/ui_ux_design.md#m31a-scientific-visualization-labels).
 - [x] **M3.2 — Navigation and dashboard architecture.** Extract Home, Configure, Run and Results with shared state, selected-diagnostic access and preserved execution and configuration behavior. [Implementation and review](docs/ui_ux_design.md#m32-implemented-dashboard).
 - [x] **M3.3 — Guided configuration.** Integrate presets, five Basic settings, 28 grouped Advanced fields, complete Expert YAML, structured validation and explicit Apply. [Implementation and review](docs/ui_ux_design.md#m33-guided-configuration).
-- [ ] **M3.4 — Execution experience.** Add observed stage status and improve log presentation on Run while preserving existing locking and failure handling.
+- [x] **M3.4 — Execution experience.** Show execution phases, scoped outcomes and observed scientific stage progress with bounded technical logs. [Implementation and review](docs/ui_ux_design.md#m34-execution-experience).
 - [ ] **M3.5a — Experiment overview and cycle navigation.** Show result correspondence, separate test and batch trajectories, realized dataset growth and compact cycle drill-through.
 - [ ] **M3.5b — Spatial data and prediction explorer.** Inspect selected populations and graphs, with verified prediction overlays, sample details and downloads.
 - [ ] **M3.5c — Classification, calibration and training results.** Present population-specific metrics, calibration diagnostics, selected CV fold plots and final refit context.

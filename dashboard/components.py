@@ -47,7 +47,10 @@ def read_active(path: Path) -> ConfigurationSnapshot | None:
 
 
 def applied_summary(
-    active: ConfigurationSnapshot | None, *, show_targets: bool = True
+    active: ConfigurationSnapshot | None,
+    *,
+    show_targets: bool = True,
+    show_calibration: bool = False,
 ) -> int | None:
     """Show settings from the active file and return a usable cycle count."""
     if active is None:
@@ -66,10 +69,19 @@ def applied_summary(
     count = cycles if type(cycles) is int and cycles >= 0 else None
     model = settings.get("default_model")
     device = settings.get("device")
+    evaluation = settings.get("evaluate")
+    method = (
+        evaluation.get("calibration_method") if isinstance(evaluation, dict) else None
+    )
+    calibration = (
+        f" · **Calibration** {method.capitalize() if isinstance(method, str) else 'Unavailable'}"
+        if show_calibration
+        else ""
+    )
     st.write(
         f"**Model** {model.upper() if isinstance(model, str) else 'Unavailable'}"
         f" · **Requested device** {device if isinstance(device, str) else 'Unavailable'}"
-        f" · **Learning cycles** {count if count is not None else 'Unavailable'}"
+        f" · **Learning cycles** {count if count is not None else 'Unavailable'}{calibration}"
     )
     data = settings.get("data")
     if show_targets and isinstance(data, dict):

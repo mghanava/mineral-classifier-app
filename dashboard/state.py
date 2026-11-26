@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import streamlit as st
 
+from dashboard.execution import RunAttempt
 from src.configuration_files import ConfigurationPreview
 
 CONFIGURE_PAGE = "dashboard/views/configure.py"
@@ -27,7 +28,7 @@ class DashboardState:
     applied_draft: tuple[str, bytes] | None = None
     result_cycle: int | None = None
     result_section: str = "Data and spatial graphs"
-    last_run: tuple[str, int] | None = None
+    last_run: RunAttempt | None = None
 
     def update_draft(self, draft: str, *, expert: bool = False) -> None:
         """Discard reviews whenever the editor contents change."""

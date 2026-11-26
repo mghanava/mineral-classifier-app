@@ -57,7 +57,7 @@ def test_dashboard_renders_only_selected_page(dashboard, tmp_path, monkeypatch):
     for page, title, controls in (
         ("home", "Mineral Classifier", {"Configure Quick demo"}),
         ("configure", "Configure", {"Load preset into draft", "Validate & Preview"}),
-        ("run", "Run", {"Generate & Run Full Pipeline", "Run stage"}),
+        ("run", "Run", {"Run full experiment", "Run stage"}),
         ("results", "Results", set()),
     ):
         _page(dashboard, page)
@@ -88,13 +88,14 @@ def test_empty_results_and_directory_presence(dashboard, tmp_path):
         (7, 0, "scripts.setup_dvc"),
         (0, 8, "dvc"),
         (None, 0, "scripts.setup_dvc"),
+        (0, None, "dvc"),
     ],
 )
 def test_dashboard_pipeline_status_and_short_circuit(
     dashboard: AppTest,
     monkeypatch: pytest.MonkeyPatch,
     setup_status: int | None,
-    dvc_status: int,
+    dvc_status: int | None,
     failed_module: str | None,
 ) -> None:
     """Stream subprocess output and run DVC only after successful setup."""
@@ -120,9 +121,7 @@ def test_dashboard_pipeline_status_and_short_circuit(
 
     _page(dashboard, "run")
     monkeypatch.setattr(subprocess, "Popen", run_fixture)
-    button = next(
-        b for b in dashboard.button if b.label == "Generate & Run Full Pipeline"
-    )
+    button = next(b for b in dashboard.button if b.label == "Run full experiment")
     button.click().run(timeout=20)
 
     expected = [["scripts.setup_dvc"]]
@@ -135,19 +134,22 @@ def test_dashboard_pipeline_status_and_short_circuit(
     if failed_module is None:
         assert not dashboard.error
         assert [item.value for item in dashboard.success] == [
-            "Pipeline completed successfully!"
+            "Completed · Full experiment"
         ]
     else:
         assert not dashboard.success
-        error = dashboard.error[0].value
-        assert failed_module in error
+        error = dashboard.error[1].value
+        assert failed_module in error or (failed_module == "dvc" and "DVC" in error)
         status = statuses[failed_module]
         assert ("Could not start" if status is None else f"status {status}") in error
     _page(dashboard, "home")
     _page(dashboard, "run")
+    assert (
+        dashboard.session_state["mineral_dashboard"].last_run.scope == "Full experiment"
+    )
     assert any(
-        "Most recent session action · Full experiment" in item.value
-        for item in dashboard.caption
+        "Full experiment" in item.value
+        for item in [*dashboard.success, *dashboard.error]
     )
 
 
@@ -324,7 +326,7 @@ def test_run_blocks_invalid_active_configuration(dashboard, tmp_path, monkeypatc
 
     _page(dashboard, "run")
     monkeypatch.setattr(subprocess, "Popen", unexpected_subprocess)
-    _click(dashboard, "Generate & Run Full Pipeline")
+    _click(dashboard, "Run full experiment")
     assert any("data.base.n_splits" in item.value for item in dashboard.error)
     assert not dashboard.success
 
@@ -378,7 +380,7 @@ for error in dashboard.error:
 
     _page(dashboard, "run")
     monkeypatch.setattr(subprocess, "Popen", fixture_process)
-    _click(dashboard, "Generate & Run Full Pipeline")
+    _click(dashboard, "Run full experiment")
     assert not dashboard.exception
     assert attempted and attempted[0][0] == original
     assert "pipeline run is active" in attempted[0][1]
@@ -445,7 +447,7 @@ def test_stage_targets_and_cycle_restrictions(
     active.write_text(active.read_text().replace("cycles: 3", f"cycles: {count}"))
     calls = []
 
-    def capture(command, **kwargs):
+    def capture(command, attempt, notify):
         calls.append(command[2:])
         return 0
 

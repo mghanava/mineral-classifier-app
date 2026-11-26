@@ -371,6 +371,22 @@ Advanced renders one of seven groups. Its 28 inventory fields include three mutu
 
 Review and apply remain explicit. Validation shows separate counts for errors, warnings and information. Blocking findings and regeneration requirements are visible. Expanders hold nonblocking details, the semantic diff and resolved YAML. The existing active snapshot and workspace lock still guard atomic persistence. The successful Apply action offers a link to Run.
 
-Chromium review covered desktop widths of 1920 and 1280 px and a 390 px layout in native light and dark themes. At narrow widths, Review and apply follows the stacked editor fields. The local capture index at `/tmp/mineral-m33-review/INDEX.md` records 11 captures from a disposable workspace. Browser testing also preserved an edited malformed Expert buffer through level and page navigation. Owner visual approval is required before committing.
+Chromium review covered desktop widths of 1920 and 1280 px and a 390 px layout in native light and dark themes. At narrow widths, Review and apply follows the stacked editor fields. The local capture index at `/tmp/mineral-m33-review/INDEX.md` records 11 captures from a disposable workspace. Browser testing also preserved an edited malformed Expert buffer through level and page navigation. The owner accepted M3.3 following engineering and visual review.
 
 Engineering checks passed with 375 tests in the complete suite and 374 in the non-integration suite. Repository-wide Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed.
+
+
+## M3.4 execution experience
+
+Run shows requested model, device and observation targets, cycles, calibration and a 12-character SHA-256 prefix of the exact applied configuration bytes. Draft changes are shown separately. The full action and advanced targeted controls use the existing cooperative directory lock through strict validation, definition generation, the active-byte recheck and reproduction. The child interpreter and PATH handoff stay the same. Session state holds the latest attempt and its configuration identity, scope, commands, exit statuses and stage observations.
+
+Ready describes a session before execution. Running highlights Checking applied configuration, Preparing DVC pipeline or Reproducing. Completed requires a successful reproduction exit and describes the scope shown, including a specific target when selected. Failed identifies where the attempt stopped, including contention, invalid settings, preparation, launch or nonzero reproduction exit. Up to date requires a successful reproduction exit, DVC's no-op summary and explicit unchanged-skip evidence. A full run requires every generated stage to have been observed as skipped. A targeted run requires the target's skip and DVC's no-op summary for that traversal. Cache checkout is separate from an unchanged skip.
+
+The parser was checked against the retained M2.5 Quick demo reproduction and no-op logs and the locked DVC 3.67.1 source. It recognizes complete stage starts, unchanged skips and cache-checkout lines for this pipeline. The sequential fail-fast walk supplies completion evidence at the next recognized stage boundary or a successful exit. A generic lock-file update alone does not establish completion. Partial, unknown and buffered output can leave the last event or a stage outcome unconfirmed. Run keeps the latest learning cycle's observations visible and summarizes other cycles. It reports observations without estimating elapsed work or time remaining.
+
+Technical logs use merged stdout and stderr and keep the last 65,536 characters in the session. The expander renders at most 4,096 characters of output, with separate command and exit-status details. The download includes the retained tail, run scope and an omission count. On navigation away, the synchronous execution drains the subprocess and keeps the workspace lock through its exit. The latest outcome remains available when Run rerenders. File availability refreshes after a terminal outcome, independently of result correspondence verification.
+
+
+Engineering checks passed with 392 tests in the complete suite and 391 in the non-integration suite. Repository-wide Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed.
+
+Chromium review recorded eight simulated execution states at 1920, 1280 and 390 px widths in native light and dark themes. The capture index is `/tmp/mineral-m34-review/INDEX.md`. A paused simulated command also finished under its existing lock after navigation away from Run, and its outcome appeared on return. Owner visual approval is required before committing.
