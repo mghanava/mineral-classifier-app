@@ -593,3 +593,34 @@ The eight updated captures and measurement record are in `/tmp/mineral-m35bii-po
 The refined full suite reported **479 passed and 4 historical-fixture skips**. The fast suite reported **472 passed and 11 deselected**. Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files. All 341 retained-file digests and modification timestamps matched the pre-review manifest, and the production manifest matched the earlier review baseline.
 
 M3.6 will address the remaining 3D axis tick clipping, clarify verification-scope wording and refine probability formatting.
+
+## M3.5c classification calibration and training results
+
+**Model performance and training** opens Classification and also offers Training and Original diagnostics. Both native views follow the existing learning-cycle selector. Classification selects either final test or the incoming prediction batch. The verified evaluation record supplies class-balanced sample-weighted Accuracy, Macro F0.5 and signed MCC before and after calibration on the same final-test observations. Accuracy and Macro F0.5 use percentages. MCC uses a signed decimal. The original calibrated final-test matrix remains the primary image for that population.
+
+The incoming view displays the pipeline's published calibrated, weighted scores independently of the selected batch probability family. The count matrix and per-class table use the exact scoped prediction join. Matrix rows are observed classes and columns are predicted classes, both in the persisted mapping order. The table includes all classes, including zero-count rows and columns. Precision divides the diagonal by the predicted count, recall divides it by observed support, and zero denominators display as **Undefined**. These are unweighted derived diagnostics. The pipeline publishes calibrated batch classification scores only.
+
+**Probability calibration** compares weighted final-test ECE and MCE for the same observations using percentages and directional percentage-point differences. Both are lower-is-better, bin-dependent estimates. The verified evaluation scope supplies the method, reserved calibration partition size and reporting-bin count. The original reliability diagram preserves readable access to the curve and the summed-weight bars. Confidence exceeds accuracy below the diagonal and falls below accuracy above it. Legacy labeling guidance remains available. The gated optimizer selector replaces the primary image with the selected loss/gradient plot or fitted-parameter text. Isotonic and evaluation with verbosity disabled have explicit inapplicability states. The view uses saved summary values and figures. Per-bin records and batch ECE/MCE are unavailable in the artifacts.
+
+**Training** pairs the verified fold memberships with the bound training record. It shows model family, actual device when recorded, fitted preprocessing, development size, CV fold count, epoch budget and each fold's best and completed epochs. The deployed model is a fresh refit on the full development population. It follows the CV-derived duration and replays the recorded learning rates from the selected fold, truncating or holding the last rate as needed. Optional details expose the exact stored refit schedule and recorded seeds. The selected fold opens one original four-panel PNG with the original-resolution download. Exact curves remain embedded in the saved figures.
+
+Published metrics and native summaries require matching producer evidence from **Refresh result evidence**. The current stage can supply a summary even when an unrelated stage lacks correspondence. Batch counts additionally require fresh positional verification for the selected batch. Family switches reuse the immutable joined snapshot. The application checks the snapshot against current workspace evidence and clears native counts when the join no longer verifies. Original diagnostics remain individually accessible with their evidence labels, including historical outputs. The new summaries use verified metadata and existing joins, without loading serialized models or calibrators.
+
+### Browser review
+
+The ten Chromium captures in `/tmp/mineral-m35c-review.fVlTf4/` use disposable copies of the verified Quick demo. The index records final-test classification, same-cohort metrics, both batch probability families, reliability, optimizer details, CV and refit views, the native dark theme and the narrow layout.
+
+| Initial diagnostic placement | Viewport | Top | Width × height |
+| --- | --- | ---: | ---: |
+| Final-test matrix | 1920 × 1080 | 516 px | 600 × 538 px |
+| Incoming count matrix | 1920 × 1080 | 693 px | 594 × 435 px |
+| Reliability diagram | 1920 × 1080 | 484 px | 550 × 549 px |
+| First training fold | 1920 × 1080 | 518 px | 713 × 651 px |
+| Dark reliability diagram | 1280 × 900 | 595 px | 550 × 549 px |
+| Narrow incoming count matrix | 390 × 850 | 1,051 px | 348 × 435 px |
+
+Horizontal overflow measured zero at all reviewed widths. The taller fold and narrow batch views require vertical scrolling. Original figure downloads preserve their resolution. The owner accepted M3.5c for visual quality and engineering after reviewing all ten browser captures.
+
+M3.6 will move the probability-family selector above both batch diagnostics, investigate the duplicate **Evidence and execution details** disclosure, improve wide optimizer figure sizing, tailor calibration interpretation to the selected diagnostic and improve per-class table readability on narrow screens.
+
+Both genuine cycles passed the Results journey tests, including stale-join invalidation, lazy diagnostic selection, and the distinction between published weighted accuracy and raw batch counts. The full suite reported **485 passed and 4 historical-fixture skips**. The fast suite reported **476 passed and 13 deselected**. Repository-wide Ruff, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files. Retained and production manifests matched before and after the review. No new experiment ran.

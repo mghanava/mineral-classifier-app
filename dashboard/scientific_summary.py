@@ -66,6 +66,68 @@ class BasePopulation:
 
 
 @dataclass(frozen=True)
+class FoldMetadata:
+    """Verified split sizes and recorded CV progress."""
+
+    train_count: int
+    validation_count: int
+    best_epoch: int
+    completed_epochs: int
+    seed: int | None
+
+
+@dataclass(frozen=True)
+class TrainingMetadata:
+    """Recorded schedule of the fresh development refit."""
+
+    folds: tuple[FoldMetadata, ...]
+    epoch_budget: int
+    refit_epochs: int
+    source_fold: int
+    learning_rates: tuple[float, ...]
+    configured_seed: int | None
+    refit_seed: int | None
+
+    @classmethod
+    def from_binding(
+        cls, training: dict, base: "BaseData"
+    ) -> "TrainingMetadata | None":
+        """Pair the validated training record with the checked fold populations."""
+        cv = training["cv_folds"]
+        if len(cv) != len(base.folds):
+            return None
+        seeds = training.get("seed_provenance")
+        seeds = seeds if isinstance(seeds, dict) else {}
+        fold_seeds = seeds.get("cv_seeds")
+        if not isinstance(fold_seeds, list) or len(fold_seeds) != len(cv):
+            fold_seeds = [None] * len(cv)
+
+        def seed(value: object) -> int | None:
+            return value if type(value) is int and value >= 0 else None
+
+        return cls(
+            tuple(
+                FoldMetadata(
+                    train.num_nodes,
+                    validation.num_nodes,
+                    record["best_validation_epoch"],
+                    len(record["learning_rates"]),
+                    seed(fold_seed),
+                )
+                for (train, validation), record, fold_seed in zip(
+                    base.folds, cv, fold_seeds, strict=True
+                )
+            ),
+            training["epoch_budget"],
+            training["epochs"],
+            training["lr_source_fold_index"],
+            tuple(training["learning_rates"]),
+            seed(seeds.get("configured_seed")),
+            seed(seeds.get("final_refit_seed")),
+        )
+
+
+@dataclass(frozen=True)
 class ModelMetadata:
     """Selected metadata from the bound full-development model."""
 
@@ -75,6 +137,7 @@ class ModelMetadata:
     weights_sha256: str
     training_graph_sha256: str
     effective_device: str | None
+    training: TrainingMetadata | None = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +147,8 @@ class CalibrationMetadata:
     method: str
     split_sha256: str
     calibrator_sha256: str
+    reporting_bins: int | None = None
+    verbose: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -280,6 +345,7 @@ class ScientificReader:
                 bundle["weights_sha256"],
                 bundle["training_graph_sha256"],
                 device if isinstance(device, str) else None,
+                TrainingMetadata.from_binding(training, base),
             ),
             bundle,
             partition.partition_sha256,
@@ -310,6 +376,8 @@ class ScientificReader:
             self.settings["evaluate"]["calibration_method"],
             binding["calibration_split_sha256"],
             binding["calibrator_sha256"],
+            self.settings["evaluate"]["n_bins"],
+            self.settings["evaluate"]["verbose"],
         )
 
     def drift(

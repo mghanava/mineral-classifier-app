@@ -8,6 +8,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Compare verified final-test classification and calibration scores before and after calibration, and view incoming-batch count matrices and per-class rates for either verified probability family. Inspect CV fold progress and the recorded schedule for the fresh full-development refit.
 - Explore one selected population in a shared XY or 3D view with stored links, display filters, observation details and verified prediction overlays. Download the original producer CSV and full or filtered enriched results, and open original figures through the diagnostic selector.
 - Read selected raw spatial populations and verified membership with immutable float64 observations and stored topology. Add a fresh, cycle-scoped evidence gate for positional prediction joins, display filters and enriched prediction exports.
 - Add an Experiment overview with verified headline metrics, an interactive learning trajectory, realized base growth and a bounded cycle summary. Inspect a cycle in the existing diagnostic explorer and retain mode, cycle and section across navigation.

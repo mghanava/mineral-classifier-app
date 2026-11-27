@@ -631,6 +631,12 @@ def test_existing_diagnostics_are_selectable(
     _select(dashboard, "Result section", section)
     if section in ("Data and spatial graphs", "Spatial predictions"):
         _original(dashboard)
+    elif section in ("Model performance and training", "Probability calibration"):
+        next(
+            widget
+            for widget in dashboard.segmented_control
+            if widget.label == "Scientific result view"
+        ).select("Original diagnostics").run()
     assert len(dashboard.selectbox[-1].options) == len(paths)
     for path in paths:
         reads.clear()
@@ -677,6 +683,12 @@ def test_partial_artifacts_are_reported(dashboard, tmp_path, path, section, cont
     _select(dashboard, "Result section", section)
     if section in ("Data and spatial graphs", "Spatial predictions"):
         _original(dashboard)
+    elif section in ("Model performance and training", "Probability calibration"):
+        next(
+            widget
+            for widget in dashboard.segmented_control
+            if widget.label == "Scientific result view"
+        ).select("Original diagnostics").run()
     assert not dashboard.exception and not dashboard.error
     assert any("incomplete or malformed" in item.value for item in dashboard.warning)
 

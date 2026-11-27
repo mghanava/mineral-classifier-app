@@ -98,7 +98,9 @@ def applied_summary(
     return count
 
 
-def show_artifact(workspace: Workspace, path: Path) -> None:
+def show_artifact(
+    workspace: Workspace, path: Path, *, image_width: int | None = None
+) -> None:
     """Read and render one selected diagnostic, reporting intermittent files."""
     if path.suffix == ".html":
         st.caption("Original Plotly HTML may load Plotly from a CDN.")
@@ -126,7 +128,7 @@ def show_artifact(workspace: Workspace, path: Path) -> None:
                 display_width = min(
                     920, max(1, round(540 * image.width / image.height))
                 )
-            st.image(value, width=display_width)
+            st.image(value, width=image_width or display_width)
             st.download_button(
                 "Download original figure",
                 value,

@@ -71,9 +71,14 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 - [x] **M3.5a-ii — Experiment overview and cycle navigation.** Implemented verified headlines, separate test and batch trajectories, realized dataset growth and compact cycle drill-through. The owner accepted the engineering and visual work after reviewing the eight refined browser captures. [Implementation and review](docs/ui_ux_design.md#m35a-ii-experiment-overview-and-cycle-navigation).
 - [x] **M3.5b-i — Verified spatial data readers and prediction alignment.** Both genuine Quick demo cycles passed the spatial join tests, and all 14 stages verified. The replacement workspace is retained at `~/Projects/DataScience/review-workspaces/mineral-classifier/v0.2.0.dev3/quick-demo/`. [Acceptance results](docs/ui_ux_design.md#retained-quick-demo-acceptance).
 - [x] **M3.5b-ii — Interactive spatial visualization and observation explorer.** Implemented the shared map, observation inspector, verified score overlays and downloads. The owner accepted the engineering work and visual design after reviewing all eight refined screenshots. [Implementation and review](docs/ui_ux_design.md#m35b-ii-interactive-spatial-explorer).
-- [ ] **M3.5c — Classification, calibration and training results.** Present population-specific metrics, calibration diagnostics, selected CV fold plots and final refit context.
+- [x] **M3.5c — Classification, calibration and training results.** Implemented population-specific scores and batch counts, calibration diagnostics, selected CV plots and deployed refit context. The owner accepted the visual design and engineering after reviewing all ten browser captures. [Implementation and review](docs/ui_ux_design.md#m35c-classification-calibration-and-training-results).
 - [ ] **M3.5d — Drift and cross-cycle comparison.** Preserve drift diagnostics and support descriptive two-cycle inspection with cohort and method context.
 - [ ] **M3.6 — UI verification and visual refinement.** Verify the supported user journeys, responsive layout, accessibility, dark and light themes and legacy diagnostic coverage. Refine 3D axis tick clipping, verification-scope wording and probability formatting.
+  - Place the probability-family selector above both batch diagnostics.
+  - Investigate the duplicate **Evidence and execution details** disclosure.
+  - Improve sizing for wide optimizer figures.
+  - Tailor calibration interpretation to the selected diagnostic.
+  - Improve per-class table readability on narrow screens.
 
 **Acceptance:** A first-time visitor can configure and run the synthetic workflow without manual DVC or YAML operations and explore provenance-aware Results. Page length stays bounded as cycle and fold counts grow. Existing scientific diagnostics and expert execution controls remain accessible.
 

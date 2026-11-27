@@ -375,6 +375,42 @@ def _explore(
             on_change=_remember_selection,
             args=("result_section", "_results_section"),
         )
+    if section in (MODEL, CALIBRATION):
+        from dashboard.model_results import (
+            render_calibration,
+            render_classification,
+            render_training,
+        )
+
+        options = (
+            ["Classification", "Training", "Original diagnostics"]
+            if section == MODEL
+            else ["Calibration overview", "Original diagnostics"]
+        )
+        with st.container(key="results-science-header", gap="xxsmall"):
+            mode = st.segmented_control(
+                "Scientific result view",
+                options,
+                default=options[0],
+                required=True,
+                key=f"scientific-view:{section}",
+                label_visibility="collapsed",
+            )
+        if mode == "Classification":
+            render_classification(
+                workspace,
+                cycle,
+                checked,
+                historical=cycle > (declared or 0),
+                refresh=refresh,
+            )
+            return
+        if mode == "Training":
+            render_training(workspace, cycle, checked)
+            return
+        if mode == "Calibration overview":
+            render_calibration(workspace, cycle, checked)
+            return
     spatial = section in (DATA, PREDICTION)
     if spatial:
         from dashboard.spatial_explorer import choose_population, render_spatial
@@ -471,6 +507,18 @@ def render() -> None:
             gap: .4rem;
         }
         .stMainBlockContainer:has(.st-key-results-spatial-header) h1 {font-size: 2.15rem; padding: 0;}
+        .stMainBlockContainer:has(.st-key-results-science-header) {
+            padding-top: 3.9rem;
+            max-width: 84rem;
+        }
+        .stMainBlockContainer:has(.st-key-results-science-header) > [data-testid="stVerticalBlock"] {
+            gap: .55rem;
+        }
+        .stMainBlockContainer:has(.st-key-results-science-header) h1 {font-size: 2.15rem; padding: 0;}
+        .stMainBlockContainer:has(.st-key-results-science-header) [data-testid="stMetricValue"] {
+            font-size: 1.55rem;
+            font-variant-numeric: tabular-nums;
+        }
         .st-key-results-headlines {
             padding-block: 0.75rem;
             border-block: 1px solid color-mix(in srgb, currentColor 16%, transparent);
@@ -537,14 +585,14 @@ def render() -> None:
     aggregate = workspace.available(AGGREGATE)
     summary = ExperimentSummary.from_verification(checked)
     declared = applied.cycles if applied else None
-    spatial_header = mode == CYCLE_EXPLORER and state.result_section in (
+    compact_header = mode == CYCLE_EXPLORER and state.result_section in (
         DATA,
         PREDICTION,
+        MODEL,
+        CALIBRATION,
     )
-    with st.container(
-        gap="xxsmall", horizontal=spatial_header, vertical_alignment="center"
-    ):
-        if not spatial_header:
+    with st.container(key="results-evidence-context", gap="xxsmall"):
+        if not compact_header:
             _identity(applied, checked, summary, observed, aggregate)
         if state.result_evidence_notice:
             st.caption(state.result_evidence_notice)
