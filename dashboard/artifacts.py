@@ -85,14 +85,19 @@ class Workspace:
                     ):
                         yield int(match[1])
 
-    def read(self, relative: Path) -> Figure | pd.DataFrame | bytes | dict | str:
-        """Read one chosen display artifact without loading executable model objects."""
+    def read_bytes(self, relative: Path) -> bytes:
+        """Read the exact bytes of one confined display artifact."""
         path = self._local(relative)
         if relative.suffix not in DISPLAY_FORMATS or not path.is_file():
             raise ValueError("The display file is unavailable.")
         contents = path.read_bytes()
         if not contents:
             raise ValueError("The display file is empty.")
+        return contents
+
+    def read(self, relative: Path) -> Figure | pd.DataFrame | bytes | dict | str:
+        """Read one chosen display artifact without loading executable model objects."""
+        contents = self.read_bytes(relative)
         if relative.suffix == ".png":
             with Image.open(BytesIO(contents), formats=["PNG"]) as image:
                 image.verify()

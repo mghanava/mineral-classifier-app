@@ -537,3 +537,59 @@ The 640-row final append loaded in 45.36 ms median. Measurements used 30 repetit
 Set `MINERAL_QUICK_DEMO_WORKSPACE` to the persistent path for the genuine spatial checks and overview headline test. Without a configured path, the tests fall back to their original local fixtures and can skip if those are absent. The separate historical evidence tests accept `MINERAL_HISTORICAL_QUICK_DEMO_WORKSPACE` for the M2.5-era artifacts. The current-source replacement supports the current headline and spatial checks. The historical tests still require the historical source and lock.
 
 Of the seven initial skips, two were the genuine spatial joins and one was the overview headline comparison. All three passed against the replacement. The other four require the absent M2.5 workspace and cover historical-source invalidation, mixed-cycle artifacts and bindings, and two workspace-change cases. The final full suite reported **464 passed and 4 skipped**. The fast suite reported **459 passed and 9 deselected**. Repository-wide Ruff, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files.
+
+## M3.5b-ii interactive spatial explorer
+
+Data and Spatial predictions share a 520 px spatial canvas and observation inspector in Cycle explorer. One map or original diagnostic is mounted at a time. The shared learning-cycle selector retains input base c−1, incoming observations c and appended snapshot c. Data includes bootstrap, full input bases, each verified holdout and CV partition, and development membership. Appended base coloring uses verified source membership and includes the final snapshot. Full-base links are descriptive. Partition and incoming links come from their own stored graphs. The development selection exposes membership without topology.
+
+The default plan view locks Y to X at 1:1. The 3D view uses Plotly's data aspect mode with the original XYZ values, and greater Z is higher. The generator samples Z from a typically negative lower bound to zero. Existing graph documentation uses synthetic coordinate units, so the labels are X, Y and Z and the caption identifies the simulated local Cartesian coordinates. There is no CRS or unit conversion.
+
+Observed and predicted labels share colors and symbols indexed by class ID. The first four classes use blue circles, orange diamonds, green squares and purple crosses, in persisted mapping order. The legend leaves filtering to the explicit filters so hiding a class cannot silently alter map counts or exports. Probability color uses Cividis on the fixed 0–1 domain. Entropy uses Viridis on 0–ln(C) in nats. Features use their full-population bounds, with a single color and a labeled value when constant. Correctness uses contrasting shapes and colors. Score coloring and the inspector switch together when the probability family changes. Calibrated scores are the default.
+
+Observed-class and signed Z filters are display-only. The context line shows the visible count and full-population class counts. With edges enabled, the map uses the stored deduplicated links that connect visible endpoints. The limit is **10,000 visible observations** and **8,000 visible links**. Above the observation limit the map asks for a narrower filter. Above the link limit it keeps the observations and omits the entire edge layer, with the actual visible link count and an explanation. Graph statistics still describe the original selected graph, including stored self-loops.
+
+The inspector uses a searchable stable ID selector in both perspectives and highlights that observation on the map. It shows coordinates, observed class and membership plus matched prediction, correctness, max probability, entropy and a probability bar chart when scores are available. Raw feature detail and the observation table are mounted on request. Keeping the ID when a filter excludes it makes the exclusion explicit. Changing populations resets incompatible selections. Plotly keys and `uirevision` are scoped to the population and perspective. The installed Streamlit version can remount charts when the figure specification changes, so retained zoom or camera across every interaction is not guaranteed.
+
+The map opens one fresh spatial join for the selected batch. Ordinary edits reuse the immutable result after the workspace stamp and cooperative lock checks. Changed evidence triggers a fresh verification, and an unsuccessful join withholds scores and enriched downloads. It keeps readable raw graph observations and offers verification details, explicit retry and original diagnostics. Historical cycles outside the applied scope use the original diagnostic route. The original CSV, enriched full-population CSV and enriched filtered-view CSV are clearly distinct. Verified download content is prepared on demand under the workspace lock and is checked again against the snapshot before delivery. Native browser content already drawn remains visible until a rerun.
+
+Original diagnostics remain selectable, including stored graph figures, t-SNE, prediction histograms and the standalone CSV. The display does not regenerate scientific artifacts or scores.
+
+### Browser review and performance
+
+The 14-image review is in `/tmp/mineral-m35bii-review.ruyRWq/`. Its index identifies genuine Quick demo states, the deliberate failed-join case on a disposable copy, and the separate synthetic stress benchmark. Chromium verified a native XY pointer click through Streamlit 1.59.0. The returned point's custom data selected its stable ID, the map ring highlighted that exact row and the inspector displayed its probability chart. The 3D view uses the ID picker. Both genuine learning cycles also passed the Results AppTest integration checks against copies of the retained output.
+
+The initial 1920×1080 view placed the 520 px map from y=542 to y=1062, with the inspector beside it. At 1280×900 the native dark view retained two columns and required scrolling for the bottom. At 390 px the 348 px plot and inspector stacked, with the map below the initial viewport. Horizontal overflow measured zero at all three widths.
+
+| Measurement | Observed time |
+| --- | ---: |
+| Python input base load, 540 genuine observations | 23.24 ms |
+| Python fresh join, genuine cycle 2 | 602.88 ms |
+| Python full-base XY figure construction | 8.85 ms |
+| Python genuine 3D figure, edges off / on | 8.75 / 10.08 ms |
+| AppTest color / filter rerun | 37.4 / 38.6 ms |
+| Chromium first genuine prediction view | 915 ms |
+| Chromium color / filter rerender | 512 / 389 ms |
+| Chromium genuine 3D edge toggle, off / on | 717 / 621 ms |
+| Chromium isolated stress render, edges off / on | 311.6 / 593.0 ms |
+
+Python and AppTest timings exclude the browser. Chromium app timings include the Streamlit rerun and frame delivery. The three genuine 3D toggles per state varied by several hundred milliseconds on the headless software renderer. The isolated stress render uses 5,000 synthetic UI observations and 7,500 predefined links, timing Plotly drawing and two animation frames over five runs per state. It excludes Streamlit and represents no scientific result.
+
+Retained checksums still match all 124 result files, the scientific sources, applied configuration, DVC definition and lock. The retained cache still contains 146 files. The production before and after manifests match. No new experiment ran.
+
+The full regression suite reported **473 passed and 4 skipped**, with skips confined to the unavailable historical M2.5 fixture. The fast suite reported **466 passed and 11 deselected**. Repository-wide Ruff, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files. This initial review preceded owner visual acceptance.
+
+### Focused visual refinement
+
+The revised XY map fits an equal-span square around the full selected population with 5% padding on each side of its longest dimension. Plotly constrains the axis domains and preserves equal units per pixel. Display filters leave the initial framing alone. The centered desktop layout gives the map and inspector a combined content width of about 1,120 px. Filters are grouped in a popover alongside perspective, color and links, and the chart is 550 px high.
+
+Probability and entropy start with the approved absolute domains, Cividis 0–1 and Viridis 0–ln(C). **Population range** optionally uses the exact minimum and maximum across the full selected population for the active value and probability family. The caption identifies the bounds and limits color comparisons to that population. Filters leave the domain fixed. A collapsed range uses one marker color and a constant-value caption. Stronger outlines keep low-contrast markers readable against both plot backgrounds. The 3D scene starts in an angled orthographic view with physical data aspect and signed Z. Stored edges remain opt-in with the existing limits. Plotly can clip some outer 3D axis ticks at the captured width. Signed Z remains available through hover and observation details.
+
+The inspector defaults to a compact class summary with total and shown counts and each class's share of the full population. Verified prediction modes offer a context-specific predicted-class or correctness breakdown and keep zero-count categories visible. The class filter continues to use observed labels. Selecting an observation replaces the summary with labels, a correctness badge, max probability, entropy and probability bars as available. Display ordinals such as **Observation 001** identify choices within the current population. The picker, map events and exports still use the exact stable IDs. **Stable ID lookup and details** accepts an exact full ID and exposes the selected row's original ID, coordinates, membership and raw features.
+
+Chromium confirmed native XY selection and exact full-ID selection in 3D on the genuine cycle 2 batch. The observed relative range for calibrated maximum probability was 0.2570238–0.2896868. At 1920×1080 the chart began at y=480, about 62 px earlier than the initial review. It ended at y=1030. The 467×467 px data pane used equal scales of 11.5713 synthetic units per pixel. The 1280×900 dark view retained side-by-side panels, with the chart bottom below the fold. At 390×850 the plot was 348 px wide and the inspector stacked below. There was no horizontal overflow at any of those widths.
+
+The eight updated captures and measurement record are in `/tmp/mineral-m35bii-polish.0KlRFW/`. They cover the full-base frame, default prediction summary, selected sample, absolute and relative probability scales, entropy, stored links in 3D and the dark theme. The retained and production manifests were compared before and after the review. The owner accepted M3.5b-ii for visual quality and engineering after reviewing all eight refined screenshots.
+
+The refined full suite reported **479 passed and 4 historical-fixture skips**. The fast suite reported **472 passed and 11 deselected**. Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files. All 341 retained-file digests and modification timestamps matched the pre-review manifest, and the production manifest matched the earlier review baseline.
+
+M3.6 will address the remaining 3D axis tick clipping, clarify verification-scope wording and refine probability formatting.

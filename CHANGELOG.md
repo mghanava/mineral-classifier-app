@@ -8,6 +8,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Explore one selected population in a shared XY or 3D view with stored links, display filters, observation details and verified prediction overlays. Download the original producer CSV and full or filtered enriched results, and open original figures through the diagnostic selector.
 - Read selected raw spatial populations and verified membership with immutable float64 observations and stored topology. Add a fresh, cycle-scoped evidence gate for positional prediction joins, display filters and enriched prediction exports.
 - Add an Experiment overview with verified headline metrics, an interactive learning trajectory, realized base growth and a bounded cycle summary. Inspect a cycle in the existing diagnostic explorer and retain mode, cycle and section across navigation.
 - Add an explicit Results evidence refresh that verifies scoped DVC records, local content and scientific bindings. Distinguish availability, lock-matching bytes and correspondence with applied settings and workspace sources.

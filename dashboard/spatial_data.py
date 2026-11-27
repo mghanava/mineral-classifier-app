@@ -51,6 +51,7 @@ class PopulationKind(StrEnum):
     CV_VALIDATION = "cv_validation"
     DEVELOPMENT = "development"
     INCOMING = "incoming_batch"
+    POST_APPEND = "post_append"
     FINAL_APPEND = "final_append"
 
 
@@ -230,16 +231,18 @@ class SpatialView:
         """Return the visible observation count."""
         return int(np.count_nonzero(self._visible.array()))
 
-    def edge_ids(self) -> tuple[tuple[str, str], ...]:
-        """Resolve stored undirected links to IDs only when both endpoints are visible."""
+    def edge_rows(self) -> NDArray[np.int64]:
+        """Return stored physical links restricted to visible population row indices."""
         topology = self.population.topology
         if topology is None:
-            return ()
+            return np.empty((0, 2), dtype=np.int64)
         mask, links = self._visible.array(), topology.links.array()
+        return links[mask[links].all(axis=1)]
+
+    def edge_ids(self) -> tuple[tuple[str, str], ...]:
+        """Resolve each visible physical link to stable observation IDs."""
         ids = self.population.sample_ids
-        return tuple(
-            (ids[left], ids[right]) for left, right in links[mask[links].all(axis=1)]
-        )
+        return tuple((ids[left], ids[right]) for left, right in self.edge_rows())
 
 
 def make_population(
@@ -314,17 +317,23 @@ def _load_population(
         )
     snapshot = (
         cycle
-        if kind in (PopulationKind.SNAPSHOT, PopulationKind.FINAL_APPEND)
+        if kind
+        in (
+            PopulationKind.SNAPSHOT,
+            PopulationKind.POST_APPEND,
+            PopulationKind.FINAL_APPEND,
+        )
         else cycle - 1
     )
     if kind in (
         PopulationKind.SNAPSHOT,
         PopulationKind.INPUT_BASE,
+        PopulationKind.POST_APPEND,
         PopulationKind.FINAL_APPEND,
     ):
         raw, graph = _full_base(reader, snapshot)
         parent_sha256 = append_boundary = None
-        if kind == PopulationKind.FINAL_APPEND:
+        if kind in (PopulationKind.POST_APPEND, PopulationKind.FINAL_APPEND):
             previous = reader.base(cycle - 1)
             appended = reader.append(cycle, previous, reader.batch(cycle, previous))
             if raw.dataset_sha256 != appended.raw.dataset_sha256:
@@ -366,14 +375,15 @@ def _load_population(
     )
 
 
-def _population_paths(kind: PopulationKind, cycle: int) -> tuple[str, ...]:
+def population_paths(kind: PopulationKind, cycle: int) -> tuple[str, ...]:
+    """List the raw artifacts that identify a selected population snapshot."""
     if kind == PopulationKind.SNAPSHOT:
         paths = [_base_path(cycle)]
     elif kind == PopulationKind.INPUT_BASE:
         paths = [_base_path(cycle - 1)]
     elif kind == PopulationKind.INCOMING:
         paths = [_base_path(cycle - 1), f"data/prediction/cycle_{cycle}/pred_data.pt"]
-    elif kind == PopulationKind.FINAL_APPEND:
+    elif kind in (PopulationKind.POST_APPEND, PopulationKind.FINAL_APPEND):
         paths = [
             *(
                 _base_path(index, name)
@@ -405,7 +415,7 @@ def read_population(
         PopulationKind.CV_VALIDATION,
     ):
         raise ValueError("Fold selection applies only to CV populations.")
-    paths = _population_paths(kind, cycle)
+    paths = population_paths(kind, cycle)
     with configuration_operation(root / "params.yaml"):
         stamp = WorkspaceStamp.capture(root, paths)
         params = stamp.controls[0]

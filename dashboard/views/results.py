@@ -83,29 +83,7 @@ def _figure_exports(files: Iterable[Path]) -> list[Path]:
     return list(by_stem.values())
 
 
-def _data(workspace: Workspace, cycle: int) -> list[Path]:
-    if cycle == 0:
-        st.caption(
-            "Bootstrap creates the initial base snapshot used by learning cycle 1."
-        )
-        directory = Path("data/base/cycle_0")
-    else:
-        populations = {
-            f"Input base · snapshot {cycle - 1}": Path(f"data/base/cycle_{cycle - 1}"),
-            f"Incoming batch {cycle}": Path(f"data/prediction/cycle_{cycle}"),
-            f"Post-append base · snapshot {cycle}": Path(f"data/base/cycle_{cycle}"),
-        }
-        population = st.selectbox("Population", populations)
-        directory = populations[population]
-        if population.startswith("Post-append"):
-            st.caption("The append uses simulator labels from the incoming batch.")
-    files = workspace.files(directory)
-    return [*_figure_exports(files), *(path for path in files if path.suffix == ".png")]
-
-
 def _diagnostics(workspace: Workspace, section: str, cycle: int) -> list[Path]:
-    if section == DATA:
-        return _data(workspace, cycle)
     if section == PERFORMANCE:
         st.caption(
             "Learning cycles split a growing base and score new batches. "
@@ -118,18 +96,6 @@ def _diagnostics(workspace: Workspace, section: str, cycle: int) -> list[Path]:
             "Drift tests describe distribution differences, and performance requires separate evaluation."
         )
         return workspace.files(Path(f"drift_analysis/cycle_{cycle}"))
-    if section == PREDICTION:
-        st.caption(
-            "The stored graph shows simulator labels. The standalone prediction table has no coordinates."
-        )
-        return _figure_exports(
-            workspace.files(Path(f"data/prediction/cycle_{cycle}"))
-        ) + [
-            path
-            for path in workspace.files(Path(f"prediction/cycle_{cycle}"))
-            if path.name
-            not in {"metrics.json", "confussion_matrix_.png", "confusion_matrix.png"}
-        ]
     evaluation = workspace.files(Path(f"evaluation/cycle_{cycle}"))
     if section == CALIBRATION:
         st.caption(
@@ -369,6 +335,9 @@ def _explore(
     aggregate: bool,
     checked: Verification | None,
     summary: ExperimentSummary,
+    *,
+    folds: int,
+    refresh: bool,
 ) -> None:
     state = dashboard_state()
     scope = sorted(set(range((declared or 0) + 1)) | observed)
@@ -406,26 +375,84 @@ def _explore(
             on_change=_remember_selection,
             args=("result_section", "_results_section"),
         )
-    _cycle_evidence(checked, summary, cycle, section, cycle > (declared or 0))
-    if cycle and section != PERFORMANCE:
-        st.caption(
-            f"**Lineage** · Input base {cycle - 1} + incoming batch {cycle} → appended base {cycle}"
+    spatial = section in (DATA, PREDICTION)
+    if spatial:
+        from dashboard.spatial_explorer import choose_population, render_spatial
+
+        with st.container(
+            key="results-spatial-header",
+            horizontal=True,
+            gap="small",
+            vertical_alignment="bottom",
+        ):
+            view_mode = st.segmented_control(
+                "Spatial view",
+                ["Interactive map", "Original diagnostics"],
+                default="Interactive map",
+                required=True,
+                key=f"spatial-view:{section}",
+                label_visibility="collapsed",
+            )
+            scope = choose_population(
+                cycle, declared=declared, folds=folds, predictions=section == PREDICTION
+            )
+        status = summary.evidence.get(cycle)
+        correspondence = (
+            f"{status.availability} · {status.correspondence}"
+            if status
+            else Correspondence.UNKNOWN
         )
-    if section == DATA and cycle:
-        population_column, diagnostic_column = st.columns(2)
-        with population_column:
-            choices = _data(workspace, cycle)
-        with diagnostic_column:
-            chosen = _pick_diagnostic(choices, section, cycle)
+        if cycle:
+            st.caption(
+                f"Cycle evidence · {correspondence}  |  "
+                f"Input base {cycle - 1} + incoming batch {cycle} → appended base {cycle}"
+            )
+        else:
+            st.caption(f"Bootstrap evidence · {correspondence}")
+        if view_mode == "Interactive map":
+            render_spatial(
+                workspace,
+                scope,
+                predictions=section == PREDICTION,
+                historical=cycle > (declared or 0),
+                refresh=refresh,
+            )
+            return
+        original = workspace.files(scope.directory)
+        choices = _figure_exports(original)
+        if section == DATA:
+            choices += [path for path in original if path.suffix == ".png"]
+        else:
+            choices += [
+                path
+                for path in workspace.files(Path(f"prediction/cycle_{cycle}"))
+                if path.name in ("predictions.csv", "histograms.png")
+            ]
     else:
+        _cycle_evidence(checked, summary, cycle, section, cycle > (declared or 0))
+        if cycle and section != PERFORMANCE:
+            st.caption(
+                f"**Lineage** · Input base {cycle - 1} + incoming batch {cycle} → appended base {cycle}"
+            )
         choices = _diagnostics(workspace, section, cycle)
-        chosen = _pick_diagnostic(choices, section, cycle)
+    chosen = _pick_diagnostic(choices, section, cycle)
     if chosen is None:
         st.warning(
             "No display files found for this selection. The output may be absent or partial."
         )
         return
     _interpret(chosen)
+    if chosen.suffix == ".csv" and section == PREDICTION:
+        stage = dict(checked.stages).get(f"predict_cycle_{cycle}") if checked else None
+        status = stage.correspondence if stage else Correspondence.UNKNOWN
+        st.caption(f"Standalone prediction CSV · {status}")
+        st.download_button(
+            "Original producer CSV",
+            lambda: workspace.read_bytes(chosen),
+            chosen.name,
+            "text/csv",
+            on_click="ignore",
+        )
     show_artifact(workspace, chosen)
 
 
@@ -436,6 +463,14 @@ def render() -> None:
         .stMainBlockContainer:has(.st-key-results-toolbar) {
             padding-top: clamp(1.5rem, 3.5vw, 3.25rem);
         }
+        .stMainBlockContainer:has(.st-key-results-spatial-header) {
+            padding-top: 3.9rem;
+            max-width: 80rem;
+        }
+        .stMainBlockContainer:has(.st-key-results-spatial-header) > [data-testid="stVerticalBlock"] {
+            gap: .4rem;
+        }
+        .stMainBlockContainer:has(.st-key-results-spatial-header) h1 {font-size: 2.15rem; padding: 0;}
         .st-key-results-headlines {
             padding-block: 0.75rem;
             border-block: 1px solid color-mix(in srgb, currentColor 16%, transparent);
@@ -502,8 +537,15 @@ def render() -> None:
     aggregate = workspace.available(AGGREGATE)
     summary = ExperimentSummary.from_verification(checked)
     declared = applied.cycles if applied else None
-    with st.container(gap="xxsmall"):
-        _identity(applied, checked, summary, observed, aggregate)
+    spatial_header = mode == CYCLE_EXPLORER and state.result_section in (
+        DATA,
+        PREDICTION,
+    )
+    with st.container(
+        gap="xxsmall", horizontal=spatial_header, vertical_alignment="center"
+    ):
+        if not spatial_header:
+            _identity(applied, checked, summary, observed, aggregate)
         if state.result_evidence_notice:
             st.caption(state.result_evidence_notice)
         if state.has_unapplied_draft(payload):
@@ -513,7 +555,16 @@ def render() -> None:
         _details(applied, checked)
 
     if mode == CYCLE_EXPLORER:
-        _explore(workspace, declared, observed, aggregate, checked, summary)
+        _explore(
+            workspace,
+            declared,
+            observed,
+            aggregate,
+            checked,
+            summary,
+            folds=applied.folds if applied else 0,
+            refresh=refresh,
+        )
     else:
         render_overview(
             summary, declared, observed, aggregate, state.result_cycle, _inspect

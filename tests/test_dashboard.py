@@ -77,6 +77,18 @@ def _explorer(dashboard: AppTest) -> AppTest:
     return dashboard.segmented_control[0].select("Cycle explorer").run()
 
 
+def _original(dashboard: AppTest) -> AppTest:
+    return (
+        next(
+            widget
+            for widget in dashboard.segmented_control
+            if widget.label == "Spatial view"
+        )
+        .select("Original diagnostics")
+        .run()
+    )
+
+
 def test_empty_results_and_directory_presence(dashboard, tmp_path):
     """An empty output directory provides no evidence of available diagnostics."""
     (tmp_path / "results/evaluation/cycle_1").mkdir(parents=True)
@@ -508,6 +520,8 @@ def test_result_cycle_and_population_routing(dashboard, tmp_path, monkeypatch):
     _page(dashboard, "results")
     assert not reads
     _explorer(dashboard)
+    assert not reads
+    _original(dashboard)
     assert reads == [bootstrap]
     _select(dashboard, "Learning cycle", 0)
     assert reads == [bootstrap, bootstrap]
@@ -615,6 +629,8 @@ def test_existing_diagnostics_are_selectable(
     _page(dashboard, "results")
     _explorer(dashboard)
     _select(dashboard, "Result section", section)
+    if section in ("Data and spatial graphs", "Spatial predictions"):
+        _original(dashboard)
     assert len(dashboard.selectbox[-1].options) == len(paths)
     for path in paths:
         reads.clear()
@@ -659,6 +675,8 @@ def test_partial_artifacts_are_reported(dashboard, tmp_path, path, section, cont
     _page(dashboard, "results")
     _explorer(dashboard)
     _select(dashboard, "Result section", section)
+    if section in ("Data and spatial graphs", "Spatial predictions"):
+        _original(dashboard)
     assert not dashboard.exception and not dashboard.error
     assert any("incomplete or malformed" in item.value for item in dashboard.warning)
 
@@ -681,6 +699,7 @@ def test_legacy_html_and_external_artifact_link(dashboard, tmp_path, monkeypatch
     monkeypatch.setattr(Workspace, "read", capture)
     _page(dashboard, "results")
     _explorer(dashboard)
+    _original(dashboard)
     assert dashboard.selectbox[-1].options == ["Full base graph"]
     assert not reads
     dashboard.checkbox[0].check().run()
