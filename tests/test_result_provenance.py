@@ -206,18 +206,23 @@ def test_metrics_reject_nonfinite_wrong_types_and_missing_fields():
 @pytest.fixture
 def retained_workspace(tmp_path):
     """Copy historical scientific outputs and source without sharing a cache."""
-    if not (RETAINED / "dvc.lock").is_file():
-        pytest.skip("Retained local M2.5 verification workspace unavailable.")
+    retained = Path(
+        os.environ.get("MINERAL_HISTORICAL_QUICK_DEMO_WORKSPACE", RETAINED)
+    ).expanduser()
+    if not (retained / "dvc.lock").is_file():
+        pytest.skip(
+            f"Retained local M2.5 verification workspace unavailable at {retained}."
+        )
     for name in ("params.yaml", "dvc.yaml", "dvc.lock"):
-        shutil.copy2(RETAINED / name, tmp_path / name)
+        shutil.copy2(retained / name, tmp_path / name)
     for name in ("src", "results"):
         shutil.copytree(
-            RETAINED / name,
+            retained / name,
             tmp_path / name,
             ignore=shutil.ignore_patterns("__pycache__"),
         )
     (tmp_path / ".dvc").mkdir()
-    shutil.copy2(RETAINED / ".dvc/config", tmp_path / ".dvc/config")
+    shutil.copy2(retained / ".dvc/config", tmp_path / ".dvc/config")
     return Workspace(tmp_path)
 
 

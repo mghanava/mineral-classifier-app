@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
+from numpy.typing import NDArray
+from torch_geometric.data import Data
 
 from dashboard.dvc_evidence import plain_path, same_value
 from src.utilities.general_utils import load_data
@@ -155,9 +157,19 @@ class BaseData(NamedTuple):
 
     population: BasePopulation
     raw: RawDataset
-    folds: list
-    test: object
-    calibration: object
+    folds: list[tuple[Data, Data]]
+    test: Data
+    calibration: Data
+
+    def development_rows(self) -> NDArray[np.int64]:
+        """Return the verified development membership in parent order."""
+        held_out = np.concatenate(
+            (
+                self.test.original_node_indices.numpy(),
+                self.calibration.original_node_indices.numpy(),
+            )
+        )
+        return np.setdiff1d(np.arange(self.population.total), held_out)
 
 
 class ScientificReader:
@@ -200,12 +212,18 @@ class ScientificReader:
         graph = load_data(
             self.path(f"data/prediction/cycle_{cycle}/pred_data.pt"), "Incoming batch"
         )
+        return self.batch_graph(graph, base.raw)
+
+    def batch_graph(self, graph: Data, parent: RawDataset) -> RawDataset:
+        """Check a loaded incoming graph against its exact parent and applied schema."""
         raw = read_raw_graph(graph)
         verify_graph(graph, self.protocol, "prediction")
         if (raw.feature_names, raw.class_names) != self.schema or getattr(
             graph, "source_parent_sha256", None
-        ) != base.raw.dataset_sha256:
+        ) != parent.dataset_sha256:
             raise ValueError("Incoming batch schema or base lineage does not match.")
+        if not set(raw.sample_ids).isdisjoint(parent.sample_ids):
+            raise ValueError("Incoming batch reuses sample IDs from its parent base.")
         return raw
 
     def append(self, cycle: int, base: BaseData, batch: RawDataset) -> BaseData:
@@ -227,8 +245,10 @@ class ScientificReader:
                 )
         return appended
 
-    def model(self, cycle: int, base: BaseData) -> tuple[ModelMetadata, dict, str]:
-        """Check fitted preprocessing, weights bytes and the verified development graph."""
+    def bound_model(
+        self, cycle: int, base: BaseData
+    ) -> tuple[ModelMetadata, dict, str]:
+        """Check the deployed model and preprocessing against development membership."""
         name = self.settings["default_model"]
         directory = self.path(f"trained/cycle_{cycle}")
         state, bundle, _ = read_model_bundle(
@@ -237,21 +257,17 @@ class ScientificReader:
             self.protocol,
             settings=model_graph_settings(self.protocol, name, self.settings),
         )
-        development = build_development_graph(
-            base.raw, base.folds, base.test, base.calibration, self.protocol
-        )
         partition = TrainingPartition(
-            base.raw.dataset_sha256, None, development.original_node_indices.numpy()
+            base.raw.dataset_sha256, None, base.development_rows()
         )
         if (
             state.dataset_sha256 != base.raw.dataset_sha256
             or state.partition_sha256 != partition.partition_sha256
             or bundle["training_observation_count"] != base.population.development
-            or bundle["training_graph_sha256"] != development.graph_sha256
             or state.scaler_type != self.settings["data"]["scaler_type"]
         ):
             raise ValueError(
-                "Model and preprocessing are not bound to the expected development graph."
+                "Model and preprocessing are not bound to the expected development membership."
             )
         training = read_json(directory / "graph_binding.json")["training"]
         seeds = training.get("seed_provenance")
@@ -262,12 +278,22 @@ class ScientificReader:
                 state.scaler_type,
                 base.population.development,
                 bundle["weights_sha256"],
-                development.graph_sha256,
+                bundle["training_graph_sha256"],
                 device if isinstance(device, str) else None,
             ),
             bundle,
             partition.partition_sha256,
         )
+
+    def model(self, cycle: int, base: BaseData) -> tuple[ModelMetadata, dict, str]:
+        """Also verify the reconstructed training topology for overview evidence."""
+        metadata, bundle, partition = self.bound_model(cycle, base)
+        development = build_development_graph(
+            base.raw, base.folds, base.test, base.calibration, self.protocol
+        )
+        if metadata.training_graph_sha256 != development.graph_sha256:
+            raise ValueError("Model graph binding differs from the development graph.")
+        return metadata, bundle, partition
 
     def calibration(
         self, cycle: int, base: BaseData, bundle: dict

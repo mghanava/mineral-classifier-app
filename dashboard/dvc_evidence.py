@@ -7,6 +7,7 @@ import stat
 import subprocess
 import sys
 from dataclasses import dataclass
+from hashlib import md5
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -138,7 +139,9 @@ def local_status(root: Path) -> dict:
 class LocalHashes:
     """Compute DVC workspace hashes with no persistent hash state or ODB writes."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self, root: Path, *, snapshots: dict[str, bytes] | None = None
+    ) -> None:
         """Build against fresh local metadata using DVC's directory manifest format."""
         from dvc.ignore import DvcIgnoreFilter
         from dvc_objects.fs import LocalFileSystem
@@ -147,6 +150,14 @@ class LocalHashes:
         self.fs = LocalFileSystem()
         self.ignore = DvcIgnoreFilter(self.fs, str(root))
         self.cache: dict[str, tuple[str, int | None, int | None]] = {}
+        self.snapshots = {
+            name: (md5(payload, usedforsecurity=False).hexdigest(), len(payload))
+            for name, payload in (snapshots or {}).items()
+        }
+
+    def _check_snapshot(self, name: str, digest: str, size: int | None) -> None:
+        if name in self.snapshots and self.snapshots[name] != (digest, size):
+            raise ValueError(f"Loaded bytes differ from DVC evidence for {name}.")
 
     def matches(self, entry: dict) -> bool:
         """Check regular file or directory content and the lock's size metadata."""
@@ -178,8 +189,30 @@ class LocalHashes:
                 )
                 digest = tree.hash_info
                 tree.fs.rm(tree.path)
+                members = {
+                    member: Path(member).relative_to(name).parts
+                    for member in self.snapshots
+                    if Path(member).is_relative_to(name)
+                }
+                if members and {key for key, _, _ in tree} != {
+                    child.relative_to(path).parts
+                    for child in path.rglob("*")
+                    if child.is_file()
+                }:
+                    raise ValueError(
+                        f"Directory files differ from the DVC manifest for {name}."
+                    )
+                for member, key in members.items():
+                    item = tree.get(key)
+                    if item is None:
+                        raise ValueError(
+                            f"{member} is absent from the DVC directory manifest."
+                        )
+                    member_meta, member_digest = item
+                    self._check_snapshot(member, member_digest.value, member_meta.size)
             else:
                 meta, digest = hash_file(str(path), self.fs, "md5", info=info)
+                self._check_snapshot(name, digest.value, meta.size)
             self.cache[name] = (digest.value, meta.size, meta.nfiles)
         actual, size, nfiles = self.cache[name]
         return (

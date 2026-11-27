@@ -519,6 +519,102 @@ def _read_summaries(root: Path, settings: dict, stages: dict[str, Evidence]):
     return bootstrap, summaries
 
 
+def stage_paths(scope: dict) -> tuple[str, ...]:
+    """List declared stage paths and their ancestor ignore files for stamping."""
+    files = {path for spec in scope.values() for path in (*spec["deps"], *spec["outs"])}
+    ignore_files = {
+        (parent / ".dvcignore").as_posix()
+        for path in files
+        for parent in Path(path).parents
+    }
+    return tuple(sorted(files | ignore_files))
+
+
+def producer_scope(pipeline: dict, stage: str) -> dict:
+    """Select a declaration and all upstream producers, including directory owners."""
+    dependencies = _dependencies(pipeline)
+    pending = [stage]
+    scope = {}
+    while pending:
+        name = pending.pop()
+        if name not in scope:
+            scope[name] = pipeline[name]
+            pending.extend(dependencies[name])
+    return scope
+
+
+def check_dvc_stages(
+    root: Path,
+    settings: dict,
+    pipeline: dict,
+    scope: dict,
+    controls: tuple[bytes | None, ...],
+    *,
+    snapshots: dict[str, bytes] | None = None,
+) -> tuple[dict[str, Evidence], list[str]]:
+    """Check fresh local stage content against the applied topology and lock."""
+    params_bytes, definition_bytes, lock_bytes, *_ = controls
+    problems = []
+    topology = None
+    if definition_bytes is None:
+        problems.append("No generated dvc.yaml is available.")
+    else:
+        try:
+            topology = same_value(
+                dvc_mapping(definition_bytes, "dvc.yaml"), {"stages": pipeline}
+            )
+            if not topology:
+                problems.append(
+                    "Generated DVC definition differs from the expected applied topology."
+                )
+        except ValueError as error:
+            problems.append(str(error))
+    records = {}
+    if lock_bytes is None:
+        problems.append("No dvc.lock is available.")
+    else:
+        try:
+            lock = dvc_mapping(lock_bytes, "dvc.lock")
+            if lock.get("schema") != "2.0" or not isinstance(lock.get("stages"), dict):
+                raise ValueError("Unsupported DVC lock schema.")
+            records = lock["stages"]
+        except ValueError as error:
+            problems.append(str(error))
+    status = {}
+    status_ok = False
+    if topology and records:
+        try:
+            status = local_status(root)
+            status_ok = not (status.keys() - pipeline.keys())
+            if not status_ok:
+                problems.append("Local DVC status included unidentified stages.")
+        except Exception as error:
+            problems.append(str(error))
+    hashes = LocalHashes(root, snapshots=snapshots)
+    dvc_params = dvc_mapping(params_bytes, "params.yaml")
+    members = {
+        key: value
+        for cycle in range(1, settings["cycles"] + 1)
+        for key, value in _members(settings, cycle).items()
+    }
+    stages = {
+        name: _dvc_stage(
+            name,
+            spec,
+            _availability(root, tuple(spec["outs"]), members.get(name, ())),
+            records.get(name),
+            hashes,
+            settings,
+            dvc_params,
+            status.get(name),
+            topology,
+            status_ok,
+        )
+        for name, spec in scope.items()
+    }
+    return stages, problems
+
+
 def verify_workspace(workspace: Workspace) -> Verification:
     """Check declared local evidence under the cooperative lock on explicit refresh."""
     from scripts.setup_dvc import pipeline_definition
@@ -533,89 +629,20 @@ def verify_workspace(workspace: Workspace) -> Verification:
                 sorted(set(Workspace(root).result_cycles(include_raw=True)) - {0})
             )
             controls = WorkspaceStamp.capture(root, ()).controls
-            params_bytes, definition_bytes, lock_bytes, *_ = controls
+            params_bytes = controls[0]
             if params_bytes is None:
                 raise ValueError("An applied configuration is required.")
             applied, settings = AppliedConfiguration.read(params_bytes)
             pipeline = pipeline_definition(settings)["stages"]
-            files = {
-                path
-                for spec in pipeline.values()
-                for path in (*spec["deps"], *spec["outs"])
-            }
-            ignore_files = {
-                (parent / ".dvcignore").as_posix()
-                for path in files
-                for parent in Path(path).parents
-            }
-            paths = tuple(sorted(files | ignore_files))
+            paths = stage_paths(pipeline)
             stamp = WorkspaceStamp.capture(root, paths)
             if stamp.controls != controls:
                 raise ValueError(
                     "Workspace controls changed during verification. Refresh again."
                 )
-            problems = []
-            topology = None
-            if definition_bytes is None:
-                problems.append("No generated dvc.yaml is available.")
-            else:
-                try:
-                    topology = same_value(
-                        dvc_mapping(definition_bytes, "dvc.yaml"), {"stages": pipeline}
-                    )
-                    if not topology:
-                        problems.append(
-                            "Generated DVC definition differs from the expected applied topology."
-                        )
-                except ValueError as error:
-                    problems.append(str(error))
-            records = {}
-            if lock_bytes is None:
-                problems.append("No dvc.lock is available.")
-            else:
-                try:
-                    lock = dvc_mapping(lock_bytes, "dvc.lock")
-                    if lock.get("schema") != "2.0" or not isinstance(
-                        lock.get("stages"), dict
-                    ):
-                        raise ValueError("Unsupported DVC lock schema.")
-                    records = lock["stages"]
-                except ValueError as error:
-                    problems.append(str(error))
-            status = {}
-            status_ok = False
-            if topology and records:
-                try:
-                    status = local_status(root)
-                    status_ok = not (status.keys() - pipeline.keys())
-                    if not status_ok:
-                        problems.append(
-                            "Local DVC status included unidentified stages."
-                        )
-                except Exception as error:
-                    problems.append(str(error))
-            hashes = LocalHashes(root)
-            dvc_params = dvc_mapping(params_bytes, "params.yaml")
-            members = {
-                key: value
-                for cycle in range(1, applied.cycles + 1)
-                for key, value in _members(settings, cycle).items()
-            }
-            stages = {
-                name: _dvc_stage(
-                    name,
-                    spec,
-                    _availability(root, tuple(spec["outs"]), members.get(name, ())),
-                    records.get(name),
-                    hashes,
-                    settings,
-                    dvc_params,
-                    status.get(name),
-                    topology,
-                    status_ok,
-                )
-                for name, spec in pipeline.items()
-            }
+            stages, problems = check_dvc_stages(
+                root, settings, pipeline, pipeline, controls
+            )
             bootstrap, summaries = _read_summaries(root, settings, stages)
             _propagate(stages, _dependencies(pipeline))
             cycles = tuple(

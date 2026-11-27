@@ -304,7 +304,8 @@ Extract spatial view code when the Plotly/table implementation warrants a separa
 | **M3.4 Execution experience** | Add observed stage status and a dedicated log presentation to Run. | Full and each existing targeted action use the applied configuration and preserve setup/exit/lock behavior. Test zero cycles, prerequisite runs, skipped stages, a run with incomplete output, and failure. Visible stage progress reflects observed signals. |
 | **M3.5a-i Result provenance and scientific summaries** | Establish read-only DVC evidence, scientific binding and summary readers and an explicit refresh. | Declared, partial, historical and matching scopes distinguish local availability from correspondence. |
 | **M3.5a-ii Experiment overview and cycle navigation** | Present verified headlines, separate test and batch trends, dataset growth and cycle drill-through. | A bounded summary and one selected cycle keep page height effectively constant. |
-| **M3.5b Spatial data and prediction explorer** | Build selected graph/raw views, approved same-run overlay, table and download. | Known shuffled/mismatched CSVs, even within-class reorder with a changed output hash, do not produce joined predictions. Verified rows/schema/colors and edges agree with sources. Offer graph-free plot, keyboard access to sample data, and supported fallback for legacy files. |
+| **M3.5b-i Verified spatial data readers and prediction alignment** | Verify selected raw cohorts, exact same-stage graph and CSV bytes, display links, filtered views and enriched exports. | Both retained Quick demo cycles verify. Same-class row swaps, mixed-cycle artifacts and stale evidence cannot authorize a join. |
+| **M3.5b-ii Interactive spatial visualization and observation explorer** | Build the interactive spatial views, accessible sample details, controls and downloads. | Verified colors and edges agree with sources. Offer an edge-free plot, keyboard access to sample data and supported fallback for legacy files. |
 | **M3.5c Classification, calibration and training results** | Rehome original figures, published metrics, batch class counts and fold/refit diagnostics. | Calibration states and cohorts are clearly identified, legacy figure caveats are accessible, and inactive diagnostics have a defined state. CV and final refit remain distinct. |
 | **M3.5d Drift and cross-cycle comparison** | Refine the drift and cross-cycle views and implement one optional paired assessment. | Reference cohorts, raw versus model space, permutation method and caveats remain visible. Selected feature/diagnostic only; comparable views share scales and show cohort changes. |
 | **M3.6 UI verification and visual refinement** | Browser verification in addition to focused AppTest and fixture regression checks. | Test forward/back and deep links, keyboard journey, layout reflow, browser contrast, figure resolution, theme changes and supported baseline workflows. Inventory each legacy output against its new route. |
@@ -421,7 +422,7 @@ A disposable one-stage DVC fixture generated its own lock and checked actual sta
 
 Quick demo had 124 result files and 34.3 MB of output. On the review host, its first explicit refresh took 1.33 s and its warm median was 0.70 s. The current-source mismatch copy also took 0.70 s warm. Standard took 1.20 s on its first refresh and 0.83 s warm. Metadata-only rechecks took approximately 5 ms median across 30 repetitions. These are local observations. Explicit refresh scales with declared files, bytes hashed and graph verification cost. Repeated views scale with the scoped manifest and skip DVC and scientific rereads.
 
-M3.5a-ii owns headline cards, trajectories, bounded growth and cycle navigation. M3.5b owns exact prediction CSV-to-graph binding, aligned rows and spatial overlays. This evidence checker alone grants no positional join.
+M3.5a-ii owns headline cards, trajectories, bounded growth and cycle navigation. M3.5b-i owns exact prediction CSV-to-graph binding and aligned rows. The overview evidence alone grants no positional join.
 
 Engineering verification passed with 410 tests in the full suite and 405 in the non-integration suite, with five integration tests deselected in the latter. Repository-wide Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files.
 
@@ -454,3 +455,85 @@ The Results header leads with verified coverage and correspondence. The applied 
 **Dataset evolution** shows the initial and latest verified population sizes and switches between **Totals** and **Partitions** in one chart slot. The partition view stacks verified development, calibration and final-test counts with distinct patterns. Both views retain unavailable snapshot positions as gaps, distinguish the final append and keep label density bounded. The final append describes available data for future use. The cycle summary retains its bounded height, optional partition counts and **Inspect cycle** action.
 
 The updated review uses the retained Quick demo artifacts and the original DVC lock. Its capture archive and measurements are in `/tmp/mineral-m35aii-polish.vGt2dt`. The owner accepted M3.5a-ii for engineering and visual quality after reviewing the eight refined browser captures.
+
+## M3.5b-i verified spatial data
+
+### Selected populations and topology
+
+`dashboard.spatial_data.read_population` reads one trusted local cohort. Snapshot indices start at 0 for bootstrap. For learning cycle c, the input base and its holdout and CV populations come from snapshot c−1. CV fold indices are zero-based. Development membership is the verified complement of final test and calibration, cross-checked against all CV folds and returned in parent order. The standalone incoming batch is checked against its input base. The final append verifies the ordered IDs, coordinates, raw features and labels of the two source populations before exposing their row memberships.
+
+Each population carries its selected role, cycle or snapshot, fold when applicable, stable sample IDs, canonical float64 XYZ and ordered raw float64 features, observed class indices and names, schema version and dataset identity. For subsets, the dataset digest identifies the source dataset and the selected graph carries its split digest. Coordinates are in synthetic units. There is no supplied CRS or depth conversion. Full-base topology is descriptive. Final-test, calibration, fold and prediction topology is independently constructed by the scientific pipeline and read from its stored graph. Derived development membership has no topology. The reader checks raw structure and local bindings. Correspondence to the applied run remains a separate evidence decision.
+
+The representation retains stored COO, weights and distances, and the original unique-edge, degree, density, distance and self-loop statistics. Display links collapse both directions of an edge into one physical link and omit self-loops. The view resolves endpoints to stable IDs and includes a link only if both endpoints are visible. Inclusive stored Z, observed class and stable ID filters preserve source row order. The view count describes visible observations. Original population counts and graph statistics remain associated with the full selected cohort.
+
+### Exact prediction join
+
+`dashboard.spatial_predictions.verify_prediction_join` checks one declared learning cycle under the cooperative configuration lock. It uses fresh DVC status, generated topology, lock records, typed tracked settings and fresh content hashes for the selected predict stage and its recursive producers. The status CLI can inspect the whole generated pipeline. Applied correspondence is required for the selected ancestry, which includes the incoming dataset producer, input-base lineage, training and evaluation. Drift and later prediction outputs are independent of this join. Overview evidence is insufficient for authorization.
+
+- The verified stage must declare the exact `pred_data.pt` dependency and prediction output directory. The captured incoming graph and CSV bytes must match the file hash and the CSV entry in the matching DVC directory manifest. Changed directory members, including extra ignored files within the prediction output, cause rejection. The join uses the captured graph and CSV bytes for all subsequent reads.
+- The verified input base and independent split artifacts establish the raw schema, observed labels and membership. Existing model and preprocessing readers check the weights and sidecar bytes, the model graph settings, source dataset identity, ordered development partition identity and fitted scaler type. Existing calibration readers check the exact model bundle, calibration split and calibrator bytes. The training graph digest stays bound to the checked bundle and lock. The spatial reader does not reconstruct the training graph to rederive that digest. The incoming graph is checked against the same base and the applied schema, including its raw and graph protocol versions, ordered unique IDs and tensor shapes.
+- The reviewed [prediction stage](../src/stages/predict.py) loads the verified incoming graph and applies the frozen preprocessing row-wise on a clone. GCN and GAT emit a row per input node in input order. The calibration path acts on the per-node logits and the uncalibrated path applies class-wise softmax. The [exporter](../src/utilities/pred_utils.py) uses those rows and the original `y` vector directly and writes an index-free CSV without sorting or filtering. The gate checks the reviewed producer source fingerprints as well as DVC lineage. A new producer revision requires a fresh review of the row-order contract before its outputs can be joined. Row counts and ordered labels alone cannot detect a row exchange within a class.
+- The parser requires the exact ordered class-index columns and the expected label and entropy fields. The row count and ordered observed labels must match the graph. Both probability families must be finite and bounded by 0 and 1. Row sums must be within eight float32 epsilons of 1 (approximately 9.54 × 10⁻⁷ absolute). The stored calibrated label must match the first maximum. Entropies are checked against the producer's `-sum(p * ln(p + 1e-8))` convention with absolute tolerance `8 * eps(float32) * (1 + ln(class_count))`. These allowances cover float32 arithmetic, probability serialization and the scale of the entropy reduction. The persisted entropy value is retained without rounding, clipping or renormalization.
+
+The lock and filesystem stamp are checked after DVC evidence collection and after loading and scientific checks. Both probability matrices are then associated with the same stable IDs in verified row order. The snapshot holds immutable numeric storage. Returned arrays have their own metadata and read-only buffers, and a returned table is detached. Repeated snapshot access performs no filesystem reads or DVC calls. `still_observed` checks the original workspace identity, exact control bytes and metadata for the selected files and directory members. It is an invalidation check for normal local changes. A new file read or a new join requires fresh verification. A snapshot can still describe its original point-in-time data after an invalidation. The cooperative lock covers dashboard runs and configuration changes. Metadata and content checks reject ordinary concurrent edits from other tools, while non-cooperative writers remain outside a filesystem transaction.
+
+These readers are for trusted local production artifacts. PyG graph serialization requires the existing pickle-capable Torch loading mode on CPU. DVC hashes and scientific bindings establish correspondence within the trusted workspace and do not make an uploaded graph or fabricated lock trustworthy. Model and calibrator payloads are checked as bytes. No model or calibrator is deserialized for inference. Missing, partial, stale, conflicting and busy evidence can withhold the joined result with reasons. The existing original graph and standalone CSV diagnostics keep their independent evidence. Historical outputs with unsupported source, schema or correspondence remain unjoined.
+
+### Display values and exports
+
+The joined snapshot supplies observed class and raw features from the graph, plus either family's predicted class, maximum probability, selected-class probability, persisted entropy in nats and correctness where an observation has a label. No per-observation scores are available for test, calibration or CV populations. The data layer performs no inference, calibration, graph construction or training.
+
+An enriched export is generated in memory with stable IDs, XYZ, observed and both predicted labels, both class-indexed probability families and their entropy values. Cycle, schema version, ordered class names, membership, source digests and original population count travel with the export. An export is explicitly `full_population` or `filtered_view`. Empty filtered exports keep their headers and the export object retains the scope and counts. The scientific producer CSV stays independently accessible and unchanged.
+
+### Verification and measurements
+
+The retained current-source workspace `/tmp/mineral-m35aii-quick.JeKROY` was unavailable during the initial engineering review. Disposable two-cycle fixtures verified the gate, including an integration check using actual local DVC status, and supplied the failure tests. Fixture locks and scores exercise the contracts without representing trained results.
+
+The following warm medians were measured locally on an Intel Core i9-12900H. Raw loading and separate graph edge preparation used 30 repetitions. Joins included a fresh local DVC status subprocess and used seven repetitions per cycle. Repeated in-memory reads used 2,000 repetitions. The edge timings include original graph statistics, deduplication and immutable copies of stored topology, using prepared COO fixture arrays.
+
+| Operation | Fixture size | Median |
+| --- | ---: | ---: |
+| Full base load | 128 observations | 4.55 ms |
+| CV validation load, including parent and split verification | 26 selected observations | 5.97 ms |
+| Incoming load, including parent verification | 16 incoming observations | 3.96 ms |
+| Fresh prediction join, cycle 1 | 16 incoming observations | 493.75 ms |
+| Fresh prediction join, cycle 2 | 16 incoming observations | 528.78 ms |
+| Immutable coordinate access and calibrated argmax | 16 incoming observations | 1.8 µs |
+| Cycle 2 metadata recheck | Selected producer scope | 2.90 ms |
+| Edge preparation | 100 nodes, 700 COO entries | 0.70 ms |
+| Edge preparation | 640 nodes, 12,160 COO entries | 12.29 ms |
+| Edge preparation | 5,000 nodes, 55,000 COO entries | 60.24 ms |
+
+These are fixture timings. Fresh verification scales with DVC status and the bytes and graph partitions in the selected producer ancestry. Edge preparation scales with the stored COO population. Snapshot reuse incurs only in-memory access and derivation, while metadata checks remain separate.
+
+The initial full suite reported **461 passed and 7 skipped**. The non-integration suite reported **459 passed and 9 deselected**. Repository-wide Ruff lint and formatting, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files.
+
+### Retained Quick demo acceptance
+
+The original temporary workspace could not be recovered from retained local files. The owner authorized one replacement full CPU reproduction, which completed in **63.647 s** in `~/Projects/DataScience/review-workspaces/mineral-classifier/v0.2.0.dev3/quick-demo/`. The distributed Quick demo v1 preset resolved to the same applied YAML SHA-256 as M3.5a-ii. The scientific source tree was `d3ace04b5c810dfc5320f736bdad758558df460c` at revision `20135e154cde6dba11623002fe4b0e9017661e3c`. The workspace retains its independent cache, source identity and hashes, generated DVC definition, DVC lock, scientific outputs and logs under `verification/`. Production configuration, DVC files, results and cache agreed with the before-run manifest.
+
+All 14 expected stages executed, and the existing evidence layer verified all 14 stages and both learning cycles as matching. Both genuine spatial integration tests passed on disposable copies of the retained artifacts. Each checked 100 rows for exact sample IDs, float64 coordinates and raw features, observed labels, both probability families, persisted entropy and correctness. They also checked source membership, append order, and full and filtered enriched exports. Across both cycles and probability families, the maximum absolute entropy difference from the producer's formula was 1.86 × 10⁻⁷ nats.
+
+All counts and published metrics matched the M3.5a-ii record at its reported precision.
+
+| Cycle | Input base | Development | Calibration | Final test | Incoming | Post-append | Calibrated final-test accuracy | Final-test ECE before / after | Calibrated batch accuracy |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 440 | 308 | 40 | 92 | 100 | 540 | 36.30% | 0.071203 / 0.090677 | 43.82% |
+| 2 | 540 | 378 | 49 | 113 | 100 | 640 | 30.83% | 0.028284 / 0.040227 | 42.67% |
+
+The final base contained 448 development, 58 calibration and 134 final-test observations, as previously reported. Both runs produced 124 files. The replacement totaled 34,262,219 bytes, 1,466 bytes fewer than the prior reported total. The older files were unavailable for per-file comparison.
+
+| Genuine retained-workspace operation | Cycle 1 median | Cycle 2 median |
+| --- | ---: | ---: |
+| Input base load | 15.00 ms | 29.02 ms |
+| CV validation load, first fold | 7.48 ms | 10.03 ms |
+| Incoming batch load | 5.03 ms | 6.29 ms |
+| Fresh prediction join | 593.31 ms | 626.59 ms |
+| Immutable coordinates and calibrated argmax | 1.99 µs | 2.73 µs |
+| Workspace metadata recheck | 2.71 ms | 4.27 ms |
+
+The 640-row final append loaded in 45.36 ms median. Measurements used 30 repetitions per raw load and metadata recheck, seven fresh joins per cycle, and 3,000 repeated in-memory reads per cycle. The full evidence refresh took 863 ms.
+
+Set `MINERAL_QUICK_DEMO_WORKSPACE` to the persistent path for the genuine spatial checks and overview headline test. Without a configured path, the tests fall back to their original local fixtures and can skip if those are absent. The separate historical evidence tests accept `MINERAL_HISTORICAL_QUICK_DEMO_WORKSPACE` for the M2.5-era artifacts. The current-source replacement supports the current headline and spatial checks. The historical tests still require the historical source and lock.
+
+Of the seven initial skips, two were the genuine spatial joins and one was the overview headline comparison. All three passed against the replacement. The other four require the absent M2.5 workspace and cover historical-source invalidation, mixed-cycle artifacts and bindings, and two workspace-change cases. The final full suite reported **464 passed and 4 skipped**. The fast suite reported **459 passed and 9 deselected**. Repository-wide Ruff, applicable pre-commit hooks, Git whitespace checks and offline uv lock consistency passed. Pre-commit modified no files.

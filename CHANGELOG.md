@@ -8,6 +8,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Added
 
+- Read selected raw spatial populations and verified membership with immutable float64 observations and stored topology. Add a fresh, cycle-scoped evidence gate for positional prediction joins, display filters and enriched prediction exports.
 - Add an Experiment overview with verified headline metrics, an interactive learning trajectory, realized base growth and a bounded cycle summary. Inspect a cycle in the existing diagnostic explorer and retain mode, cycle and section across navigation.
 - Add an explicit Results evidence refresh that verifies scoped DVC records, local content and scientific bindings. Distinguish availability, lock-matching bytes and correspondence with applied settings and workspace sources.
 - Add typed scientific summary readers for realized populations, final-test and incoming-batch metrics, model and calibration metadata and per-cycle completeness.
