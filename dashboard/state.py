@@ -16,6 +16,7 @@ RUN_PAGE = "dashboard/views/run.py"
 RESULTS_PAGE = "dashboard/views/results.py"
 EXPERIMENT_OVERVIEW = "Experiment overview"
 CYCLE_EXPLORER = "Cycle explorer"
+COMPARE_CYCLES = "Compare two cycles"
 
 
 @dataclass
@@ -34,6 +35,8 @@ class DashboardState:
     applied_draft: tuple[str, bytes] | None = None
     result_mode: str = EXPERIMENT_OVERVIEW
     result_cycle: int | None = None
+    compare_first: int | None = None
+    compare_second: int | None = None
     result_section: str = "Data and spatial graphs"
     last_run: RunAttempt | None = None
     result_verification: "Verification | None" = None

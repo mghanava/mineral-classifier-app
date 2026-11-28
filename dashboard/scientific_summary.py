@@ -10,7 +10,8 @@ import numpy as np
 from numpy.typing import NDArray
 from torch_geometric.data import Data
 
-from dashboard.dvc_evidence import plain_path, same_value
+from dashboard.drift_summary import REPRESENTATIONS, DriftSummary, read_drift_summary
+from dashboard.dvc_evidence import plain_path
 from src.utilities.general_utils import load_data
 from src.utilities.graph_protocol import (
     model_graph_settings,
@@ -162,6 +163,9 @@ class CycleSummary:
     prediction: ClassificationMetrics | None = None
     model: ModelMetadata | None = None
     calibration: CalibrationMetadata | None = None
+    drift: DriftSummary | None = None
+    feature_names: tuple[str, ...] = ()
+    class_names: tuple[str, ...] = ()
 
 
 def read_json(path: Path) -> dict:
@@ -387,11 +391,9 @@ class ScientificReader:
         batch: RawDataset,
         bundle: dict,
         partition: str,
-    ) -> None:
-        """Check drift metadata against the paired populations and fitted representation."""
-        metadata = read_json(
-            self.path(f"drift_analysis/cycle_{cycle}/drift_metadata.json")
-        )
+    ) -> DriftSummary:
+        """Read the drift report bound to the checked cohorts and fitted representation."""
+        directory = f"drift_analysis/cycle_{cycle}"
         settings = self.settings["analyze_drift"]
         expected = {
             "version": 1,
@@ -409,16 +411,13 @@ class ScientificReader:
                 "configured_seed": settings["seed"],
                 "effective_seed": derive_seed(settings["seed"], "drift", cycle),
             },
-            "representations": {
-                "marginal": "canonical_raw_float64",
-                "multivariate": "frozen_model_transform_float64",
-            },
+            "representations": REPRESENTATIONS,
             **bundle,
         }
-        if any(
-            not same_value(value, metadata.get(key)) or key not in metadata
-            for key, value in expected.items()
-        ):
-            raise ValueError(
-                "Drift metadata differs from the declared populations, model or settings."
-            )
+        return read_drift_summary(
+            self.path(f"{directory}/drift_metadata.json"),
+            self.path(f"{directory}/drift_results.txt"),
+            expected=expected,
+            reference_count=base.population.total,
+            incoming_count=len(batch.sample_ids),
+        )

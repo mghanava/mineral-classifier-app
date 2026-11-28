@@ -16,7 +16,12 @@ from dashboard.provenance import (
     Verification,
     verify_workspace,
 )
-from dashboard.state import CYCLE_EXPLORER, EXPERIMENT_OVERVIEW, dashboard_state
+from dashboard.state import (
+    COMPARE_CYCLES,
+    CYCLE_EXPLORER,
+    EXPERIMENT_OVERVIEW,
+    dashboard_state,
+)
 
 DATA = "Data and spatial graphs"
 MODEL = "Model performance and training"
@@ -375,6 +380,12 @@ def _explore(
             on_change=_remember_selection,
             args=("result_section", "_results_section"),
         )
+    if section == DRIFT:
+        from dashboard.drift_results import render_drift
+
+        with st.container(key="results-drift", gap="small"):
+            if render_drift(workspace, cycle, checked):
+                return
     if section in (MODEL, CALIBRATION):
         from dashboard.model_results import (
             render_calibration,
@@ -492,6 +503,56 @@ def _explore(
     show_artifact(workspace, chosen)
 
 
+def _compare(
+    declared: int | None, observed: set[int], checked: Verification | None
+) -> None:
+    from dashboard.cycle_comparison import ComparisonCycle, render_comparison
+
+    scope = sorted(set(range(1, (declared or 0) + 1)) | (observed - {0}))
+    if not scope:
+        st.info(
+            "Two learning cycles are needed for a comparison. Bootstrap is a base snapshot."
+        )
+        return
+    state = dashboard_state()
+    with st.container(key="results-compare", gap="small"):
+        st.markdown("### Compare two cycles")
+        with st.container(key="compare-selectors"):
+            columns = st.columns(2)
+            selected = []
+            for column, field, label, default in zip(
+                columns,
+                ("compare_first", "compare_second"),
+                ("Learning cycle A", "Learning cycle B"),
+                (scope[-2] if len(scope) > 1 else scope[0], scope[-1]),
+                strict=True,
+            ):
+                if getattr(state, field) not in scope:
+                    setattr(state, field, default)
+                key = f"_results_{field}"
+                st.session_state[key] = getattr(state, field)
+                with column:
+                    cycle = st.selectbox(
+                        label,
+                        scope,
+                        format_func=lambda item: (
+                            cycle_label(item)
+                            + (
+                                " · historical"
+                                if declared is not None and item > declared
+                                else ""
+                            )
+                        ),
+                        key=key,
+                        on_change=_remember_selection,
+                        args=(field, key),
+                    )
+                    selected.append(
+                        ComparisonCycle.from_evidence(cycle, declared, checked)
+                    )
+        render_comparison((selected[0], selected[1]))
+
+
 def render() -> None:
     """Switch between the verified overview and one selected scientific diagnostic."""
     st.html("""
@@ -518,6 +579,35 @@ def render() -> None:
         .stMainBlockContainer:has(.st-key-results-science-header) [data-testid="stMetricValue"] {
             font-size: 1.55rem;
             font-variant-numeric: tabular-nums;
+        }
+        .stMainBlockContainer:has(.st-key-results-drift),
+        .stMainBlockContainer:has(.st-key-results-compare) {
+            max-width: 78rem;
+            padding-top: 3.6rem;
+        }
+        .stMainBlockContainer:has(:is(.st-key-results-drift, .st-key-results-compare)) > [data-testid="stVerticalBlock"] {
+            gap: .5rem;
+        }
+        .stMainBlockContainer:has(:is(.st-key-results-drift, .st-key-results-compare)) h1 {
+            font-size: 2.15rem;
+            padding: 0;
+        }
+        .stMainBlockContainer:has(.st-key-results-drift) h3,
+        .stMainBlockContainer:has(.st-key-results-compare) h3 {
+            padding-bottom: .15rem;
+        }
+        .st-key-results-drift [data-testid="stMetricValue"] {
+            font-size: clamp(1.55rem, 2vw, 2rem);
+            font-variant-numeric: tabular-nums;
+        }
+        @media (max-width: 700px) {
+            :is(.st-key-drift-settings, .st-key-results-compare) [data-testid="stHorizontalBlock"] {
+                flex-direction: column;
+            }
+            :is(.st-key-drift-settings, .st-key-results-compare) [data-testid="stColumn"] {
+                width: 100% !important;
+                flex: 1 1 auto !important;
+            }
         }
         .st-key-results-headlines {
             padding-block: 0.75rem;
@@ -554,7 +644,7 @@ def render() -> None:
     ):
         mode = st.segmented_control(
             "Results mode",
-            [EXPERIMENT_OVERVIEW, CYCLE_EXPLORER],
+            [EXPERIMENT_OVERVIEW, CYCLE_EXPLORER, COMPARE_CYCLES],
             required=True,
             key="_results_mode",
             label_visibility="collapsed",
@@ -581,15 +671,23 @@ def render() -> None:
             "Workspace evidence changed. Refresh to check correspondence again."
         )
 
+    if checked is None or refresh:
+        st.session_state.pop("_drift_raw_snapshot", None)
+
     observed = set(workspace.result_cycles(include_raw=True))
     aggregate = workspace.available(AGGREGATE)
     summary = ExperimentSummary.from_verification(checked)
     declared = applied.cycles if applied else None
-    compact_header = mode == CYCLE_EXPLORER and state.result_section in (
-        DATA,
-        PREDICTION,
-        MODEL,
-        CALIBRATION,
+    compact_header = mode == COMPARE_CYCLES or (
+        mode == CYCLE_EXPLORER
+        and state.result_section
+        in (
+            DATA,
+            PREDICTION,
+            MODEL,
+            CALIBRATION,
+            DRIFT,
+        )
     )
     with st.container(key="results-evidence-context", gap="xxsmall"):
         if not compact_header:
@@ -613,6 +711,8 @@ def render() -> None:
             folds=applied.folds if applied else 0,
             refresh=refresh,
         )
+    elif mode == COMPARE_CYCLES:
+        _compare(declared, observed, checked)
     else:
         render_overview(
             summary, declared, observed, aggregate, state.result_cycle, _inspect

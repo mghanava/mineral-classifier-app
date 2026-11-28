@@ -475,7 +475,7 @@ def _read_summaries(root: Path, settings: dict, stages: dict[str, Evidence]):
             input_base,
             model,
         )
-        checked(
+        drift_summary = checked(
             drift,
             lambda: reader.drift(cycle, input_base, batch, model[1], model[2]),
             input_base,
@@ -509,6 +509,9 @@ def _read_summaries(root: Path, settings: dict, stages: dict[str, Evidence]):
             batch_metrics,
             model[0] if model else None,
             calibration,
+            drift_summary,
+            input_base.raw.feature_names if input_base else (),
+            input_base.raw.class_names if input_base else (),
         )
         return summary, after
 
