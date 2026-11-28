@@ -23,6 +23,9 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Changed
 
+- Use a native scientific-blue light and dark theme. Clarify applied settings, draft review, observed Run phases and the scope of Results evidence.
+- Improve 3D framing and align spatial probability formats across colorbars, hover and the inspector. Move the batch probability selector above both derived views and give calibration optimizer figures a wider layout.
+- Make raw drift histograms legible with paired bars and a pattern for incoming observations. Show numerical comparison-bar labels, warm orange before calibration and blue after calibration.
 - Emphasize Results coverage and headline metrics, report same-cohort ECE changes in percentage points, and add a verified partition composition view alongside base totals.
 - Show the applied and draft status, preset provenance and measured CPU references beside explicit validation and Apply. Show separate finding counts and keep blocking errors visible.
 - Replace seven eager tabs with native top navigation for Home, Configure, Run and Results. Configure retains explicit validation and Apply. Run owns all full and targeted execution actions.
@@ -30,6 +33,7 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ### Fixed
 
+- Present one Results evidence and execution disclosure and use singular validation finding labels when appropriate.
 - Label validation and across-cycle figures with Macro F0.5. Place overconfidence below the identity diagonal and underconfidence above it in reliability diagrams, and label the secondary axis with the sum of sample weights per bin. Metric calculations, serialized keys and artifact filenames are preserved.
 
 ## [0.2.0.dev2] - 2026-11-25

@@ -331,7 +331,7 @@ def _drift_comparison(cycles: tuple[ComparisonCycle, ComparisonCycle]) -> None:
 
 def render_comparison(cycles: tuple[ComparisonCycle, ComparisonCycle]) -> None:
     """Show the paired summary for one topic and one compatible chart."""
-    st.caption(COHORT_NOTE)
+    st.markdown(f"**Changing evaluation populations** · {COHORT_NOTE}")
     view = st.segmented_control(
         "Comparison view",
         list(ComparisonView),
@@ -406,15 +406,35 @@ def render_comparison(cycles: tuple[ComparisonCycle, ComparisonCycle]) -> None:
             else:
                 figure = go.Figure()
                 labels = [f"Cycle {first.cycle} · A", f"Cycle {second.cycle} · B"]
+                colors = (
+                    (ORANGE, BLUE)
+                    if view == ComparisonView.CALIBRATION
+                    else (BLUE, ORANGE)
+                )
+                label_format = (
+                    ",.0f"
+                    if view == ComparisonView.GROWTH
+                    else ".3f"
+                    if decimal
+                    else ".2%"
+                )
                 for name, values, color in zip(
-                    names, series, (BLUE, ORANGE)[: len(series)], strict=True
+                    names, series, colors[: len(series)], strict=True
                 ):
-                    figure.add_bar(x=labels, y=values, name=name, marker_color=color)
+                    figure.add_bar(
+                        x=labels,
+                        y=values,
+                        name=name,
+                        marker_color=color,
+                        text=[format(value, label_format) for value in values],
+                        textposition="outside",
+                        cliponaxis=False,
+                    )
                 figure.update_layout(
                     height=290,
                     barmode="group",
                     showlegend=len(series) > 1,
-                    margin={"l": 8, "r": 8, "t": 8, "b": 8},
+                    margin={"l": 8, "r": 8, "t": 26, "b": 8},
                     legend={"orientation": "h", "y": 1.02, "yanchor": "bottom"},
                 )
                 figure.update_yaxes(

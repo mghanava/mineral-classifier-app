@@ -118,24 +118,24 @@ def _native(workspace: Workspace, checked: Verification, drift: DriftSummary) ->
         reference[:, column], incoming[:, column]
     )
     figure = go.Figure()
-    for label, proportions, color in (
-        (f"Reference · n={drift.reference_count:,}", ref_proportion, BLUE),
-        (f"Incoming · n={drift.incoming_count:,}", in_proportion, ORANGE),
+    for label, proportions, color, pattern in (
+        (f"Reference · n={drift.reference_count:,}", ref_proportion, BLUE, ""),
+        (f"Incoming · n={drift.incoming_count:,}", in_proportion, ORANGE, "/"),
     ):
         figure.add_bar(
             x=(edges[:-1] + edges[1:]) / 2,
-            width=np.diff(edges),
             y=proportions,
             name=label,
-            marker_color=color,
-            opacity=0.72,
+            marker={"color": color, "pattern": {"shape": pattern, "solidity": 0.18}},
             customdata=np.column_stack((edges[:-1], edges[1:])),
             hovertemplate="%{customdata[0]:.3g} to %{customdata[1]:.3g}<br>%{y:.2%}",
         )
     figure.update_layout(
         height=320,
         margin={"l": 6, "r": 12, "t": 6, "b": 8},
-        barmode="overlay",
+        barmode="group",
+        bargap=0.12,
+        bargroupgap=0.04,
         legend={"orientation": "h", "y": 1.02, "yanchor": "bottom"},
     )
     figure.update_xaxes(title=feature, automargin=True)
@@ -147,10 +147,27 @@ def _native(workspace: Workspace, checked: Verification, drift: DriftSummary) ->
     )
     st.caption(
         f"{RAW_REPRESENTATION} · Shared bin edges. Heights show the fraction of each "
-        "cohort in each bin. This descriptive display uses no statistical test."
+        "cohort in each bin. Paired bars use the same interval. This descriptive display uses no statistical test."
     )
     with st.container(width=900):
         st.plotly_chart(figure, config={"displayModeBar": False})
+        with st.expander("Histogram values"):
+            st.dataframe(
+                pd.DataFrame(
+                    {
+                        "Bin start": edges[:-1],
+                        "Bin end": edges[1:],
+                        "Reference": ref_proportion,
+                        "Incoming": in_proportion,
+                    }
+                ),
+                hide_index=True,
+                height=240,
+                column_config={
+                    name: st.column_config.NumberColumn(format="percent")
+                    for name in ("Reference", "Incoming")
+                },
+            )
 
 
 def _settings(drift: DriftSummary, workspace: Workspace, metadata_path: Path) -> None:
@@ -242,9 +259,10 @@ def render_drift(
                 "Finding": st.column_config.TextColumn(width=93),
             },
         )
-    st.caption(
-        "Failure to detect drift leaves distribution equality unresolved. A detected "
-        "shift alone gives no evidence of predictive degradation."
+    st.markdown(
+        f"**Interpretation limits** · Budget {drift.budget:,} permutations per test. Small budgets give coarse "
+        "p-values, and spatial dependence can violate the row-shuffling assumption. Failure to detect drift "
+        "leaves distribution equality unresolved. Detection alone gives no evidence of predictive degradation."
     )
     directory = Path(f"drift_analysis/cycle_{cycle}")
     with st.container(width=400):

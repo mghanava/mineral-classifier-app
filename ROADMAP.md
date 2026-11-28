@@ -73,16 +73,11 @@ The `v0.1.0` tag preserves the original application at `d00c2cd`. The developmen
 - [x] **M3.5b-ii — Interactive spatial visualization and observation explorer.** Implemented the shared map, observation inspector, verified score overlays and downloads. The owner accepted the engineering work and visual design after reviewing all eight refined screenshots. [Implementation and review](docs/ui_ux_design.md#m35b-ii-interactive-spatial-explorer).
 - [x] **M3.5c — Classification, calibration and training results.** Implemented population-specific scores and batch counts, calibration diagnostics, selected CV plots and deployed refit context. The owner accepted the visual design and engineering after reviewing all ten browser captures. [Implementation and review](docs/ui_ux_design.md#m35c-classification-calibration-and-training-results).
 - [x] **M3.5d — Drift and cross-cycle comparison.** Implemented verified per-method drift findings, selected diagnostics and two-cycle comparison with cohort and method context. The owner accepted the visual design and engineering after reviewing all ten browser captures. [Implementation and review](docs/ui_ux_design.md#m35d-distribution-drift-and-cross-cycle-comparison).
-- [ ] **M3.6 — UI verification and visual refinement.** Verify the supported user journeys, responsive layout, accessibility, dark and light themes and legacy diagnostic coverage. Refine 3D axis tick clipping, verification-scope wording and probability formatting.
-  - Place the probability-family selector above both batch diagnostics.
-  - Resolve duplicate evidence disclosures, including **Evidence and execution details**.
-  - Standardize before/after calibration colors and add direct numerical labels to comparison bars.
-  - Improve overlapping histogram readability and secondary text contrast.
-  - Improve sizing for wide optimizer figures.
-  - Tailor calibration interpretation to the selected diagnostic.
-  - Improve per-class table readability on narrow screens.
+- [x] **M3.6 — UI verification and visual refinement.** Refined native light/dark styling, configuration action hierarchy, Run phase and stage presentation, Results evidence scopes, 3D framing and probability formatting, calibration diagnostics, and drift and comparison charts. Browser and regression verification used isolated workspaces. The owner accepted the visual and engineering work after reviewing all 20 browser captures, the accessibility findings, the design notes, and the dev3 readiness report. [Refinements and output coverage](docs/ui_ux_design.md#m36-application-wide-visual-refinement).
 
 **Acceptance:** A first-time visitor can configure and run the synthetic workflow without manual DVC or YAML operations and explore provenance-aware Results. Page length stays bounded as cycle and fold counts grow. Existing scientific diagnostics and expert execution controls remain accessible.
+
+All dev3 implementation milestones have received owner acceptance.
 
 ### Milestone 4 — User data ingestion (`0.2.0.dev4`)
 

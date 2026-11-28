@@ -37,7 +37,9 @@ Open [http://localhost:8501](http://localhost:8501)
 5. In **Model performance and training**, compare published final-test scores before and after calibration or inspect incoming-batch counts by probability family. Use **Training** for the CV fold figures and deployed refit schedule. **Probability calibration** compares ECE and MCE on the same final-test cohort and gives access to the saved reliability and optimizer diagnostics.
 6. In **Distribution drift**, review per-method permutation findings for the verified input base and incoming batch. Select a raw feature, saved scientific figure, technical settings or the original report. Use **Compare two cycles** to view paired classification scores, calibration errors or realized dataset growth. Each result retains its population and evidence context. Cross-cycle differences do not establish learning improvement.
 
-Quick demo and Standard completed their two-cycle CPU pipelines in 74.31 s and 101.66 s on the verification host. Both retain their approved budgets. Presets set computational budgets, and predictive performance depends on the data and evaluation protocol. Research resolves to the full canonical defaults and has been checked through static validation and DVC generation. [Verification report](docs/configuration_verification.md)
+The unmodified Quick demo and Standard reference presets completed their two-cycle CPU pipelines in 74.31 s and 101.66 s on the verification host. Both retain their approved budgets. Presets set computational budgets, and predictive performance depends on the data and evaluation protocol. Research resolves to the full canonical defaults and has been checked through static validation and DVC generation. [Verification report](docs/configuration_verification.md)
+
+Use the Streamlit settings menu to choose Light, Dark or the system theme. Results reports experiment correspondence, selected diagnostic evidence and verified spatial prediction alignment at their own scopes. [Dashboard review and legacy diagnostic routes](docs/ui_ux_design.md#m36-application-wide-visual-refinement)
 
 ### Configuration CLI
 

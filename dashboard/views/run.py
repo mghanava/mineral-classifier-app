@@ -85,13 +85,16 @@ def _stage_progress(progress: StageProgress, *, running: bool) -> None:
         name, stage_cycle = stage_details(stage)
         if stage_cycle == cycle:
             display = "Start observed" if status == "Started" else status
-            selected.append(f"{name} ({display.lower()})")
+            selected.append((name, display))
         elif stage_cycle:
             other_cycles.add(stage_cycle)
             other_statuses[status] += 1
     st.markdown(f"**Learning cycle {cycle}**")
-    for index in range(0, len(selected), 3):
-        st.caption(" · ".join(selected[index : index + 3]))
+    st.dataframe(
+        [{"Stage": name, "Observed status": status} for name, status in selected],
+        hide_index=True,
+        height=min(253, 37 + 35 * len(selected)),
+    )
     if other_cycles:
         confirmed = other_statuses["Completed"] + other_statuses["Restored from cache"]
         st.caption(
@@ -117,9 +120,12 @@ def _status(
             "Up to date": st.success,
         }
         show[attempt.status](f"{attempt.status} · {attempt.scope}")
-        st.caption(
-            " → ".join(
-                f"**{phase}**" if phase == attempt.phase else phase for phase in PHASES
+        st.markdown(
+            " ".join(
+                f":blue-badge[{index}. {phase} · latest]"
+                if phase == attempt.phase
+                else f":gray-badge[{index}. {phase}]"
+                for index, phase in enumerate(PHASES, 1)
             )
         )
         if attempt.config_id and attempt.config_id != applied_id:
@@ -222,7 +228,7 @@ def render() -> None:
         else None
     )
 
-    with st.container(width=1050):
+    with st.container(width=1100, gap="small"):
         st.subheader("Applied configuration")
         cycles = applied_summary(active, show_calibration=True)
         if applied_id:

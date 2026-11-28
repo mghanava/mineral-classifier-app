@@ -30,6 +30,7 @@ class ColorMode(StrEnum):
     CORRECTNESS = "Classification correctness"
 
 
+PROBABILITY_FORMAT = ".1%"
 SCORE_MODES = (ColorMode.MAXIMUM, ColorMode.PROBABILITY, ColorMode.ENTROPY)
 
 
@@ -44,6 +45,12 @@ class ColorField:
     symbols: tuple[str, ...] = CLASS_SYMBOLS
     scale: str = "Viridis"
     bounds: tuple[float, float] | None = None
+    number_format: str = ".5g"
+    tick_format: str = ".3~g"
+
+    def display_value(self, value: float) -> str:
+        """Format exact observation values and displayed scale bounds."""
+        return format(value, self.number_format)
 
 
 def color_field(
@@ -104,7 +111,15 @@ def color_field(
         scale, bounds = "Cividis", (0, 1)
     if population_range:
         bounds = (float(values.min()), float(values.max()))
-    return ColorField(title, values, scale=scale, bounds=bounds)
+    number_format = ".3f" if mode == ColorMode.ENTROPY else PROBABILITY_FORMAT
+    return ColorField(
+        title,
+        values,
+        scale=scale,
+        bounds=bounds,
+        number_format=number_format,
+        tick_format=number_format,
+    )
 
 
 def observation_label(row: int, count: int) -> str:
@@ -176,7 +191,7 @@ def spatial_figure(
                 predicted[row] if predicted is not None else "",
                 field.categories[int(field.values[row])]
                 if field.categories
-                else f"{field.values[row]:.5g}",
+                else field.display_value(field.values[row]),
                 observation_label(row, population.count),
             )
             for row in subset
@@ -236,7 +251,7 @@ def spatial_figure(
                     "thickness": 12,
                     "len": 0.76,
                     "outlinewidth": 0,
-                    "tickformat": ".3~g",
+                    "tickformat": field.tick_format,
                 },
             }
         )
@@ -287,7 +302,9 @@ def spatial_figure(
     if three_d:
         axis.pop("automargin")
         fig.update_layout(
+            margin={"l": 18, "r": 18, "t": 54, "b": 26},
             scene={
+                "domain": {"x": [0.045, 0.955], "y": [0.075, 0.955]},
                 "aspectmode": "data",
                 "bgcolor": panel,
                 "xaxis": {**axis, "title": "X", "showbackground": False},
@@ -297,12 +314,14 @@ def spatial_figure(
                     "title": "Z",
                     "showbackground": False,
                     "autorange": True,
+                    "nticks": 3,
+                    "tickfont": {"size": 10},
                 },
                 "camera": {
-                    "eye": {"x": 1.5, "y": -1.9, "z": 1.65},
+                    "eye": {"x": 1.8, "y": -2.25, "z": 1.8},
                     "projection": {"type": "orthographic"},
                 },
-            }
+            },
         )
     else:
         x_range, y_range = _plan_ranges(coords)
@@ -330,10 +349,10 @@ def probability_figure(
             marker_color=[
                 CLASS_COLORS[index % len(CLASS_COLORS)] for index in range(len(names))
             ],
-            text=[f"{value:.1%}" for value in values],
+            text=[format(value, PROBABILITY_FORMAT) for value in values],
             textposition="outside",
             cliponaxis=False,
-            hovertemplate="%{y}: %{x:.2%}<extra></extra>",
+            hovertemplate="%{y}: %{x:.1%}<extra></extra>",
         )
     )
     figure.update_layout(

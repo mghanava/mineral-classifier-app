@@ -20,7 +20,7 @@ def render() -> None:
     )
 
     demo, custom = st.columns(2, gap="large")
-    with demo:
+    with demo, st.container(border=True, gap="small"):
         try:
             preset = load_preset("quick_demo")
         except ValueError as error:
@@ -32,17 +32,16 @@ def render() -> None:
                 dashboard_state().preset = preset.id
                 st.switch_page(CONFIGURE_PAGE)
             st.caption(
-                "Measured reference: the two-cycle CPU pipeline took 74.31 s on the "
+                "Unmodified Quick demo reference · 74.31 s for two CPU cycles on the "
                 "M2.5 verification host. Runtime varies by machine."
             )
-    with custom:
+    with custom, st.container(border=True, gap="small"):
         st.subheader("Custom experiment")
         st.write(
-            "Start from the applied settings or choose a preset and edit its YAML."
+            "Start from applied settings or load a preset, then edit guided controls or YAML."
         )
         st.page_link(CONFIGURE_PAGE, label="Configure an experiment")
 
-    st.divider()
     st.header("Workspace")
     config, results = st.columns(2, gap="large")
     with config:

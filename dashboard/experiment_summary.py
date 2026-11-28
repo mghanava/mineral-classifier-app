@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 
 from dashboard.provenance import Availability, Correspondence, Evidence, Verification
 
-BLUE = "#0079B8"
+BLUE = "#0072B2"
 ORANGE = "#BC591E"
 PURPLE = "#8274AD"
 
@@ -153,7 +153,7 @@ def trajectory_figure(
     metric: Metric, cycles: range, series: tuple[Series, Series]
 ) -> go.Figure:
     """Draw bounded metric trajectories with explicit gaps and integer positions."""
-    percent = metric in (Metric.ACCURACY, Metric.ECE)
+    percent = metric == Metric.ACCURACY or metric.calibration_error
     sparse = len(cycles) <= 3
     figure = go.Figure()
     for item, color, dash, symbol in zip(
@@ -192,7 +192,7 @@ def trajectory_figure(
             Metric.MACRO_F05: "Macro F0.5",
             Metric.MCC: "MCC",
             Metric.ECE: "ECE (%)",
-            Metric.MCE: "MCE",
+            Metric.MCE: "MCE (%)",
         }[metric],
         showlegend=True,
     )

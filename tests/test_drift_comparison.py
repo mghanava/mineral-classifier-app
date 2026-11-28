@@ -310,6 +310,10 @@ def test_genuine_drift_comparison_and_lazy_navigation(tmp_path, monkeypatch):
         ComparisonView.CALIBRATION
     ).run()
     assert "ECE · Before calibration" in app.dataframe[0].value["Measure"].tolist()
+    plotted = json.loads(app.get("plotly_chart")[0].proto.spec)["data"]
+    assert [trace["marker"]["color"] for trace in plotted] == ["#BC591E", "#0072B2"]
+    assert plotted[0]["text"] == ["7.12%", "2.83%"]
+    assert plotted[1]["text"] == ["9.07%", "4.02%"]
     _find(app, "selectbox", "Learning cycle A").select(2).run()
     assert not app.get("plotly_chart")
     _find(app, "selectbox", "Learning cycle B").select(1).run()

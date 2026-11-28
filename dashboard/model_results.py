@@ -61,7 +61,7 @@ def _context(
 ) -> None:
     label = f"{count:,} observations" if count is not None else "Cohort size unverified"
     status = str(evidence.correspondence) if evidence else "Unverified correspondence"
-    st.caption(f"Cycle {cycle} · {scope} · {label} · {status}")
+    st.caption(f"Cycle {cycle} · {scope} · {label} · Diagnostic evidence: {status}")
 
 
 def _formatted(value: float | None, *, percent: bool = True) -> str:
@@ -313,19 +313,32 @@ def render_classification(
     st.caption(
         f"Verified batch alignment · {result.joined.population.count:,} observations · Unweighted derived counts and rates"
     )
-    plot, details = st.columns([1.12, 1], gap="large")
+    family = st.segmented_control(
+        "Batch probability family",
+        list(ProbabilityFamily),
+        default=ProbabilityFamily.CALIBRATED,
+        required=True,
+        format_func=str.capitalize,
+        key="classification-family",
+    )
+    batch = BatchDiagnostics.from_join(result.joined, family)
+    plot, details = st.columns([1.12, 1], gap="medium")
     with details:
         st.markdown("#### Per-class summary")
-        family = st.segmented_control(
-            "Batch probability family",
-            list(ProbabilityFamily),
-            default=ProbabilityFamily.CALIBRATED,
-            required=True,
-            format_func=str.capitalize,
-            key="classification-family",
+        st.dataframe(
+            batch.per_class(),
+            hide_index=True,
+            height=230,
+            column_config={
+                "Class": st.column_config.TextColumn(width=72, pinned=True),
+                "Observed support": st.column_config.NumberColumn(
+                    "Observed", width=72, help="Observed support in the incoming batch."
+                ),
+                "Predicted": st.column_config.NumberColumn(width=72),
+                "Precision": st.column_config.TextColumn(width=77),
+                "Recall": st.column_config.TextColumn(width=72),
+            },
         )
-        batch = BatchDiagnostics.from_join(result.joined, family)
-        st.dataframe(batch.per_class(), hide_index=True, height=230)
         st.caption(
             "Precision uses predicted counts. Recall uses observed support. A zero denominator yields an undefined rate."
         )
@@ -387,68 +400,70 @@ def render_calibration(
         )
     else:
         st.info("Refresh result evidence to check the paired calibration scores.")
-    image, notes = st.columns([1.65, 1], gap="large")
+    if calibration and base:
+        st.markdown(
+            f"**{calibration.method.replace('_', ' ').capitalize()}** · "
+            f"{base.calibration:,} in the calibration partition · {base.final_test:,} final test · "
+            f"{calibration.reporting_bins or 'Unrecorded'} reporting bins"
+        )
     directory = Path(f"evaluation/cycle_{cycle}")
-    diagnostic, title = directory / "reliability_diagram.png", "Reliability diagram"
+    applicability = (
+        optimizer_applicability(calibration.method, calibration.verbose)
+        if calibration
+        else None
+    )
+    if applicability:
+        st.caption(applicability)
+    else:
+        options = [
+            path
+            for path in workspace.files(directory)
+            if path.name == "optimum_params.txt"
+            or path.name.endswith("_loss_and_gradient.png")
+        ]
+        if options and st.toggle(
+            "Calibration optimizer details", key=f"optimizer:{cycle}"
+        ):
+            diagnostic = st.selectbox(
+                "Optimizer diagnostic",
+                options,
+                format_func=lambda path: (
+                    "Fitted parameters"
+                    if path.suffix == ".txt"
+                    else "Loss and gradient"
+                ),
+                key=f"optimizer-kind:{cycle}",
+            )
+            if diagnostic.suffix == ".txt":
+                st.markdown("#### Fitted parameters")
+                st.caption(
+                    "Recorded parameters of the fitted calibrator on the reserved calibration workflow."
+                )
+            else:
+                st.markdown("#### Optimizer loss and gradient")
+                st.caption(
+                    "Loss and gradient describe optimizer iterations on the reserved calibration workflow. "
+                    "The final-test scores above use a separate partition."
+                )
+            _figure(workspace, diagnostic, 1120)
+            return
+        if not options and calibration:
+            st.caption("No saved optimizer diagnostic is available.")
+
+    image, notes = st.columns([1.5, 1], gap="large")
+    with image:
+        st.markdown("#### Reliability diagram")
+        _figure(workspace, directory / "reliability_diagram.png", 550)
     with notes:
         st.markdown("#### Reading the diagram")
-        if calibration and base:
-            st.markdown(
-                f"**{calibration.method.replace('_', ' ').capitalize()}** · "
-                f"{base.calibration:,} in the calibration partition · {base.final_test:,} final test · "
-                f"{calibration.reporting_bins or 'Unrecorded'} reporting bins"
-            )
-            st.caption(
-                "Calibration uses the reserved calibration partition. Parametric methods use an internal fit and monitor split."
-            )
         st.markdown(
             "Below the diagonal, confidence exceeds accuracy (overconfidence). "
             "Above it, accuracy exceeds confidence (underconfidence). "
             "The secondary bars sum sample weights within each bin. ECE and MCE depend on the binning."
         )
         st.caption(
-            "Legacy figures may invert the annotations or label the weighted bars “Sample Count”."
-        )
-        applicability = (
-            optimizer_applicability(calibration.method, calibration.verbose)
-            if calibration
-            else None
-        )
-        if applicability:
-            st.caption(applicability)
-        else:
-            options = [
-                path
-                for path in workspace.files(directory)
-                if path.name == "optimum_params.txt"
-                or path.name.endswith("_loss_and_gradient.png")
-            ]
-            if options and st.toggle(
-                "Calibration optimizer details", key=f"optimizer:{cycle}"
-            ):
-                diagnostic = st.selectbox(
-                    "Optimizer diagnostic",
-                    options,
-                    format_func=lambda path: (
-                        "Fitted parameters"
-                        if path.suffix == ".txt"
-                        else "Loss and gradient"
-                    ),
-                    key=f"optimizer-kind:{cycle}",
-                )
-                title = (
-                    "Fitted parameters"
-                    if diagnostic.suffix == ".txt"
-                    else "Optimizer loss and gradient"
-                )
-            elif not options and calibration:
-                st.caption("No saved optimizer diagnostic is available.")
-    with image:
-        st.markdown(f"#### {title}")
-        _figure(
-            workspace,
-            diagnostic,
-            550 if diagnostic.name == "reliability_diagram.png" else 730,
+            "The saved figure retains the producer's colors and labels. "
+            "Legacy figures may invert the annotations or label weighted bars “Sample Count”."
         )
 
 

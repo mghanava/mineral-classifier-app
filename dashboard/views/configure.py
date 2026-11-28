@@ -71,8 +71,8 @@ def _presets(state: DashboardState) -> None:
         description = f"v{preset.version} · {preset.description}"
         if selected in _MEASURED_SECONDS:
             description += (
-                f" Measured CPU reference on the M2.5 host: {_MEASURED_SECONDS[selected]} s. "
-                "Actual runtime varies."
+                f" Unmodified preset reference · {_MEASURED_SECONDS[selected]} s for two CPU cycles "
+                "on the M2.5 host. Runtime varies by machine and settings."
             )
         st.caption(description)
     except ValueError as error:
@@ -159,10 +159,15 @@ def _review(
             "The active configuration changed since preview. Preview again before applying."
         )
     counts = Counter(issue.severity for issue in preview.validation.issues)
-    st.write(
-        f"**{counts['error']} errors · {counts['warning']} warnings · "
-        f"{counts['info']} informational findings**"
+    findings = " · ".join(
+        f"{counts[key]} {label}{'' if counts[key] == 1 else 's'}"
+        for key, label in (
+            ("error", "error"),
+            ("warning", "warning"),
+            ("info", "informational finding"),
+        )
     )
+    st.write(f"**{findings}**")
     show_validation(preview.validation, compact=True)
     if preview.comparison_warning:
         st.warning(preview.comparison_warning)
@@ -225,12 +230,16 @@ def _status(
             else None
         )
         status += f" · {name}" if current == baseline else f" · Customized from {name}"
-    st.markdown(f"**Draft** · {status}")
-    if applied.contents is not None:
-        st.caption("Applied settings used by Run")
-        applied_summary(applied, show_targets=False)
-    else:
-        st.caption("No configuration applied to this workspace.")
+    with st.container(horizontal=True, gap="large"):
+        with st.container(gap="xxsmall", width=340):
+            st.markdown("**Session draft**")
+            st.write(status)
+        with st.container(gap="xxsmall"):
+            st.markdown("**Applied configuration · used by Run**")
+            if applied.contents is not None:
+                applied_summary(applied, show_targets=False)
+            else:
+                st.write("No applied configuration.")
 
 
 def render() -> None:
@@ -243,14 +252,14 @@ def render() -> None:
     if state.draft is None:
         state.update_draft((active.contents or b"").decode("utf-8", errors="replace"))
 
-    with st.container(width=1180):
+    with st.container(gap="medium"):
         status = st.container()
         editor, review = st.columns([3, 2], gap="large")
         with editor:
             _presets(state)
             resolved, draft_error = _resolve_draft(state)
             _editor(state, resolved)
-        with review:
+        with review, st.container(border=True, gap="small"):
             applied = _review(state, active, resolved, draft_error)
         with status:
             _status(state, applied, resolved)

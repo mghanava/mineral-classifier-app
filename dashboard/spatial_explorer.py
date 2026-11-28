@@ -25,6 +25,7 @@ from dashboard.spatial_figure import (
     LINK_LIMIT,
     MEMBERSHIP_NAMES,
     POINT_LIMIT,
+    PROBABILITY_FORMAT,
     SCORE_MODES,
     ColorMode,
     color_field,
@@ -450,10 +451,14 @@ def _inspector(
             matched = joined.correctness(family)[row]
             badge = ":green-badge[Correct]" if matched else ":red-badge[Incorrect]"
             st.markdown(f"Predicted · **{prediction}** · {badge}")
-            st.caption(
-                f"**{scores.maximum_probability()[row]:.1%}** max probability · "
-                f"**{scores.entropy_nats[row]:.3f} nats** entropy · {family.capitalize()}"
-            )
+            with st.container(horizontal=True, gap="medium"):
+                st.markdown(
+                    f"Maximum probability  \n**{scores.maximum_probability()[row]:{PROBABILITY_FORMAT}}**"
+                )
+                st.markdown(
+                    f"Predictive entropy  \n**{scores.entropy_nats[row]:.3f} nats**"
+                )
+            st.caption(f"{family.capitalize()} probability family")
             st.plotly_chart(
                 probability_figure(
                     population.class_names, scores.probabilities[row], dark=dark
@@ -714,7 +719,7 @@ def render_spatial(
         )
         constant = " · Constant value" if low == high else ""
         st.caption(
-            f"**{scale}** · {field.title} {low:.6g} to {high:.6g}{constant}{limitation}"
+            f"**{scale}** · {field.title} {field.display_value(low)} to {field.display_value(high)}{constant}{limitation}"
         )
     dark = st.context.theme.type == "dark"
     links = np.empty((0, 2), dtype=np.int64)

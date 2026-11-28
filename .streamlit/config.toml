@@ -1,0 +1,21 @@
+[theme]
+font = "sans-serif"
+headingFontSizes = ["2.125rem", "1.65rem", "1.3rem", "1.05rem"]
+headingFontWeights = [650, 650, 650, 650]
+showWidgetBorder = true
+
+[theme.light]
+primaryColor = "#0072B2"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F1F5F9"
+textColor = "#172333"
+linkColor = "#00669F"
+borderColor = "#78889A"
+
+[theme.dark]
+primaryColor = "#69BFF2"
+backgroundColor = "#101820"
+secondaryBackgroundColor = "#202D3A"
+textColor = "#F1F6FB"
+linkColor = "#82CAF3"
+borderColor = "#66768A"

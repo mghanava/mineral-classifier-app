@@ -168,6 +168,8 @@ def test_quick_demo_result_journey(
     reads.clear()
     _find(app, "toggle", "Calibration optimizer details").set_value(True).run()
     assert len(reads) == 1 and reads[0].name.endswith("_loss_and_gradient.png")
+    assert any("Optimizer loss and gradient" in item.value for item in app.markdown)
+    assert not any("Reading the diagram" in item.value for item in app.markdown)
     assert _find(app, "selectbox", "Learning cycle").value == cycle
     _find(app, "selectbox", "Result section").select(
         "Model performance and training"

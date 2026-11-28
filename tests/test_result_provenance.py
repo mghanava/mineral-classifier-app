@@ -346,7 +346,8 @@ def test_results_refresh_is_explicit_and_cached_scope_is_invalidated(
     assert any("No local results" in text.value for text in app.markdown)
     app.segmented_control[0].select("Cycle explorer").run()
     assert any(
-        "Cycle evidence · Missing · Unverified" in text.value for text in app.caption
+        "Cycle completeness · Missing · Unverified" in text.value
+        for text in app.caption
     )
     app.selectbox[0].select(0).run()
     assert not app.exception and len(reads) == 1

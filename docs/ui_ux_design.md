@@ -650,3 +650,44 @@ M3.6 carries forward five refinements from this review:
 - Add direct numerical labels to comparison bars.
 - Improve readability where the raw histograms overlap.
 - Improve secondary text contrast in both themes.
+
+## M3.6 application-wide visual refinement
+
+The app uses native Streamlit themes with a shared scientific-blue accent, explicit widget borders and a common heading hierarchy. The system follows the browser theme by default and supports manual Light and Dark selection. Native status labels identify evidence without relying on hue. Scientific classes retain their existing colors and marker shapes. Native calibration charts use warm orange before calibration and blue after calibration. Original saved scientific figures retain the producer's colors, labels and resolution.
+
+Home separates demo and custom configuration actions. Configure identifies the session draft and applied file at the top of the draft-and-review layout. The benchmark captions identify the unmodified reference presets. Preset loading, preview, apply and validation retain their existing semantics. Run identifies the latest observed phase and shows a bounded table for the latest observed learning cycle alongside its separately scoped session outcome.
+
+Results distinguishes experiment correspondence, cycle completeness, selected diagnostic evidence, and positional spatial prediction alignment. The evidence disclosure contains the experiment fingerprint, stage evidence and session execution outcome. The standalone CSV retains producer row order. The spatial explorer frames the 3D camera farther out with more tick space, preserves the physical aspect and signed Z, and uses consistent probability percentages in colorbars, hover, and the inspector. Calibration selects the associated interpretation with each saved diagnostic and reserves the full content width for the wide optimizer figure. The batch probability-family control precedes both the derived count matrix and per-class table. Drift pairs the two cohorts' bars at each observed interval and distinguishes the incoming bars with a pattern. A numeric table shows the same bin values. Comparison charts label the bars directly and keep the changing-population limitation beside the selectors.
+
+### Original scientific output routes
+
+The abbreviations below follow the M3.1 inventory above. Figure-specific views load only the selected diagnostic. The table covers the released UI routes for the M3.1 types, including repeated cycle and fold instances.
+
+| M3.1 output | Current UI route |
+| --- | --- |
+| B(b) `base_data.pt` | Cycle explorer → Data and spatial graphs → Bootstrap, Input base, Post-append base or Final append. Experiment overview shows verified growth. |
+| B(b) `fold_data.pt`, `test_data.pt`, `calib_data.pt` | Data and spatial graphs → CV training, CV validation, Development membership, Final-test partition or Calibration partition. Fold views use the stored independent graph. |
+| B(b) `base_data_graph`, `test_graph`, `calib_graph`, `train_graph_{fold}`, `val_graph_{fold}` | Data and spatial graphs → select the snapshot/partition/fold → Original diagnostics → corresponding saved figure. Prefer the Plotly JSON when both JSON and HTML are present. |
+| B(b) `tsne_comparison.png` | Data and spatial graphs → Original diagnostics → Feature separation · t-SNE. |
+| I(c) `pred_data.pt`, `prediction_data_graph.{json,html}` | Data and spatial graphs → Incoming batch or Spatial predictions → Interactive map / Original diagnostics → Incoming batch graph. |
+| T(c) `training_plots_dataset_{fold}.png` | Model performance and training → Training → Training fold. Also available under Original diagnostics. |
+| T(c) `graph_binding.json`, `preprocessing.json` | Model performance and training → Original diagnostics. Training uses the checked metadata for CV and the fresh full-development refit. |
+| E(c) `metrics.json`, `confusion_matrix.png` | Model performance and training → Classification → Final test. Original diagnostics provides the JSON and image. Compare two cycles and Experiment overview read the scoped published scores. |
+| E(c) `reliability_diagram.png` | Probability calibration → Calibration overview → Reliability diagram, or Original diagnostics. |
+| E(c) `calibration_{method}_loss_and_gradient.png`, `optimum_params.txt`, `calibration_binding.json` | Probability calibration → Calibration optimizer details for the figure and fitted parameters when emitted. Original diagnostics includes the calibration binding. |
+| P(c) `predictions.csv` | Spatial predictions → Original diagnostics → Incoming-batch predictions table, or Prediction downloads for the producer CSV and gated enriched exports. |
+| P(c) `confussion_matrix_.png`, `histograms.png`, `metrics.json` | Model performance and training → Original diagnostics for the original confusion matrix and published metrics. Spatial predictions → Original diagnostics → Incoming-batch score distributions. |
+| D(c) `drift_results.txt`, `drift_metadata.json` | Distribution drift → Original test report or Technical settings. If verification is unavailable, use the single original diagnostic picker. |
+| D(c) `marginal_distributions.png`, `distance_distributions.png`, `mutual_information.png`, `pca_kpca_grid.png` | Distribution drift → Supporting diagnostic → original raw feature distributions, distances, mutual information or PCA and Kernel PCA. |
+| `cycles_performance_analysis/cycles_performance.png` | Cycle explorer → Cross-cycle performance → Original cross-cycle performance figure. Applicable to runs with more than one learning cycle. |
+| `params.yaml`, DVC definition and lock, execution stream | Configure → Applied configuration and preview. Results → Evidence and execution details for scoped verification. Run → Technical logs for the bounded session stream. Preset choices and draft YAML remain in Configure. |
+
+Intentionally unsupported or inapplicable. Bootstrap `hotspots.npy` and `prototypes.npy` are simulator inputs with no dedicated rendering route. Checkpoint and calibrator binaries are checked as local bytes and are not deserialized for dashboard charting. Unpaired plot projections, evaluation row scores, exact reliability-bin or epoch curves, realized permutation counts and null distributions are unavailable for interactive reconstruction. Optimizer outputs are inapplicable to isotonic calibration or with verbosity disabled. An HTML-only graph is gated as trusted local legacy HTML and can require its original CDN assets. The existing aligned prediction export gate continues to require the exact verified incoming graph and score rows.
+
+### Verification and release review
+
+The local browser review covers all four pages and the principal Results views on isolated workspaces. It uses the retained Quick demo copy for genuine graphs, metrics and scientific figures, controlled output for Run, and a copy with an omitted drift report for partial evidence. The browser captures at 1920, 1280 and 390 px measured zero document and main-content horizontal overflow. Native light and dark themes, keyboard focus order, one visible evidence disclosure, stable-ID navigation and the original CSV download were checked. The chart alternative and narrow table checks are described in the external accessibility notes. The review does not certify screen-reader interoperability or WCAG conformance. Large native grids can scroll internally, original scientific figures may require the saved download, and 3D orbit can still crowd ticks.
+
+The browser archive, index, measurements and dev3 readiness report are stored outside the repository in `/tmp/mineral-m36.hK4Pke/`. Full and fast regressions also cover bootstrap-only, single and many-cycle cases, failed and unchanged Run outcomes, isolation and locking, missing, historical and stale evidence, navigation restoration and lazy reading of scientific diagnostics. No new scientific experiment ran.
+
+The owner accepted M3.6 for visual quality and engineering after reviewing all 20 browser captures, the accessibility findings, these design notes, and the dev3 readiness report. All dev3 implementation milestones have received owner acceptance.

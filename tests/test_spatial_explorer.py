@@ -83,6 +83,9 @@ def test_plot_geometry_categories_and_visible_links(workspace):
     figure = spatial_figure(subset, field, three_d=True, **args)
     assert figure.layout.scene.aspectmode == "data"
     assert figure.layout.scene.zaxis.autorange is True
+    assert figure.layout.scene.zaxis.nticks == 3
+    assert 0 < figure.layout.scene.domain.x[0] < figure.layout.scene.domain.x[1] < 1
+    assert 0 < figure.layout.scene.domain.y[0] < figure.layout.scene.domain.y[1] < 1
     np.testing.assert_array_equal(
         figure.data[-2].z, population.coordinates[subset.row_indices, 2]
     )
@@ -112,6 +115,8 @@ def test_spatial_field_domains_and_family(workspace, family):
         np.testing.assert_array_equal(field.values, expected)
         if mode in (ColorMode.MAXIMUM, ColorMode.PROBABILITY):
             assert (field.bounds, field.scale) == ((0, 1), "Cividis")
+            assert field.tick_format == ".1%"
+            assert field.display_value(0.5271) == "52.7%"
         if mode == ColorMode.ENTROPY:
             assert (field.bounds, field.scale) == (
                 (0, np.log(len(population.class_names))),

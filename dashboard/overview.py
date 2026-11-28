@@ -212,7 +212,9 @@ def _cycle_table(
         context = "Final test" if metric.calibration_error else "Calibrated scores"
         st.caption(f"Table metric · {metric} · {context}")
     number = st.column_config.NumberColumn
-    metric_format = "percent" if metric in (Metric.ACCURACY, Metric.ECE) else "%.4f"
+    metric_format = (
+        "percent" if metric == Metric.ACCURACY or metric.calibration_error else "%.4f"
+    )
     st.dataframe(
         rows,
         column_order=columns,

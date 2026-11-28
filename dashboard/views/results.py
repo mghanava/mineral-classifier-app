@@ -140,6 +140,11 @@ def _pick_diagnostic(choices: list[Path], section: str, cycle: int) -> Path | No
 
 
 def _interpret(path: Path) -> None:
+    if path.stem == "tsne_comparison":
+        st.caption(
+            "Saved t-SNE views summarize class separation for several perplexities. "
+            "The silhouette score uses raw features."
+        )
     if path.stem == "reliability_diagram":
         st.caption(
             "Figure label revision unverified. Below the diagonal is overconfidence "
@@ -228,7 +233,7 @@ def _identity(
                 if 0 in summary.snapshots
                 else "Bootstrap awaiting verification"
             )
-        st.markdown(f"**{coverage}**  ·  {badge}")
+        st.markdown(f"**Experiment evidence** · {badge}  ·  {coverage}")
         device = ""
         if summary.latest is not None:
             model = summary.learning[summary.latest].model
@@ -238,7 +243,7 @@ def _identity(
             f"Applied model {applied.model.upper()} · Requested device {applied.requested_device}{device}"
         )
     else:
-        st.markdown(badge)
+        st.markdown(f"**Experiment evidence** · {badge}")
     if checked is None and (observed or aggregate):
         st.caption(UNVERIFIED)
 
@@ -253,11 +258,15 @@ def _details(
         "Evidence and execution details",
         key="_results_evidence_details",
         on_change="rerun",
-        type="compact",
     )
     if not details.open:
         return
     with details:
+        st.caption(
+            "Experiment correspondence covers the applied pipeline. Cycle completeness covers its "
+            "required stages. Each diagnostic reports correspondence for its own producer. "
+            "Prediction alignment checks the graph and score rows used together."
+        )
         if applied:
             st.caption(
                 "Applied params.yaml fingerprint · SHA-256 of the exact file bytes"
@@ -270,7 +279,7 @@ def _details(
                 else ""
             )
             st.write(
-                f"**Latest execution in this session** · {attempt.status} · {attempt.scope}{identity}"
+                f"**Session execution outcome** · {attempt.status} · {attempt.scope}{identity}"
             )
         if checked:
             st.write(
@@ -308,7 +317,7 @@ def _cycle_evidence(
         if cycle == 0
         else f"Learning cycle {cycle}"
     )
-    label = f"{scope} · "
+    label = f"{scope} · {'Aggregate diagnostic' if section == PERFORMANCE else 'Cycle completeness'} · "
     if historical and section != PERFORMANCE:
         label += "Historical cycle outside the applied configuration · "
     if evidence is None:
@@ -451,11 +460,11 @@ def _explore(
         )
         if cycle:
             st.caption(
-                f"Cycle evidence · {correspondence}  |  "
+                f"Cycle completeness · {correspondence}  |  "
                 f"Input base {cycle - 1} + incoming batch {cycle} → appended base {cycle}"
             )
         else:
-            st.caption(f"Bootstrap evidence · {correspondence}")
+            st.caption(f"Bootstrap completeness · {correspondence}")
         if view_mode == "Interactive map":
             render_spatial(
                 workspace,
@@ -488,11 +497,10 @@ def _explore(
             "No display files found for this selection. The output may be absent or partial."
         )
         return
+    _diagnostic_evidence(chosen, checked, cycle, declared)
     _interpret(chosen)
     if chosen.suffix == ".csv" and section == PREDICTION:
-        stage = dict(checked.stages).get(f"predict_cycle_{cycle}") if checked else None
-        status = stage.correspondence if stage else Correspondence.UNKNOWN
-        st.caption(f"Standalone prediction CSV · {status}")
+        st.caption("Standalone prediction CSV · Producer row order")
         st.download_button(
             "Original producer CSV",
             lambda: workspace.read_bytes(chosen),
@@ -501,6 +509,43 @@ def _explore(
             on_click="ignore",
         )
     show_artifact(workspace, chosen)
+
+
+def _diagnostic_evidence(
+    path: Path, checked: Verification | None, cycle: int, declared: int | None
+) -> None:
+    if declared is not None and cycle > declared and path != AGGREGATE:
+        st.caption("Selected diagnostic · Historical file outside the applied scope")
+        return
+    if path == AGGREGATE:
+        producer = "analyze_cycles_performance"
+    elif path.parts[:2] == ("data", "base"):
+        snapshot = int(path.parts[2].removeprefix("cycle_"))
+        producer = (
+            "bootstrap" if snapshot == 0 else f"prepare_next_cycle_data_{snapshot}"
+        )
+    else:
+        family = {
+            "data": "generate_pred_data",
+            "evaluation": "evaluate",
+            "trained": "train",
+            "prediction": "predict",
+            "drift_analysis": "analyze_drift",
+        }[path.parts[0]]
+        producer = f"{family}_cycle_{cycle}"
+    evidence = dict(checked.stages).get(producer) if checked else None
+    tracked = checked is not None and any(
+        f"results/{path}" == item or f"results/{path.parent}" == item
+        for item in checked.paths
+    )
+    status = (
+        f"{evidence.availability} · {evidence.correspondence}"
+        if evidence
+        and tracked
+        and (not is_matching(evidence) or evidence.locked_outputs_match)
+        else Correspondence.UNKNOWN
+    )
+    st.caption(f"Selected diagnostic · {status}")
 
 
 def _compare(
@@ -555,72 +600,6 @@ def _compare(
 
 def render() -> None:
     """Switch between the verified overview and one selected scientific diagnostic."""
-    st.html("""
-        <style>
-        .stMainBlockContainer:has(.st-key-results-toolbar) {
-            padding-top: clamp(1.5rem, 3.5vw, 3.25rem);
-        }
-        .stMainBlockContainer:has(.st-key-results-spatial-header) {
-            padding-top: 3.9rem;
-            max-width: 80rem;
-        }
-        .stMainBlockContainer:has(.st-key-results-spatial-header) > [data-testid="stVerticalBlock"] {
-            gap: .4rem;
-        }
-        .stMainBlockContainer:has(.st-key-results-spatial-header) h1 {font-size: 2.15rem; padding: 0;}
-        .stMainBlockContainer:has(.st-key-results-science-header) {
-            padding-top: 3.9rem;
-            max-width: 84rem;
-        }
-        .stMainBlockContainer:has(.st-key-results-science-header) > [data-testid="stVerticalBlock"] {
-            gap: .55rem;
-        }
-        .stMainBlockContainer:has(.st-key-results-science-header) h1 {font-size: 2.15rem; padding: 0;}
-        .stMainBlockContainer:has(.st-key-results-science-header) [data-testid="stMetricValue"] {
-            font-size: 1.55rem;
-            font-variant-numeric: tabular-nums;
-        }
-        .stMainBlockContainer:has(.st-key-results-drift),
-        .stMainBlockContainer:has(.st-key-results-compare) {
-            max-width: 78rem;
-            padding-top: 3.6rem;
-        }
-        .stMainBlockContainer:has(:is(.st-key-results-drift, .st-key-results-compare)) > [data-testid="stVerticalBlock"] {
-            gap: .5rem;
-        }
-        .stMainBlockContainer:has(:is(.st-key-results-drift, .st-key-results-compare)) h1 {
-            font-size: 2.15rem;
-            padding: 0;
-        }
-        .stMainBlockContainer:has(.st-key-results-drift) h3,
-        .stMainBlockContainer:has(.st-key-results-compare) h3 {
-            padding-bottom: .15rem;
-        }
-        .st-key-results-drift [data-testid="stMetricValue"] {
-            font-size: clamp(1.55rem, 2vw, 2rem);
-            font-variant-numeric: tabular-nums;
-        }
-        @media (max-width: 700px) {
-            :is(.st-key-drift-settings, .st-key-results-compare) [data-testid="stHorizontalBlock"] {
-                flex-direction: column;
-            }
-            :is(.st-key-drift-settings, .st-key-results-compare) [data-testid="stColumn"] {
-                width: 100% !important;
-                flex: 1 1 auto !important;
-            }
-        }
-        .st-key-results-headlines {
-            padding-block: 0.75rem;
-            border-block: 1px solid color-mix(in srgb, currentColor 16%, transparent);
-        }
-        .st-key-results-headlines [data-testid="stMetricValue"] {
-            font-size: clamp(2.125rem, 2.6vw, 3rem);
-            font-weight: 650;
-            font-variant-numeric: tabular-nums;
-            line-height: 1.1;
-        }
-        </style>
-    """)
     st.title("Results")
     workspace = Workspace(Path.cwd())
     state = dashboard_state()
@@ -692,6 +671,8 @@ def render() -> None:
     with st.container(key="results-evidence-context", gap="xxsmall"):
         if not compact_header:
             _identity(applied, checked, summary, observed, aggregate)
+        if checked is not None and checked.stamp is None and checked.reasons:
+            st.warning(checked.reasons[0])
         if state.result_evidence_notice:
             st.caption(state.result_evidence_notice)
         if state.has_unapplied_draft(payload):

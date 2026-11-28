@@ -17,7 +17,23 @@ def app() -> None:
         ],
         position="top",
     )
-    page.run()
+    # Address native navigation focus and caption contrast with two scoped overrides.
+    st.html("""
+        <style>
+        header a[data-testid="stTopNavLink"]:focus-visible {
+            outline: 2px solid currentColor;
+            outline-offset: 2px;
+        }
+        [data-testid="stCaptionContainer"] {
+            opacity: .84;
+        }
+        </style>
+    """)
+    with (
+        st.container(horizontal=True, horizontal_alignment="center"),
+        st.container(width=1260, gap="small"),
+    ):
+        page.run()
 
 
 if __name__ == "__main__":
