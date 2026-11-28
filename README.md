@@ -1,10 +1,10 @@
 # Mineral Deposit Classification
 
-A web-based dashboard for synthetic mineral classification using graph neural networks and a DVC-managed learning pipeline. The current development version is `0.2.0.dev2`.
+A Streamlit workbench for synthetic spatial mineral classification with GCN and GAT models. Use Home, Configure, Run and Results to define a DVC-managed experiment and inspect its graphs, calibrated predictions and drift evidence. The current development version is `0.2.0.dev3`.
 
-## Demo
+## Historical demo
 
-[![Demo Video](https://img.youtube.com/vi/TZHFRYZLA9k/maxresdefault.jpg)](https://youtu.be/TZHFRYZLA9k)
+[![Original prototype video](https://img.youtube.com/vi/TZHFRYZLA9k/maxresdefault.jpg)](https://youtu.be/TZHFRYZLA9k)
 
 ## How It Works
 
@@ -13,22 +13,35 @@ A web-based dashboard for synthetic mineral classification using graph neural ne
 3. **Learning Cycles**: Generate synthetic batches, predict with the calibrated model, analyze drift (MMD, energy distance, Wasserstein), and append the simulator-labeled observations for the next cycle.
 4. **Performance Analysis**: Compare model performance across learning cycles.
 
-## Container Quick Start
+## Install and start
 
-**Requirements:**
-- Docker >= 23.0
-- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)
-- NVIDIA Driver >= 560.28 (check with `nvidia-smi`, must support CUDA >= 12.6)
+### From a source checkout
 
-```bash
+Use [uv](https://docs.astral.sh/uv/) with a supported Python version (the project declares Python 3.11 or newer). Run these commands from the repository root so Streamlit loads the project theme and the dashboard uses the intended workspace.
+
+```fish
 git clone https://github.com/mghanava/mineral-classifier-app.git
 cd mineral-classifier-app
-make run
+git switch develop/v0.2.0
+uv sync --locked
+uv run --frozen --no-sync streamlit run app.py
 ```
 
-Open [http://localhost:8501](http://localhost:8501)
+Open [localhost:8501](http://localhost:8501). The local Quick demo preset requests CPU execution, including on hosts without a dedicated GPU. The lock still uses the declared CUDA 12.6 PyTorch source where applicable.
 
-### Using the Dashboard
+### Optional container startup
+
+The supplied Compose service uses the NVIDIA runtime. It requires Docker with Compose, an NVIDIA Container Toolkit setup and a compatible NVIDIA driver. Container deployment was outside the dev3 verification.
+
+```fish
+make run
+make logs
+make stop
+```
+
+`make run` builds and starts the service at [localhost:8501](http://localhost:8501). Results and the DVC cache use separate named volumes. `make stop` stops the service while keeping those volumes.
+
+## Quick demo journey
 
 1. **Home** shows the applied configuration and any existing workspace results. **Configure Quick demo** highlights the reduced CPU preset. **Configure an experiment** opens the same editor for a custom experiment.
 2. In **Configure**, select a preset and click **Load preset into draft**, or customize the current draft. **Basic** shows model, device, cycle count and the two observation targets. **Advanced** groups scientific settings by purpose. **Expert** edits the same draft as complete YAML. Use **Validate & Preview** to review findings and differences, then **Apply configuration** to update `params.yaml`. Preview again if the draft or active file changes. The draft and selected preset survive navigation within the session.
@@ -39,7 +52,7 @@ Open [http://localhost:8501](http://localhost:8501)
 
 The unmodified Quick demo and Standard reference presets completed their two-cycle CPU pipelines in 74.31 s and 101.66 s on the verification host. Both retain their approved budgets. Presets set computational budgets, and predictive performance depends on the data and evaluation protocol. Research resolves to the full canonical defaults and has been checked through static validation and DVC generation. [Verification report](docs/configuration_verification.md)
 
-Use the Streamlit settings menu to choose Light, Dark or the system theme. Results reports experiment correspondence, selected diagnostic evidence and verified spatial prediction alignment at their own scopes. [Dashboard review and legacy diagnostic routes](docs/ui_ux_design.md#m36-application-wide-visual-refinement)
+The dashboard follows the system theme by default. Use the Streamlit menu to select Light or Dark. Results reports experiment correspondence, selected diagnostic evidence and verified spatial prediction alignment at their own scopes. [Dashboard review and legacy diagnostic routes](docs/ui_ux_design.md#m36-application-wide-visual-refinement)
 
 ### Configuration CLI
 
@@ -55,36 +68,22 @@ uv run --frozen --no-sync python -m scripts.configure import legacy.yaml --outpu
 
 Resolution and import preview to stdout by default. Use `--overrides` with a partial YAML mapping for custom settings. Use `--output` for an explicit export, and add `--overwrite` when replacing an existing file. For direct DVC use, regenerate with `uv run --frozen --no-sync python -m scripts.setup_dvc` after applying topology changes. Keep the active file fixed during a direct DVC run. Dashboard reproduction blocks cooperating configuration writers in its workspace until the run exits. [Configuration design](docs/configuration_design.md#cli-and-streamlit)
 
-### Current scope
+## Current scope and limitations
 
-The verified workflow uses synthetic data and random stratified validation. Generalization to unseen regions, full-budget Research execution and container deployment remain unverified. The dashboard supports guided configuration, DVC-backed result correspondence and selected-diagnostic browsing. Cross-cycle curves describe changing evaluation populations. User data ingestion and independent inference are planned. [Roadmap](ROADMAP.md)
+- The verified workflow uses synthetic data and random stratified validation. Predictive performance in unseen geological regions remains unverified. Evaluation populations change across cycles, so the comparison views provide descriptive context. Fixed-holdout analysis, user data ingestion and independent inference remain planned.
+- Spatial dependence limits interpretation of drift permutation p-values. Quick demo budgets 19 permutations per test, giving coarse p-value increments of about 0.0526. Drift detection alone does not establish predictive degradation.
+- Full-budget Research execution and container deployment remain unverified. The sampled Chromium review found no horizontal overflow at 1920, 1280 and 390 px. Native tables may still scroll internally, and saved scientific figures retain their original labels and colors. [Dev3 limitations](CHANGELOG.md#dev3-limitations) · [Roadmap](ROADMAP.md)
 
-### Stop
+## Developer setup
 
-```bash
-make stop          # stop containers
-make clean         # remove everything (containers, volumes, images)
+```fish
+make install  # sync the lock with development tools
+make hooks    # install pre-commit hooks
+make lint
+make test
 ```
 
-## Developer Setup
-
-**Additional requirement:** [uv](https://docs.astral.sh/uv/)
-
-```bash
-make install           # create venv + install all dependencies
-make hooks             # install pre-commit hooks
-make dev               # start in dev mode (bind mount, hot reload)
-```
-
-### Workflow
-
-| Change | Action |
-|---|---|
-| Edit Python source | Save to trigger a development-mode reload |
-| Change an experiment | Preview and apply it in Configure |
-| Add Python dependency | make rebuild |
-| Change Dockerfile/compose | make rebuild |
-| Something broken | make clean and make dev |
+Use the source startup command above for local development, or `make dev` for the bind-mounted Compose service. Use `make rebuild` when the development image needs rebuilding.
 
 ### Reset Results
 
@@ -92,11 +91,7 @@ make dev               # start in dev mode (bind mount, hot reload)
 make reset   # wipe generated results, keep DVC cache
 ```
 
-`make reset` deletes everything under `results/` (preserving `.gitkeep`) but **keeps the DVC object cache**, so a subsequent run re-materializes cached outputs in seconds instead of retraining.
-
-Use it to remove stale artifacts when lowering the cycle count — e.g. after running 5 cycles, change `cycles:` to 3 and run `make reset` to drop the now-unused cycle_4/cycle_5 folders. Then run the pipeline again; the bootstrap stage and cycles 1–3 are restored from cache, so nothing is retrained and cycle_0 is not regenerated.
-
-This is intentionally distinct from `make clean`, which also deletes the DVC cache, volumes, and images for a true from-scratch state.
+`make reset` deletes generated files under `results/` and keeps the DVC object cache. DVC can restore matching cached outputs and may rerun stages when a match is unavailable. `make clean` also removes cached data and container volumes. Preserve any outputs you need before running either command.
 
 ### Abort a Pipeline Run
 
@@ -119,7 +114,8 @@ git commit -m "Experiment: description"
 ## Make Commands
 
 ```
-make run       Start the app
+make install   Sync the locked local environment with development tools
+make run       Build and start the Compose service
 make stop      Stop the app
 make logs      Follow container logs
 make dev       Start in development mode
@@ -141,6 +137,7 @@ make help      Show all commands
 
 ```
 ├── app.py                       # Streamlit entry point and native page registry
+├── .streamlit/config.toml       # Native light and dark theme
 ├── dashboard/                   # Views, session state, workspace readers and execution
 ├── scripts/
 │   ├── configure.py             # Configuration CLI
@@ -155,7 +152,7 @@ make help      Show all commands
 ├── dvc.yaml / dvc.lock          # DVC pipeline definition and state
 ├── config/                      # Canonical defaults and versioned presets
 ├── params.yaml                  # Applied pipeline configuration
-├── results/                     # Pipeline outputs (DVC tracked)
+├── results/                     # Generated pipeline outputs excluded from Git
 └── src/
     ├── models/                  # GNN architectures (GCN, GAT)
     ├── stages/                  # Pipeline stages

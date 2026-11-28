@@ -6,7 +6,7 @@ Transform the v0.1.0 research prototype into an accessible spatial machine learn
 
 ## Release strategy
 
-The `v0.1.0` tag preserves the original application at `d00c2cd`. The development foundation is recorded at `55aeacf`. Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below identify milestones. The current project version is `0.2.0.dev2`. The owner approves version changes, commits, tags and merges. Check off milestones and work items after verification.
+The `v0.1.0` tag preserves the original application at `d00c2cd`. The development foundation is recorded at `55aeacf`. Develop on `develop/v0.2.0`, keep `main` stable, and use the existing `pyproject.toml` and `uv.lock`. Development version labels below identify milestones. The current project version is `0.2.0.dev3`. The owner approves version changes, commits, tags and merges. Check off milestones and work items after verification.
 
 ## v0.2.0 — Accessible classification application
 

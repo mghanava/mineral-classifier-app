@@ -6,35 +6,34 @@ Record actual changes only. Use Added, Changed, Deprecated, Removed, Fixed and S
 
 ## [Unreleased]
 
+## [0.2.0.dev3] - 2026-11-27
+
+The synthetic spatial ML workbench now spans four pages: Home, Configure, Run and Results. The owner accepted all M3 implementation milestones. [Design, diagnostic inventory and review](docs/ui_ux_design.md#m36-application-wide-visual-refinement)
+
 ### Added
 
-- View verified drift findings for each method, explore a raw feature with shared histogram bins, and open the original diagnostics, report and recorded permutation settings.
-- Compare two selected learning cycles using verified classification scores, same-cohort calibration errors or realized dataset growth. Show missing and historical evidence, gate charts on compatible schemas and metric definitions, and preserve each cycle's drift method context.
-- Compare verified final-test classification and calibration scores before and after calibration, and view incoming-batch count matrices and per-class rates for either verified probability family. Inspect CV fold progress and the recorded schedule for the fresh full-development refit.
-- Explore one selected population in a shared XY or 3D view with stored links, display filters, observation details and verified prediction overlays. Download the original producer CSV and full or filtered enriched results, and open original figures through the diagnostic selector.
-- Read selected raw spatial populations and verified membership with immutable float64 observations and stored topology. Add a fresh, cycle-scoped evidence gate for positional prediction joins, display filters and enriched prediction exports.
-- Add an Experiment overview with verified headline metrics, an interactive learning trajectory, realized base growth and a bounded cycle summary. Inspect a cycle in the existing diagnostic explorer and retain mode, cycle and section across navigation.
-- Add an explicit Results evidence refresh that verifies scoped DVC records, local content and scientific bindings. Distinguish availability, lock-matching bytes and correspondence with applied settings and workspace sources.
-- Add typed scientific summary readers for realized populations, final-test and incoming-batch metrics, model and calibration metadata and per-cycle completeness.
-- Show Run phases, scientific stage observations and scoped execution outcomes, including explicit unchanged skips. Keep a bounded technical log and download for the latest session action.
-- Guide configuration through five Basic settings and 28 Advanced fields across seven groups. Keep complete Expert YAML and all three views bound to the same session draft.
-- Add a Home page with the Quick demo entry point, the measured M2.5 runtime reference and local workspace availability.
-- Retain the configuration draft, preset, preview, selected Results cycle and section, and last execution outcome within the dashboard session.
+- Start the CPU Quick demo from Home, or configure a custom experiment. Edit one session draft in Basic, grouped Advanced or full Expert YAML mode. Review validation findings and a resolved configuration diff before explicitly applying the draft.
+- Inspect synchronous full or targeted execution in Run. Observe scientific stage evidence and scoped outcomes, including verified unchanged skips, and download the bounded technical log for the session's latest action.
+- Refresh Results to verify local DVC records, output bytes and scientific bindings against the applied configuration and source files. Inspect experiment correspondence, cycle completeness, individual diagnostics and prediction alignment at their respective scopes.
+- Review verified headline metrics, separate final-test and incoming-batch trends, and realized dataset growth. Open individual cycles from the experiment overview.
+- Explore selected populations in interactive XY and physical-aspect 3D views. Filter observations, look up stable IDs and inspect verified prediction overlays. Download the original producer CSV or full and filtered enriched results after positional alignment verifies.
+- Inspect published final-test classification and probability calibration scores before and after calibration, derived incoming-batch class counts and rates, original reliability and optimizer plots, CV fold diagnostics, and the recorded full-development refit schedule.
+- Review per-method drift findings and recorded permutation settings, or inspect raw feature distributions, distances, mutual information and projection diagnostics. Compare two cycles using compatible classification scores, same-cohort calibration errors or realized population counts.
 
 ### Changed
 
-- Use a native scientific-blue light and dark theme. Clarify applied settings, draft review, observed Run phases and the scope of Results evidence.
-- Improve 3D framing and align spatial probability formats across colorbars, hover and the inspector. Move the batch probability selector above both derived views and give calibration optimizer figures a wider layout.
-- Make raw drift histograms legible with paired bars and a pattern for incoming observations. Show numerical comparison-bar labels, warm orange before calibration and blue after calibration.
-- Emphasize Results coverage and headline metrics, report same-cohort ECE changes in percentage points, and add a verified partition composition view alongside base totals.
-- Show the applied and draft status, preset provenance and measured CPU references beside explicit validation and Apply. Show separate finding counts and keep blocking errors visible.
-- Replace seven eager tabs with native top navigation for Home, Configure, Run and Results. Configure retains explicit validation and Apply. Run owns all full and targeted execution actions.
-- Browse one existing diagnostic at a time across six scientific sections. Identify bootstrap, input base, incoming batch and post-append snapshots. Label the selected scope with its checked correspondence or unverified status.
+- Use native navigation and a scientific-blue light and dark theme, with stronger caption contrast, visible keyboard focus on page links and responsive layouts. Use scoped evidence labels and load the selected scientific figure on demand.
 
 ### Fixed
 
-- Present one Results evidence and execution disclosure and use singular validation finding labels when appropriate.
-- Label validation and across-cycle figures with Macro F0.5. Place overconfidence below the identity diagonal and underconfidence above it in reliability diagrams, and label the secondary axis with the sum of sample weights per bin. Metric calculations, serialized keys and artifact filenames are preserved.
+- Label validation and cross-cycle figures with Macro F0.5. Place overconfidence below the identity diagonal and underconfidence above it in reliability diagrams, and label the secondary axis with the sum of sample weights per bin. Metric calculations, serialized keys and artifact filenames are preserved.
+
+### Dev3 limitations
+
+- Verification uses synthetic data and random stratified splits. Generalization to unseen geological regions is unverified. Test cohorts and prediction batches change between cycles, so comparisons do not establish learning improvement on a fixed holdout.
+- Spatial dependence can break the exchangeability assumption of row-level permutation tests. Quick demo's budget of 19 permutations per test gives coarse p-values. Failure to detect drift leaves distribution equality unresolved, and detection alone does not establish predictive degradation.
+- Full-budget Research execution and container deployment remain unverified. The sampled Chromium review does not establish comprehensive accessibility conformance. Native tables may need internal scrolling and some saved figures benefit from their full-resolution download.
+- Four integration cases depend on the unavailable historical M2.5 Quick demo workspace. The retained replacement workspace supports the current two-cycle Quick demo checks. [Dev3 verification notes](docs/ui_ux_design.md#verification-and-release-review)
 
 ## [0.2.0.dev2] - 2026-11-25
 
